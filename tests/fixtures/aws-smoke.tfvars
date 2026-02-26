@@ -1,0 +1,7 @@
+project_name            = "evm-cloud-smoke"
+infrastructure_provider = "aws"
+deployment_target       = "managed"
+runtime_arch            = "multi"
+database_mode           = "managed"
+streaming_mode          = "disabled"
+ingress_mode            = "managed_lb"

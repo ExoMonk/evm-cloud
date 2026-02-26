@@ -1,0 +1,7 @@
+project_name            = "evm-cloud-example"
+infrastructure_provider = "aws"
+deployment_target       = "managed"
+runtime_arch            = "multi"
+database_mode           = "self_hosted"
+streaming_mode          = "disabled"
+ingress_mode            = "self_hosted"
