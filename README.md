@@ -15,7 +15,7 @@ This repository now includes:
 - `Makefile` with local/smoke targets
 - `examples/minimal/` concrete Terraform example
 - `tests/localstack/docker-compose.yml` for LocalStack runtime
-- `tests/fixtures/localstack.tfvars` and `tests/fixtures/aws-smoke.tfvars`
+- `tests/fixtures/aws-smoke.tfvars` for AWS sandbox smoke planning
 
 ## Repository Organization
 
@@ -55,21 +55,22 @@ make localstack-logs
 make localstack-down
 ```
 
-Run local contract plan/apply/destroy:
+Minimal example on LocalStack (networking enabled by default):
 
 ```bash
-make local-plan
-make local-apply
-make local-destroy
+make example-minimal-plan
+make example-minimal-apply
+make example-minimal-verify
+make example-minimal-destroy
 ```
 
-`tests/fixtures/localstack.tfvars` sets `aws_skip_credentials_validation=true` so local simulation does not require real STS credentials.
-
-Run the concrete minimal example:
+One-shot flow (up + apply + verify):
 
 ```bash
-make example-plan
+make example-minimal
 ```
+
+The minimal-example LocalStack flow does not require local fixtures.
 
 ## AWS Smoke Lane
 

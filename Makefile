@@ -1,12 +1,14 @@
 TF ?= terraform
-TFVARS_LOCAL ?= tests/fixtures/localstack.tfvars
 TFVARS_SMOKE ?= tests/fixtures/aws-smoke.tfvars
 LOCALSTACK_COMPOSE_FILE ?= tests/localstack/docker-compose.yml
 AWS_REGION ?= us-east-1
 AWS_PROFILE ?=
 AWS_SMOKE_SKIP_CREDENTIALS_VALIDATION ?= true
+EXAMPLE_MINIMAL_DIR ?= examples/minimal
+EXAMPLE_MINIMAL_TFVARS ?= example.tfvars
+LOCALSTACK_ENDPOINT ?= http://localhost:4566
 
-.PHONY: preflight init fmt-check validate lint security qa localstack-up localstack-down localstack-logs local-plan local-apply local-destroy aws-smoke-plan aws-smoke-apply aws-smoke-destroy example-plan
+.PHONY: preflight init fmt-check validate lint security qa localstack-up localstack-down localstack-logs local-aws local-plan local-apply local-destroy local-verify example-minimal-plan example-minimal-apply example-minimal-destroy example-minimal-verify example-minimal aws-smoke-plan aws-smoke-apply aws-smoke-destroy
 
 preflight:
 	@command -v $(TF) >/dev/null || (echo "terraform not installed" && exit 1)
@@ -41,15 +43,35 @@ localstack-down:
 localstack-logs:
 	docker compose -f $(LOCALSTACK_COMPOSE_FILE) logs
 
-local-plan: init
-	mkdir -p .terraform
-	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_REGION=$(AWS_REGION) $(TF) plan -var-file=$(TFVARS_LOCAL) -out=.terraform/local.plan
+local-aws:
+	@if [ -z "$(COMMAND)" ]; then \
+		echo "Usage: make local-aws COMMAND='ec2 describe-vpcs'"; \
+		exit 1; \
+	fi
+	@command -v aws >/dev/null || (echo "aws cli not installed" && exit 1)
+	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) aws --endpoint-url=$(LOCALSTACK_ENDPOINT) $(COMMAND)
 
-local-apply: local-plan
-	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_REGION=$(AWS_REGION) $(TF) apply -auto-approve .terraform/local.plan
+example-minimal-plan:
+	cd $(EXAMPLE_MINIMAL_DIR) && terraform init -backend=false && AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(LOCALSTACK_ENDPOINT) terraform plan -var-file=$(EXAMPLE_MINIMAL_TFVARS) -var="networking_enabled=true" -var="aws_skip_credentials_validation=true" -out=.terraform/localstack-minimal.plan
 
-local-destroy: init
-	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_REGION=$(AWS_REGION) $(TF) destroy -auto-approve -var-file=$(TFVARS_LOCAL)
+example-minimal-apply: example-minimal-plan
+	cd $(EXAMPLE_MINIMAL_DIR) && AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(LOCALSTACK_ENDPOINT) terraform apply -auto-approve .terraform/localstack-minimal.plan
+
+example-minimal-destroy:
+	cd $(EXAMPLE_MINIMAL_DIR) && terraform init -backend=false && AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(LOCALSTACK_ENDPOINT) terraform destroy -auto-approve -var-file=$(EXAMPLE_MINIMAL_TFVARS) -var="networking_enabled=true" -var="aws_skip_credentials_validation=true"
+
+example-minimal-verify:
+	cd $(EXAMPLE_MINIMAL_DIR) && terraform state list
+
+example-minimal: localstack-up example-minimal-apply example-minimal-verify
+
+local-plan: example-minimal-plan
+
+local-apply: example-minimal-apply
+
+local-destroy: example-minimal-destroy
+
+local-verify: example-minimal-verify
 
 aws-smoke-plan: init
 	mkdir -p .terraform
@@ -60,6 +82,3 @@ aws-smoke-apply: aws-smoke-plan
 
 aws-smoke-destroy: init
 	$(if $(filter true,$(AWS_SMOKE_SKIP_CREDENTIALS_VALIDATION)),AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_PROFILE=,AWS_PROFILE=$(AWS_PROFILE)) AWS_REGION=$(AWS_REGION) $(TF) destroy -auto-approve -var-file=$(TFVARS_SMOKE) -var="aws_skip_credentials_validation=$(AWS_SMOKE_SKIP_CREDENTIALS_VALIDATION)"
-
-example-plan:
-	cd examples/minimal && terraform init -backend=false && terraform validate && AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_PROFILE= AWS_REGION=$(AWS_REGION) terraform plan -var-file=example.tfvars -var="aws_skip_credentials_validation=true"
