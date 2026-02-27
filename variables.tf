@@ -68,3 +68,56 @@ variable "ingress_mode" {
     error_message = "ingress_mode must be one of: managed_lb, self_hosted."
   }
 }
+
+variable "networking_enabled" {
+  description = "Enable AWS networking module provisioning in the provider adapter."
+  type        = bool
+  default     = false
+}
+
+variable "network_environment" {
+  description = "Networking profile environment."
+  type        = string
+  default     = "dev"
+
+  validation {
+    condition     = contains(["dev", "production", "platform"], var.network_environment)
+    error_message = "network_environment must be one of: dev, production, platform."
+  }
+}
+
+variable "aws_region" {
+  description = "AWS region for provider-backed resources."
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "aws_skip_credentials_validation" {
+  description = "Skip AWS provider credential/account validation checks (useful for local simulation)."
+  type        = bool
+  default     = false
+}
+
+variable "network_vpc_cidr" {
+  description = "VPC CIDR block for networking module."
+  type        = string
+  default     = "10.42.0.0/16"
+}
+
+variable "network_availability_zones" {
+  description = "Availability zones used for subnets."
+  type        = list(string)
+  default     = ["us-east-1a", "us-east-1b"]
+}
+
+variable "network_enable_nat_gateway" {
+  description = "Enable NAT gateway for private subnet egress."
+  type        = bool
+  default     = false
+}
+
+variable "network_enable_vpc_endpoints" {
+  description = "Enable baseline VPC endpoints (S3 + interface endpoints)."
+  type        = bool
+  default     = false
+}

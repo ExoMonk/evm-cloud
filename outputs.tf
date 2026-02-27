@@ -16,3 +16,8 @@ output "aws_adapter_context" {
   description = "AWS adapter context; null unless infrastructure_provider=aws."
   value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].adapter_context : null
 }
+
+output "networking" {
+  description = "Networking outputs from AWS adapter; null unless networking_enabled and provider=aws."
+  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].networking : null
+}

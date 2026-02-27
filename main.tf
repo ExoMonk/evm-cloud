@@ -2,6 +2,13 @@ locals {
   supported_providers = ["aws"]
 }
 
+provider "aws" {
+  region                      = var.aws_region
+  skip_credentials_validation = var.aws_skip_credentials_validation
+  skip_metadata_api_check     = var.aws_skip_credentials_validation
+  skip_requesting_account_id  = var.aws_skip_credentials_validation
+}
+
 module "capabilities" {
   source = "./modules/core/capabilities"
 
@@ -51,4 +58,12 @@ module "provider_aws" {
   database_mode     = var.database_mode
   streaming_mode    = var.streaming_mode
   ingress_mode      = var.ingress_mode
+
+  aws_region                   = var.aws_region
+  networking_enabled           = var.networking_enabled
+  network_environment          = var.network_environment
+  network_vpc_cidr             = var.network_vpc_cidr
+  network_availability_zones   = var.network_availability_zones
+  network_enable_nat_gateway   = var.network_enable_nat_gateway
+  network_enable_vpc_endpoints = var.network_enable_vpc_endpoints
 }
