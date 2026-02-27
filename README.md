@@ -22,6 +22,7 @@ This repository now includes:
 - `examples/` user-facing runnable Terraform examples
 - `tests/` test harness assets (LocalStack, fixtures, smoke helpers)
 - root module files (`main.tf`, `variables.tf`, `outputs.tf`) as reusable source module
+- `modules/networking/` Tier 0 AWS networking foundation module (optional enablement via `networking_enabled`)
 
 ## Prerequisites
 
@@ -62,12 +63,12 @@ make local-apply
 make local-destroy
 ```
 
+`tests/fixtures/localstack.tfvars` sets `aws_skip_credentials_validation=true` so local simulation does not require real STS credentials.
+
 Run the concrete minimal example:
 
 ```bash
-cd examples/minimal
-terraform init
-terraform plan -var-file=example.tfvars
+make example-plan
 ```
 
 ## AWS Smoke Lane
@@ -78,6 +79,14 @@ Use a sandbox AWS account/profile and run:
 make aws-smoke-plan AWS_PROFILE=your-sandbox-profile AWS_REGION=us-east-1
 make aws-smoke-apply AWS_PROFILE=your-sandbox-profile AWS_REGION=us-east-1
 make aws-smoke-destroy AWS_PROFILE=your-sandbox-profile AWS_REGION=us-east-1
+```
+
+By default, `aws-smoke-*` runs with `AWS_SMOKE_SKIP_CREDENTIALS_VALIDATION=true` so plan checks can run in credential-less environments.
+
+For strict real-account credential validation, set:
+
+```bash
+make aws-smoke-plan AWS_PROFILE=your-sandbox-profile AWS_REGION=us-east-1 AWS_SMOKE_SKIP_CREDENTIALS_VALIDATION=false
 ```
 
 ## Current Scope Note
@@ -91,3 +100,9 @@ From repo root:
 ```bash
 make qa
 ```
+
+## Deployment Runbook
+
+For real AWS deployment process (state backend, secrets handling, apply workflow, rollback, and destroy safety), see:
+
+- `runbooks/aws-production-apply.md`
