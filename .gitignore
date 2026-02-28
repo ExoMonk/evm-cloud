@@ -16,3 +16,7 @@ crash.*.log
 # Ignore transient lock info files created by terraform apply
 .terraform.tfstate.lock.info
 .terraform.lock.hcl
+.external_modules
+
+# Secrets (never commit)
+secrets.auto.tfvars

@@ -11,6 +11,7 @@ locals {
     compute = {
       deployment_target = var.deployment_target
       runtime_arch      = var.runtime_arch
+      compute_engine    = var.compute_engine
     }
 
     database = {

@@ -21,3 +21,18 @@ output "networking" {
   description = "Networking outputs from AWS adapter; null unless networking_enabled and provider=aws."
   value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].networking : null
 }
+
+output "postgres" {
+  description = "PostgreSQL outputs; null unless postgres_enabled and provider=aws."
+  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].postgres : null
+}
+
+output "rpc_proxy" {
+  description = "eRPC proxy outputs; null unless rpc_proxy_enabled and provider=aws."
+  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].rpc_proxy : null
+}
+
+output "indexer" {
+  description = "rindexer outputs; null unless indexer_enabled and provider=aws."
+  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].indexer : null
+}

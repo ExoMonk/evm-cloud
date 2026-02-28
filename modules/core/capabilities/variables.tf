@@ -27,3 +27,8 @@ variable "ingress_mode" {
   description = "Ingress mode."
   type        = string
 }
+
+variable "compute_engine" {
+  description = "Compute engine: ecs or eks."
+  type        = string
+}
