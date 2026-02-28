@@ -26,7 +26,6 @@ Rules:
 Baseline check:
 
 ```bash
-make preflight
 make qa
 ```
 
@@ -59,19 +58,21 @@ terraform init -reconfigure -backend-config=backends/production.hcl
 
 ## 4) Secrets & Sensitive Data
 
-Never commit secrets to git or `.tfvars` in repository paths.
+Never commit secrets to git.
 
-Allowed secret sources:
-
-- AWS Secrets Manager
-- AWS SSM Parameter Store
-- CI secret injection via `TF_VAR_*`
-
-Example:
+Each example includes a `secrets.auto.tfvars.example` template with placeholder values. For deployment:
 
 ```bash
-export TF_VAR_project_name="evm-cloud-prod"
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Fill in real values (RPC URLs, ClickHouse passwords, etc.)
 ```
+
+`secrets.auto.tfvars` is gitignored and auto-loaded by Terraform.
+
+For CI/CD pipelines, inject secrets via:
+
+- `TF_VAR_*` environment variables
+- AWS Secrets Manager / SSM Parameter Store lookups in Terraform
 
 ## 5) Pre-Deploy Validation Gate
 
@@ -79,14 +80,10 @@ All of the following must pass before any apply:
 
 ```bash
 make qa
-make local-plan
-make aws-smoke-plan AWS_PROFILE=<profile> AWS_REGION=<region>
-cd examples/minimal
-terraform init -backend=false
-terraform validate
-terraform plan -var-file=example.tfvars
-cd ../..
+make verify
 ```
+
+`make verify` runs QA + plans all examples against LocalStack.
 
 If any step fails, stop and fix before deploy.
 
@@ -95,7 +92,9 @@ If any step fails, stop and fix before deploy.
 ### 6.1 Build reviewed plan artifact
 
 ```bash
-terraform plan -var-file=tests/fixtures/aws-smoke.tfvars -out=.terraform/prod.plan
+cd examples/minimal_rds  # or your production example
+terraform init -backend-config=backends/production.hcl
+terraform plan -var-file=minimal.tfvars -out=.terraform/prod.plan
 ```
 
 ### 6.2 Review plan
@@ -146,17 +145,17 @@ Minimum controls:
 Sandbox destroy example:
 
 ```bash
-make aws-smoke-destroy AWS_PROFILE=<profile> AWS_REGION=<region>
+cd examples/minimal_rds
+terraform destroy -var-file=minimal.tfvars
 ```
 
 ## 10) CI/CD Gate
 
 Required on every PR:
 
-- `make qa`
-- `make local-plan`
-- `make aws-smoke-plan`
-- `examples/minimal` init/validate/plan
+```bash
+make verify
+```
 
 Recommended on main/nightly:
 
