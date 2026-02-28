@@ -32,6 +32,11 @@ variable "ingress_mode" {
   default = "self_hosted"
 }
 
+variable "compute_engine" {
+  type    = string
+  default = "ecs"
+}
+
 variable "aws_region" {
   type    = string
   default = "us-east-1"
@@ -70,4 +75,56 @@ variable "network_enable_nat_gateway" {
 variable "network_enable_vpc_endpoints" {
   type    = bool
   default = false
+}
+
+# --- RPC Proxy ---
+
+variable "rpc_proxy_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "rpc_proxy_image" {
+  type    = string
+  default = "ghcr.io/erpc/erpc:latest"
+}
+
+# --- Indexer ---
+
+variable "indexer_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "indexer_image" {
+  type    = string
+  default = "ghcr.io/joshstevens19/rindexer:latest"
+}
+
+variable "indexer_rpc_url" {
+  type    = string
+  default = ""
+}
+
+# --- ClickHouse BYODB ---
+
+variable "indexer_clickhouse_url" {
+  type    = string
+  default = ""
+}
+
+variable "indexer_clickhouse_user" {
+  type    = string
+  default = "default"
+}
+
+variable "indexer_clickhouse_password" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "indexer_clickhouse_db" {
+  type    = string
+  default = "default"
 }

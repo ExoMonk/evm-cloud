@@ -1,0 +1,23 @@
+logLevel: warn
+projects:
+  - id: main
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 1
+        failsafe:
+          retry:
+            maxCount: 5
+            delay: 500ms
+            backoffMaxDelay: 5s
+            backoffFactor: 2
+          hedge:
+            delay: 500ms
+            maxCount: 2
+    upstreams:
+      - id: primary
+        endpoint: https://eth.llamarpc.com
+        type: evm
+server:
+  httpHost: 0.0.0.0
+  httpPort: 4000
