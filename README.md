@@ -8,21 +8,21 @@ Use a 3-lane test pyramid:
 
 1. Static IaC quality (`fmt`, `validate`, `tflint`, `checkov`)
 2. Local cloud simulation (LocalStack)
-3. Real AWS smoke deploy (sandbox account)
+3. Real AWS deploy (sandbox account)
 
-This repository now includes:
+This repository includes:
 
-- `Makefile` with local/smoke targets
-- `examples/minimal/` concrete Terraform example
+- `Makefile` with `plan` and `verify` targets
+- `examples/minimal_rds/` — full Tier 0 pipeline with managed RDS PostgreSQL
+- `examples/minimal_BYO_clickhouse/` — Tier 0 pipeline with external ClickHouse (BYODB)
 - `tests/localstack/docker-compose.yml` for LocalStack runtime
-- `tests/fixtures/aws-smoke.tfvars` for AWS sandbox smoke planning
 
 ## Repository Organization
 
 - `examples/` user-facing runnable Terraform examples
-- `tests/` test harness assets (LocalStack, fixtures, smoke helpers)
+- `tests/` test harness assets (LocalStack, fixtures)
 - root module files (`main.tf`, `variables.tf`, `outputs.tf`) as reusable source module
-- `modules/networking/` Tier 0 AWS networking foundation module (optional enablement via `networking_enabled`)
+- `modules/` provider adapters, networking, database, compute, and config modules
 
 ## Prerequisites
 
@@ -31,75 +31,43 @@ This repository now includes:
 - `checkov`
 - Docker + Docker Compose
 
-Check prerequisites:
-
-```bash
-make preflight
-```
-
-## QA Lane (always run)
+## QA (always run)
 
 ```bash
 make qa
 ```
 
-## Local Simulation Lane
+Runs `fmt-check`, `validate`, `lint`, `security` (checkov).
 
-LocalStack compose lives in `tests/localstack/docker-compose.yml`.
+## Plan an Example
 
-Start/stop LocalStack:
+Plan an example against LocalStack (starts/stops LocalStack automatically):
 
 ```bash
-make localstack-up
-make localstack-logs
-make localstack-down
+make plan EXAMPLE=minimal_rds
+make plan EXAMPLE=minimal_BYO_clickhouse
 ```
 
-Minimal example on LocalStack (networking enabled by default):
+Default is `minimal_rds`, so bare `make plan` works.
+
+## Secrets
+
+Each example has a `secrets.auto.tfvars.example` template. Copy it and fill in real values:
 
 ```bash
-make example-minimal-plan
-make example-minimal-apply
-make example-minimal-verify
-make example-minimal-destroy
+cd examples/minimal_rds
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars with your RPC URL, etc.
 ```
 
-One-shot flow (up + apply + verify):
+`secrets.auto.tfvars` is gitignored and auto-loaded by Terraform.
+
+## Full Verification
+
+Run QA + plan all examples:
 
 ```bash
-make example-minimal
-```
-
-The minimal-example LocalStack flow does not require local fixtures.
-
-## AWS Smoke Lane
-
-Use a sandbox AWS account/profile and run:
-
-```bash
-make aws-smoke-plan AWS_PROFILE=your-sandbox-profile AWS_REGION=us-east-1
-make aws-smoke-apply AWS_PROFILE=your-sandbox-profile AWS_REGION=us-east-1
-make aws-smoke-destroy AWS_PROFILE=your-sandbox-profile AWS_REGION=us-east-1
-```
-
-By default, `aws-smoke-*` runs with `AWS_SMOKE_SKIP_CREDENTIALS_VALIDATION=true` so plan checks can run in credential-less environments.
-
-For strict real-account credential validation, set:
-
-```bash
-make aws-smoke-plan AWS_PROFILE=your-sandbox-profile AWS_REGION=us-east-1 AWS_SMOKE_SKIP_CREDENTIALS_VALIDATION=false
-```
-
-## Current Scope Note
-
-At current implementation stage (provider abstraction scaffold), these lanes validate deployment contracts and guardrails. As Tier 0 modules are added, the same commands become full infrastructure smoke tests.
-
-## Validate
-
-From repo root:
-
-```bash
-make qa
+make verify
 ```
 
 ## Deployment Runbook
