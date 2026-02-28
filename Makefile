@@ -5,7 +5,7 @@ LOCALSTACK_ENDPOINT ?= http://localhost:4566
 
 LOCAL_ENV = AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(LOCALSTACK_ENDPOINT)
 
-.PHONY: fmt-check validate lint security qa plan verify
+.PHONY: fmt-check validate lint security qa plan verify up down
 
 # --- QA ---
 
@@ -22,6 +22,14 @@ security:
 	checkov -d . --framework terraform
 
 qa: fmt-check validate lint security
+
+# --- LocalStack lifecycle ---
+
+up:
+	docker compose -f $(LOCALSTACK_COMPOSE_FILE) up -d --wait
+
+down:
+	docker compose -f $(LOCALSTACK_COMPOSE_FILE) down
 
 # --- Plan an example against LocalStack ---
 # Usage: make plan EXAMPLE=minimal_rds
