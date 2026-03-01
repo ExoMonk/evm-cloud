@@ -5,19 +5,20 @@ terraform {
 module "evm_cloud" {
   source = "../.."
 
-  project_name            = var.project_name
-  infrastructure_provider = var.infrastructure_provider
-  deployment_target       = var.deployment_target
-  runtime_arch            = var.runtime_arch
-  database_mode           = var.database_mode
-  streaming_mode          = var.streaming_mode
-  ingress_mode            = var.ingress_mode
-  compute_engine          = var.compute_engine
-  workload_mode           = var.workload_mode
-  ssh_public_key          = var.ssh_public_key
-  ec2_instance_type       = var.ec2_instance_type
-  ec2_rpc_proxy_mem_limit = var.ec2_rpc_proxy_mem_limit
-  ec2_indexer_mem_limit   = var.ec2_indexer_mem_limit
+  project_name                       = var.project_name
+  infrastructure_provider            = var.infrastructure_provider
+  deployment_target                  = var.deployment_target
+  runtime_arch                       = var.runtime_arch
+  database_mode                      = var.database_mode
+  streaming_mode                     = var.streaming_mode
+  ingress_mode                       = var.ingress_mode
+  compute_engine                     = var.compute_engine
+  workload_mode                      = var.workload_mode
+  ssh_public_key                     = var.ssh_public_key
+  ec2_instance_type                  = var.ec2_instance_type
+  ec2_rpc_proxy_mem_limit            = var.ec2_rpc_proxy_mem_limit
+  ec2_indexer_mem_limit              = var.ec2_indexer_mem_limit
+  ec2_secret_recovery_window_in_days = 0 # Dev: immediate deletion for easy re-apply
 
   aws_region                      = var.aws_region
   aws_skip_credentials_validation = var.aws_skip_credentials_validation

@@ -1,6 +1,8 @@
 # EC2 instance role for Docker Compose compute engine.
 # Grants: CloudWatch Logs write + Secrets Manager read for the project's env secret.
 
+data "aws_caller_identity" "current" {}
+
 data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
     effect = "Allow"
@@ -35,7 +37,7 @@ resource "aws_iam_role_policy" "ec2_cloudwatch_logs" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${var.aws_region}:*:log-group:/evm-cloud/${var.project_name}-${var.network_environment}:*"
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/evm-cloud/${var.project_name}-${var.network_environment}:*"
       }
     ]
   })
@@ -55,7 +57,7 @@ resource "aws_iam_role_policy" "ec2_secrets_manager" {
         Action = [
           "secretsmanager:GetSecretValue"
         ]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:evm-cloud/${var.project_name}/*"
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:evm-cloud/${var.project_name}/*"
       }
     ]
   })

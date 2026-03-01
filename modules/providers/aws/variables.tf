@@ -68,6 +68,12 @@ variable "ec2_indexer_mem_limit" {
   default     = "2g"
 }
 
+variable "ec2_secret_recovery_window_in_days" {
+  description = "Recovery window for Secrets Manager secret deletion (0 = immediate for dev, 7-30 for production)."
+  type        = number
+  default     = 7
+}
+
 variable "workload_mode" {
   description = "Workload ownership: terraform manages app resources, external delegates to CI/GitOps tools."
   type        = string

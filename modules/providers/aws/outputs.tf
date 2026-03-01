@@ -84,12 +84,13 @@ output "workload_handoff" {
 
     runtime = {
       ec2 = var.compute_engine == "ec2" ? {
-        instance_id  = local.any_ec2_compute ? module.ec2[0].instance_id : null
-        public_ip    = local.any_ec2_compute ? module.ec2[0].instance_public_ip : null
-        ssh_command  = local.any_ec2_compute ? module.ec2[0].ssh_command : null
-        config_dir   = "/opt/evm-cloud/config"
-        compose_file = "/opt/evm-cloud/docker-compose.yml"
-        secret_arn   = local.any_ec2_compute ? module.ec2[0].secret_arn : null
+        instance_id          = local.any_ec2_compute ? module.ec2[0].instance_id : null
+        public_ip            = local.any_ec2_compute ? module.ec2[0].instance_public_ip : null
+        ssh_command          = local.any_ec2_compute ? module.ec2[0].ssh_command : null
+        config_dir           = "/opt/evm-cloud/config"
+        compose_file         = "/opt/evm-cloud/docker-compose.yml"
+        secret_arn           = local.any_ec2_compute ? module.ec2[0].secret_arn : null
+        cloudwatch_log_group = local.any_ec2_compute ? module.ec2[0].cloudwatch_log_group : null
       } : null
 
       eks = var.compute_engine == "eks" ? {

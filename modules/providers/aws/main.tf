@@ -174,13 +174,14 @@ module "ec2" {
   aws_region            = var.aws_region
   tags                  = local.common_tags
 
-  enable_rpc_proxy    = var.rpc_proxy_enabled
-  enable_indexer      = var.indexer_enabled
-  rpc_proxy_image     = var.rpc_proxy_image
-  indexer_image       = var.indexer_image
-  rpc_url             = local.resolved_indexer_rpc_url
-  rpc_proxy_mem_limit = var.ec2_rpc_proxy_mem_limit
-  indexer_mem_limit   = var.ec2_indexer_mem_limit
+  enable_rpc_proxy               = var.rpc_proxy_enabled
+  enable_indexer                 = var.indexer_enabled
+  rpc_proxy_image                = var.rpc_proxy_image
+  indexer_image                  = var.indexer_image
+  rpc_url                        = local.resolved_indexer_rpc_url
+  rpc_proxy_mem_limit            = var.ec2_rpc_proxy_mem_limit
+  indexer_mem_limit              = var.ec2_indexer_mem_limit
+  secret_recovery_window_in_days = var.ec2_secret_recovery_window_in_days
 
   erpc_yaml_content     = var.erpc_config_yaml
   rindexer_yaml_content = var.rindexer_config_yaml

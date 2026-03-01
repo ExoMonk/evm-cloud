@@ -53,7 +53,7 @@ scp -i $SSH_KEY config/erpc.yaml ec2-user@$PUBLIC_IP:/opt/evm-cloud/config/erpc.
 scp -i $SSH_KEY config/rindexer.yaml ec2-user@$PUBLIC_IP:/opt/evm-cloud/config/rindexer.yaml
 scp -i $SSH_KEY config/abis/*.json ec2-user@$PUBLIC_IP:/opt/evm-cloud/config/abis/
 
-# 3. SCP docker-compose.yml
+# 3. SCP docker-compose.yml (edit the reference file in this example first)
 scp -i $SSH_KEY docker-compose.yml ec2-user@$PUBLIC_IP:/opt/evm-cloud/docker-compose.yml
 
 # 4. Pull secrets and start services

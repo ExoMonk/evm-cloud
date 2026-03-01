@@ -1,7 +1,10 @@
+# Reference docker-compose.yml for external EC2 deployment.
+# Replace placeholder values before deploying:
+#   - awslogs-group: get from `terraform output -json workload_handoff | jq -r '.runtime.ec2.cloudwatch_log_group'`
+# ClickHouse credentials (including password) come from Secrets Manager via pull-secrets.sh → .env
 services:
-%{ if enable_rpc_proxy ~}
   erpc:
-    image: ${rpc_proxy_image}
+    image: ghcr.io/erpc/erpc:latest
     container_name: erpc
     restart: unless-stopped
     ports:
@@ -14,20 +17,18 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${rpc_proxy_mem_limit}
+          memory: 256m
     logging:
       driver: awslogs
       options:
-        awslogs-region: ${aws_region}
-        awslogs-group: ${log_group}
+        awslogs-region: us-east-1
+        awslogs-group: /evm-cloud/evm-cloud-external-ec2-dev
         awslogs-stream: erpc
     networks:
       - evm-cloud
-%{ endif ~}
 
-%{ if enable_indexer ~}
   rindexer:
-    image: ${indexer_image}
+    image: ghcr.io/joshstevens19/rindexer:latest
     container_name: rindexer
     restart: unless-stopped
     volumes:
@@ -38,21 +39,18 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${indexer_mem_limit}
-%{ if enable_rpc_proxy ~}
+          memory: 512m
     depends_on:
       erpc:
         condition: service_started
-%{ endif ~}
     logging:
       driver: awslogs
       options:
-        awslogs-region: ${aws_region}
-        awslogs-group: ${log_group}
+        awslogs-region: us-east-1
+        awslogs-group: /evm-cloud/evm-cloud-external-ec2-dev
         awslogs-stream: rindexer
     networks:
       - evm-cloud
-%{ endif ~}
 
 networks:
   evm-cloud:

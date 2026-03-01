@@ -188,3 +188,9 @@ variable "secret_name_prefix" {
   type        = string
   default     = "evm-cloud"
 }
+
+variable "secret_recovery_window_in_days" {
+  description = "Recovery window for Secrets Manager secret deletion (0 = immediate, 7-30 for production safety)."
+  type        = number
+  default     = 7
+}

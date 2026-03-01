@@ -115,6 +115,12 @@ variable "ec2_indexer_mem_limit" {
   default     = "2g"
 }
 
+variable "ec2_secret_recovery_window_in_days" {
+  description = "Recovery window for Secrets Manager secret deletion (0 = immediate for dev, 7-30 for production)."
+  type        = number
+  default     = 7
+}
+
 variable "networking_enabled" {
   description = "Enable AWS networking module provisioning in the provider adapter."
   type        = bool

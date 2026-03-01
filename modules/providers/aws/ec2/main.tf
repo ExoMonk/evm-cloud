@@ -26,11 +26,6 @@ locals {
     indexer_image       = var.indexer_image
     aws_region          = var.aws_region
     log_group           = aws_cloudwatch_log_group.services.name
-    project_name        = var.project_name
-    storage_backend     = var.storage_backend
-    clickhouse_url      = var.clickhouse_url
-    clickhouse_user     = var.clickhouse_user
-    clickhouse_db       = var.clickhouse_db
     rpc_proxy_mem_limit = var.rpc_proxy_mem_limit
     indexer_mem_limit   = var.indexer_mem_limit
   })
@@ -91,7 +86,7 @@ resource "aws_cloudwatch_log_group" "services" {
 resource "aws_secretsmanager_secret" "env" {
   #checkov:skip=CKV_AWS_149:KMS encryption optional for Tier 0
   name                    = local.secret_id
-  recovery_window_in_days = 0
+  recovery_window_in_days = var.secret_recovery_window_in_days
   tags                    = var.tags
 }
 
@@ -133,6 +128,11 @@ resource "aws_instance" "this" {
 
   lifecycle {
     ignore_changes = [user_data]
+
+    precondition {
+      condition     = length(local.cloud_init_content) <= 16384
+      error_message = "Cloud-init payload exceeds 16KB user_data limit. Reduce config/ABI size or use workload_mode=external."
+    }
   }
 
   tags = merge(var.tags, {
