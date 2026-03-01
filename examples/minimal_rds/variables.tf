@@ -37,6 +37,11 @@ variable "compute_engine" {
   default = "ecs"
 }
 
+variable "workload_mode" {
+  type    = string
+  default = "terraform"
+}
+
 variable "aws_region" {
   type    = string
   default = "us-east-1"

@@ -89,6 +89,11 @@ module "ecs_service" {
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
 
+  create_task_exec_iam_role = false
+  task_exec_iam_role_arn    = var.task_execution_role_arn
+  create_tasks_iam_role     = false
+  tasks_iam_role_arn        = var.task_role_arn
+
   container_definitions = {
     indexer = {
       cpu       = var.cpu
@@ -121,18 +126,6 @@ module "ecs_service" {
       }
     }
   }
-
-  # Grant S3 read access for config pull
-  tasks_iam_role_statements = [
-    {
-      effect  = "Allow"
-      actions = ["s3:GetObject", "s3:ListBucket"]
-      resources = [
-        "arn:aws:s3:::${var.config_bucket_name}",
-        "arn:aws:s3:::${var.config_bucket_name}/${var.config_object_prefix}/*"
-      ]
-    }
-  ]
 
   subnet_ids            = var.subnet_ids
   create_security_group = false

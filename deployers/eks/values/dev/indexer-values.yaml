@@ -1,0 +1,21 @@
+fullnameOverride: evm-cloud-indexer
+
+image:
+  repository: ghcr.io/joshstevens19/rindexer
+  tag: latest
+
+replicas: 1
+strategy:
+  type: Recreate
+
+storageBackend: postgres
+rpcUrl: ""
+
+postgres:
+  databaseUrl: ""
+
+config:
+  rindexerYaml: |
+    name: indexer
+    project_type: no_code
+  abis: {}

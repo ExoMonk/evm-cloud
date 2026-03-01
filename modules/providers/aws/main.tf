@@ -18,9 +18,10 @@ locals {
     security_group_ids = module.networking[0].security_group_ids
   } : null
 
-  any_compute_enabled = var.rpc_proxy_enabled || var.indexer_enabled
-  any_ecs_compute     = local.any_compute_enabled && var.compute_engine == "ecs"
-  any_eks_compute     = local.any_compute_enabled && var.compute_engine == "eks"
+  any_compute_enabled         = var.rpc_proxy_enabled || var.indexer_enabled
+  any_ecs_compute             = local.any_compute_enabled && var.compute_engine == "ecs"
+  any_eks_compute             = local.any_compute_enabled && var.compute_engine == "eks"
+  terraform_manages_workloads = var.workload_mode == "terraform"
 
   common_tags = {
     Project     = var.project_name
@@ -89,7 +90,7 @@ resource "terraform_data" "indexer_clickhouse_requires_url" {
 }
 
 resource "terraform_data" "rpc_proxy_requires_config" {
-  count = var.rpc_proxy_enabled ? 1 : 0
+  count = (var.rpc_proxy_enabled && local.terraform_manages_workloads) ? 1 : 0
 
   lifecycle {
     precondition {
@@ -100,7 +101,7 @@ resource "terraform_data" "rpc_proxy_requires_config" {
 }
 
 resource "terraform_data" "indexer_requires_config" {
-  count = var.indexer_enabled ? 1 : 0
+  count = (var.indexer_enabled && local.terraform_manages_workloads) ? 1 : 0
 
   lifecycle {
     precondition {
@@ -124,10 +125,40 @@ module "ecs_cluster" {
 
   # Use FARGATE as default capacity provider
   default_capacity_provider_strategy = {
-    fargate = {
+    FARGATE = {
       base   = 1
       weight = 100
     }
+  }
+
+  tags = local.common_tags
+}
+
+# --- ECS Service Discovery (Cloud Map) ---
+
+resource "aws_service_discovery_private_dns_namespace" "ecs" {
+  count = local.any_ecs_compute ? 1 : 0
+
+  name = "${var.project_name}-${var.network_environment}.internal"
+  vpc  = local.networking.vpc_id
+
+  tags = local.common_tags
+}
+
+resource "aws_service_discovery_service" "rpc_proxy" {
+  count = (local.any_ecs_compute && var.rpc_proxy_enabled) ? 1 : 0
+
+  name = "${var.project_name}-erpc"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.ecs[0].id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
   }
 
   tags = local.common_tags
@@ -169,12 +200,12 @@ module "eks_cluster" {
 # Secrets Manager at plan time to build it.
 
 data "aws_secretsmanager_secret_version" "rds_master" {
-  count     = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres") ? 1 : 0
+  count     = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads) ? 1 : 0
   secret_id = module.postgres[0].master_secret_arn
 }
 
 locals {
-  eks_database_url = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres") ? (
+  eks_database_url = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads) ? (
     "postgresql://${jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["username"]}:${jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["password"]}@${module.postgres[0].endpoint}:${module.postgres[0].port}/${module.postgres[0].db_name}"
   ) : ""
 }
@@ -183,7 +214,7 @@ locals {
 
 module "rpc_proxy" {
   source = "./ecs/rpc-proxy"
-  count  = (var.rpc_proxy_enabled && var.compute_engine == "ecs") ? 1 : 0
+  count  = (var.rpc_proxy_enabled && var.compute_engine == "ecs" && local.terraform_manages_workloads) ? 1 : 0
 
   project_name      = var.project_name
   environment       = var.network_environment
@@ -193,6 +224,11 @@ module "rpc_proxy" {
   image             = var.rpc_proxy_image
   aws_region        = var.aws_region
 
+  task_execution_role_arn = aws_iam_role.ecs_task_execution[0].arn
+  task_role_arn           = aws_iam_role.ecs_task_rpc_proxy[0].arn
+
+  service_discovery_service_arn = aws_service_discovery_service.rpc_proxy[0].arn
+
   config_bucket_name = aws_s3_bucket.config[0].id
   config_object_key  = aws_s3_object.erpc_config[0].key
 }
@@ -201,7 +237,7 @@ module "rpc_proxy" {
 
 module "eks_rpc_proxy" {
   source = "./eks/rpc-proxy"
-  count  = (var.rpc_proxy_enabled && var.compute_engine == "eks") ? 1 : 0
+  count  = (var.rpc_proxy_enabled && var.compute_engine == "eks" && local.terraform_manages_workloads) ? 1 : 0
 
   project_name     = var.project_name
   image            = var.rpc_proxy_image
@@ -212,7 +248,7 @@ module "eks_rpc_proxy" {
 
 module "indexer" {
   source = "./ecs/indexer"
-  count  = (var.indexer_enabled && var.compute_engine == "ecs") ? 1 : 0
+  count  = (var.indexer_enabled && var.compute_engine == "ecs" && local.terraform_manages_workloads) ? 1 : 0
 
   project_name      = var.project_name
   environment       = var.network_environment
@@ -222,6 +258,9 @@ module "indexer" {
   image             = var.indexer_image
   rpc_url           = var.indexer_rpc_url
   aws_region        = var.aws_region
+
+  task_execution_role_arn = aws_iam_role.ecs_task_execution[0].arn
+  task_role_arn           = aws_iam_role.ecs_task_indexer[0].arn
 
   storage_backend = var.indexer_storage_backend
 
@@ -245,7 +284,7 @@ module "indexer" {
 
 module "eks_indexer" {
   source = "./eks/indexer"
-  count  = (var.indexer_enabled && var.compute_engine == "eks") ? 1 : 0
+  count  = (var.indexer_enabled && var.compute_engine == "eks" && local.terraform_manages_workloads) ? 1 : 0
 
   project_name         = var.project_name
   image                = var.indexer_image

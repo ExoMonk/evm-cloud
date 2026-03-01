@@ -102,22 +102,47 @@ eth.llamarpc.com
 ## Usage
 
 ```bash
-# 1. Copy secrets template and fill in real values
-cp secrets.auto.tfvars.example secrets.auto.tfvars
+# 1) Move into this example
+cd examples/eks_BYO_clickhouse
 
-# 2. Initialize and plan
+# 2) Copy secrets template and fill in real values
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars:
+# - indexer_rpc_url
+# - indexer_clickhouse_password
+
+# 3) Initialize Terraform
 terraform init
+
+# 4) Review plan
 terraform plan -var-file=eks_clickhouse.tfvars
 
-# 3. Apply
+# 5) Apply
 terraform apply -var-file=eks_clickhouse.tfvars
 
-# 4. Configure kubectl
+# 6) Configure kubectl
 aws eks update-kubeconfig --name evm-cloud-eks-ch-dev --region us-east-1
 
-# 5. Check pods
+# 7) Check workloads
 kubectl get pods
 kubectl logs -l app=evm-cloud-eks-ch-indexer
+
+# 8) (Optional) Destroy when done
+terraform destroy -var-file=eks_clickhouse.tfvars
 ```
 
 Sensitive values (`indexer_rpc_url`, `indexer_clickhouse_password`) go in `secrets.auto.tfvars` which is gitignored and auto-loaded by Terraform.
+
+## Workload ownership mode
+
+This example defaults to:
+
+- `compute_engine = "eks"`
+- `workload_mode = "terraform"`
+
+Behavior by mode:
+
+- `terraform`: K8s workloads (ConfigMaps/Secret/Deployments/Service) are managed by Terraform.
+- `external`: Terraform provisions Layer-1 infra only (VPC + EKS substrate + IAM foundations), and workload rollout is delegated to external deploy tooling.
+
+Use `workload_handoff` v1 output as the handoff contract for external deployment flows.

@@ -69,6 +69,17 @@ variable "ingress_mode" {
   }
 }
 
+variable "workload_mode" {
+  description = "Workload ownership: terraform (default) manages app resources, external delegates to CI/GitOps tools."
+  type        = string
+  default     = "terraform"
+
+  validation {
+    condition     = contains(["terraform", "external"], var.workload_mode)
+    error_message = "workload_mode must be one of: terraform, external."
+  }
+}
+
 variable "compute_engine" {
   description = "Compute engine for workloads: ecs (Fargate) or eks (Kubernetes). Changing on an existing deployment destroys and recreates all compute resources; database is preserved."
   type        = string

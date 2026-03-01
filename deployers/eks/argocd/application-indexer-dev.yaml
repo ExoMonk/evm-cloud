@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: evm-cloud-indexer-dev
+  namespace: argocd
+spec:
+  project: evm-cloud-external-deployers
+  source:
+    repoURL: https://github.com/your-org/evm-cloud.git
+    targetRevision: main
+    path: deployers/eks/charts/indexer
+    helm:
+      valueFiles:
+        - ../../values/dev/indexer-values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -13,6 +13,7 @@ module "evm_cloud" {
   streaming_mode          = var.streaming_mode
   ingress_mode            = var.ingress_mode
   compute_engine          = var.compute_engine
+  workload_mode           = var.workload_mode
 
   aws_region                      = var.aws_region
   aws_skip_credentials_validation = var.aws_skip_credentials_validation
@@ -60,4 +61,8 @@ output "rpc_proxy" {
 
 output "indexer" {
   value = module.evm_cloud.indexer
+}
+
+output "workload_handoff" {
+  value = module.evm_cloud.workload_handoff
 }

@@ -1,0 +1,4 @@
+fullnameOverride: evm-cloud-erpc
+image:
+  repository: ghcr.io/erpc/erpc
+  tag: latest

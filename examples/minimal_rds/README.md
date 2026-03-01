@@ -116,3 +116,22 @@ eth.llamarpc.com
       │ (DATABASE_URL)
   RDS PostgreSQL           ← creds from Secrets Manager
 ```
+
+## Workload ownership mode
+
+This example defaults to:
+
+- `compute_engine = "ecs"`
+- `workload_mode = "terraform"`
+
+Behavior by mode:
+
+- `terraform`: ECS services + S3 config objects are managed by Terraform.
+- `external`: Terraform still provisions Layer-1 infra (VPC, ECS cluster, RDS, IAM, S3 bucket), but workload resources are skipped.
+
+In both modes, `workload_handoff` is emitted. In external mode, use:
+
+- `workload_handoff.identity.ecs_task_execution_role_arn`
+- `workload_handoff.identity.ecs_task_role_arns.*`
+
+to wire your external deployer task definitions.

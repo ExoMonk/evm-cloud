@@ -1,0 +1,15 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: evm-cloud-external-deployers
+  namespace: argocd
+spec:
+  description: External deployer reference applications for evm-cloud
+  sourceRepos:
+    - '*'
+  destinations:
+    - namespace: default
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'

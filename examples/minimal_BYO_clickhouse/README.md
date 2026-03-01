@@ -117,15 +117,43 @@ eth.llamarpc.com
 ## Usage
 
 ```bash
-# 1. Copy secrets template and fill in real values
-cp secrets.auto.tfvars.example secrets.auto.tfvars
+# 1) Move into this example
+cd examples/minimal_BYO_clickhouse
 
-# 2. Initialize and plan
+# 2) Copy secrets template and fill in real values
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars:
+# - indexer_rpc_url
+# - indexer_clickhouse_password
+
+# 3) Initialize Terraform
 terraform init
+
+# 4) Review plan
 terraform plan -var-file=minimal_clickhouse.tfvars
 
-# 3. Apply
+# 5) Apply
 terraform apply -var-file=minimal_clickhouse.tfvars
+
+# 6) (Optional) Confirm services were created
+aws ecs list-services --cluster evm-cloud-clickhouse-dev --region us-east-1
+
+# 7) (Optional) Destroy when done
+terraform destroy -var-file=minimal_clickhouse.tfvars
 ```
 
 Sensitive values (`indexer_rpc_url`, `indexer_clickhouse_password`) go in `secrets.auto.tfvars` which is gitignored and auto-loaded by Terraform.
+
+## Workload ownership mode
+
+This example defaults to:
+
+- `compute_engine = "ecs"`
+- `workload_mode = "terraform"`
+
+Behavior by mode:
+
+- `terraform`: ECS services + S3 config objects are managed by Terraform.
+- `external`: Terraform provisions infra and IAM handoff only; workload resources are not managed.
+
+External mode still outputs `workload_handoff` v1 with ECS role ARNs for deploy pipelines.

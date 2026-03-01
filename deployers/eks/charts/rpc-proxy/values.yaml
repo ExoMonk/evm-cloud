@@ -1,0 +1,33 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/erpc/erpc
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 4000
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+config:
+  erpcYaml: |
+    logLevel: info
+    server:
+      listenV4: true
+      httpHostV4: 0.0.0.0
+      httpPort: 4000
+    projects: []

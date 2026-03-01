@@ -38,6 +38,7 @@ module "capabilities" {
   streaming_mode          = var.streaming_mode
   ingress_mode            = var.ingress_mode
   compute_engine          = var.compute_engine
+  workload_mode           = var.workload_mode
 }
 
 resource "terraform_data" "provider_guardrails" {
@@ -79,6 +80,7 @@ module "provider_aws" {
   streaming_mode    = var.streaming_mode
   ingress_mode      = var.ingress_mode
   compute_engine    = var.compute_engine
+  workload_mode     = var.workload_mode
 
   aws_region                   = var.aws_region
   networking_enabled           = var.networking_enabled

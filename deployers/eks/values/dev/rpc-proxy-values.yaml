@@ -1,0 +1,17 @@
+fullnameOverride: evm-cloud-erpc
+
+image:
+  repository: ghcr.io/erpc/erpc
+  tag: latest
+
+service:
+  port: 4000
+
+config:
+  erpcYaml: |
+    logLevel: info
+    server:
+      listenV4: true
+      httpHostV4: 0.0.0.0
+      httpPort: 4000
+    projects: []

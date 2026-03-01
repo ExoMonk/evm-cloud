@@ -61,3 +61,19 @@ variable "aws_region" {
   description = "AWS region for CloudWatch log group and S3 access."
   type        = string
 }
+
+variable "task_execution_role_arn" {
+  description = "Pre-provisioned ECS task execution role ARN."
+  type        = string
+}
+
+variable "task_role_arn" {
+  description = "Pre-provisioned ECS task role ARN for eRPC runtime permissions."
+  type        = string
+}
+
+variable "service_discovery_service_arn" {
+  description = "Optional Cloud Map service ARN for ECS service discovery registration."
+  type        = string
+  default     = ""
+}

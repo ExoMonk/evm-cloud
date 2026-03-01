@@ -1,0 +1,68 @@
+{
+  "family": "${FAMILY}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "${CPU}",
+  "memory": "${MEMORY}",
+  "executionRoleArn": "${EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${TASK_ROLE_ARN}",
+  "volumes": [
+    { "name": "config-volume" }
+  ],
+  "containerDefinitions": [
+    {
+      "name": "config-sync",
+      "image": "public.ecr.aws/aws-cli/aws-cli:2.17.47",
+      "essential": false,
+      "entryPoint": ["sh", "-c"],
+      "command": ["mkdir -p /config/abis && aws s3 cp ${RINDEXER_CONFIG_S3_URI} /config/rindexer.yaml && aws s3 sync ${RINDEXER_ABIS_S3_URI} /config/abis/"],
+      "environment": [
+        { "name": "AWS_DEFAULT_REGION", "value": "${AWS_REGION}" }
+      ],
+      "mountPoints": [
+        { "sourceVolume": "config-volume", "containerPath": "/config", "readOnly": false }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${LOG_GROUP}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "config-sync"
+        }
+      }
+    },
+    {
+      "name": "indexer",
+      "image": "${IMAGE}",
+      "essential": true,
+      "readonlyRootFilesystem": true,
+      "dependsOn": [
+        { "containerName": "config-sync", "condition": "SUCCESS" }
+      ],
+      "command": ["/app/rindexer", "start", "indexer", "--path", "/config"],
+      "environment": [
+        { "name": "AWS_DEFAULT_REGION", "value": "${AWS_REGION}" },
+        { "name": "RPC_URL", "value": "${RPC_URL}" },
+        { "name": "CONFIG_BUNDLE_HASH", "value": "${CONFIG_BUNDLE_HASH}" },
+        { "name": "CLICKHOUSE_URL", "value": "${CLICKHOUSE_URL}" },
+        { "name": "CLICKHOUSE_USER", "value": "${CLICKHOUSE_USER}" },
+        { "name": "CLICKHOUSE_DB", "value": "${CLICKHOUSE_DB}" }
+      ],
+      "mountPoints": [
+        { "sourceVolume": "config-volume", "containerPath": "/config", "readOnly": true }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "${DATABASE_SECRET_ARN}" },
+        { "name": "CLICKHOUSE_PASSWORD", "valueFrom": "${CLICKHOUSE_PASSWORD_SECRET_ARN}" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${LOG_GROUP}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "indexer"
+        }
+      }
+    }
+  ]
+}

@@ -44,6 +44,17 @@ variable "compute_engine" {
   }
 }
 
+variable "workload_mode" {
+  description = "Workload ownership: terraform manages app resources, external delegates to CI/GitOps tools."
+  type        = string
+  default     = "terraform"
+
+  validation {
+    condition     = contains(["terraform", "external"], var.workload_mode)
+    error_message = "workload_mode must be one of: terraform, external."
+  }
+}
+
 variable "networking_enabled" {
   description = "Enable networking module provisioning."
   type        = bool

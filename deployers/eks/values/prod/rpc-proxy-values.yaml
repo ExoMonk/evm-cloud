@@ -1,0 +1,11 @@
+fullnameOverride: evm-cloud-erpc
+image:
+  repository: ghcr.io/erpc/erpc
+  tag: latest
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi

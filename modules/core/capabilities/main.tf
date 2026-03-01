@@ -12,6 +12,7 @@ locals {
       deployment_target = var.deployment_target
       runtime_arch      = var.runtime_arch
       compute_engine    = var.compute_engine
+      workload_mode     = var.workload_mode
     }
 
     database = {

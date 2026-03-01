@@ -126,3 +126,13 @@ variable "aws_region" {
   description = "AWS region for CloudWatch log group and S3 access."
   type        = string
 }
+
+variable "task_execution_role_arn" {
+  description = "Pre-provisioned ECS task execution role ARN."
+  type        = string
+}
+
+variable "task_role_arn" {
+  description = "Pre-provisioned ECS task role ARN for indexer runtime permissions."
+  type        = string
+}

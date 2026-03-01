@@ -36,7 +36,7 @@ resource "aws_s3_bucket_public_access_block" "config" {
 # --- eRPC config ---
 
 resource "aws_s3_object" "erpc_config" {
-  count = (var.rpc_proxy_enabled && var.compute_engine == "ecs") ? 1 : 0
+  count = (var.rpc_proxy_enabled && var.compute_engine == "ecs" && local.terraform_manages_workloads) ? 1 : 0
 
   bucket  = aws_s3_bucket.config[0].id
   key     = "erpc/erpc.yaml"
@@ -48,7 +48,7 @@ resource "aws_s3_object" "erpc_config" {
 # --- rindexer config ---
 
 resource "aws_s3_object" "rindexer_config" {
-  count = (var.indexer_enabled && var.compute_engine == "ecs") ? 1 : 0
+  count = (var.indexer_enabled && var.compute_engine == "ecs" && local.terraform_manages_workloads) ? 1 : 0
 
   bucket  = aws_s3_bucket.config[0].id
   key     = "rindexer/rindexer.yaml"
@@ -58,7 +58,7 @@ resource "aws_s3_object" "rindexer_config" {
 }
 
 resource "aws_s3_object" "rindexer_abis" {
-  for_each = (var.indexer_enabled && var.compute_engine == "ecs") ? var.rindexer_abis : {}
+  for_each = (var.indexer_enabled && var.compute_engine == "ecs" && local.terraform_manages_workloads) ? var.rindexer_abis : {}
 
   bucket  = aws_s3_bucket.config[0].id
   key     = "rindexer/abis/${each.key}"

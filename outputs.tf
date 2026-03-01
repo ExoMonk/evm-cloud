@@ -36,3 +36,8 @@ output "indexer" {
   description = "rindexer outputs; null unless indexer_enabled and provider=aws."
   value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].indexer : null
 }
+
+output "workload_handoff" {
+  description = "Handoff contract for external deployers; null unless provider=aws."
+  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].workload_handoff : null
+}

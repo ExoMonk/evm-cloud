@@ -32,3 +32,8 @@ variable "compute_engine" {
   description = "Compute engine: ecs or eks."
   type        = string
 }
+
+variable "workload_mode" {
+  description = "Workload ownership: terraform or external."
+  type        = string
+}

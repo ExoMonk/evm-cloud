@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "indexer.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "indexer.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicas }}
+  strategy:
+    type: {{ .Values.strategy.type }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "indexer.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ .Values.config.rindexerYaml | sha256sum }}
+      labels:
+        app.kubernetes.io/name: {{ include "indexer.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: indexer
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["start", "--path", "/config"]
+          env:
+            - name: RPC_URL
+              value: {{ .Values.rpcUrl | quote }}
+{{- if eq .Values.storageBackend "postgres" }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "indexer.fullname" . }}-secrets
+                  key: DATABASE_URL
+{{- else }}
+            - name: CLICKHOUSE_URL
+              value: {{ .Values.clickhouse.url | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.user | quote }}
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.clickhouse.db | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "indexer.fullname" . }}-secrets
+                  key: CLICKHOUSE_PASSWORD
+{{- end }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "test -f /config/rindexer.yaml"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "test -f /config/rindexer.yaml"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: config
+              mountPath: /config/rindexer.yaml
+              subPath: rindexer.yaml
+              readOnly: true
+            - name: abis
+              mountPath: /config/abis
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "indexer.fullname" . }}-config
+        - name: abis
+          configMap:
+            name: {{ include "indexer.fullname" . }}-abis
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+{{- end }}

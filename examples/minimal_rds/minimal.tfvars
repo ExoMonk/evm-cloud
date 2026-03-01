@@ -37,3 +37,4 @@ indexer_storage_backend = "postgres"
 
 # Config files: erpc.yaml, rindexer.yaml, and abis/ are read via file()
 # in main.tf from files alongside this example. Edit those files directly.
+workload_mode = "terraform"

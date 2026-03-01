@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: evm-cloud-rpc-proxy-dev
+  namespace: argocd
+spec:
+  project: evm-cloud-external-deployers
+  source:
+    repoURL: https://github.com/your-org/evm-cloud.git
+    targetRevision: main
+    path: deployers/eks/charts/rpc-proxy
+    helm:
+      valueFiles:
+        - ../../values/dev/rpc-proxy-values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

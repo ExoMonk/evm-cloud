@@ -1,0 +1,43 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/joshstevens19/rindexer
+  tag: latest
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "1"
+    memory: 2Gi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+replicas: 1
+strategy:
+  type: Recreate
+
+storageBackend: postgres
+
+rpcUrl: ""
+
+postgres:
+  databaseUrl: ""
+
+clickhouse:
+  url: ""
+  user: "default"
+  db: "default"
+  password: ""
+
+config:
+  rindexerYaml: |
+    name: indexer
+    project_type: no_code
+  abis: {}
