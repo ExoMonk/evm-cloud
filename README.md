@@ -26,18 +26,18 @@ Automated EVM blockchain infrastructure deployment with a provider-abstraction b
 
 - `examples/` runnable Terraform examples
 - `modules/` provider adapters and infra/workload modules
-- `deployers/` reference deployment scripts (EC2 SSH, EKS GitOps)
+- `deployers/` reference deployment scripts (EKS GitOps)
 - `tests/` LocalStack harness + fixtures
 - `runbooks/` operational guides
 - root module (`main.tf`, `variables.tf`, `outputs.tf`) for consumers
 
 ## Examples
 
-- `examples/minimal_rds/` — EC2 + Docker Compose + managed Postgres
-- `examples/minimal_BYO_clickhouse/` — EC2 + Docker Compose + external ClickHouse
+- `examples/minimal_aws_rds/` — EC2 + Docker Compose + managed Postgres
+- `examples/minimal_aws_byo_clickhouse/` — EC2 + Docker Compose + external ClickHouse
 - `examples/aws_eks_BYO_clickhouse/` — EKS + external ClickHouse
-- `examples/minimal_external_ec2_byo/` — EC2 external mode + BYO ClickHouse (handoff-only)
-- `examples/minimal_external_eks_byo/` — EKS external mode + BYO ClickHouse (handoff-only)
+- `examples/minimal_aws_external_ec2_byo/` — EC2 external mode + BYO ClickHouse (handoff-only)
+- `examples/minimal_aws_external_eks_byo/` — EKS external mode + BYO ClickHouse (handoff-only)
 
 Each example exposes:
 
@@ -56,7 +56,7 @@ Each example exposes:
 ## Quick start
 
 ```bash
-cd examples/minimal_BYO_clickhouse
+cd examples/minimal_aws_byo_clickhouse
 
 # Set up secrets
 cp secrets.auto.tfvars.example secrets.auto.tfvars
@@ -119,7 +119,7 @@ terraform plan -var-file=minimal_clickhouse.tfvars -var 'workload_mode=external'
 
 Expected:
 
-- no workload resources (EC2 instance / K8s deployment resources)
+- infra created (networking, EC2 instance, IAM, Secrets Manager) but no Docker Compose services started
 - `workload_handoff.mode = "external"`
 - `workload_handoff.version = "v1"`
 
