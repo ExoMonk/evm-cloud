@@ -10,7 +10,7 @@ ingress_mode                    = "self_hosted"
 compute_engine                  = "eks"
 workload_mode                   = "external"
 aws_region                      = "us-east-1"
-aws_skip_credentials_validation = true
+aws_skip_credentials_validation = false
 
 networking_enabled           = true
 network_environment          = "dev"

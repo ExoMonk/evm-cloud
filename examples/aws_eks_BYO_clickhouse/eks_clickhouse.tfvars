@@ -8,7 +8,7 @@ streaming_mode                  = "disabled"
 ingress_mode                    = "self_hosted"
 compute_engine                  = "eks"
 aws_region                      = "us-east-1"
-aws_skip_credentials_validation = true
+aws_skip_credentials_validation = false
 
 # Networking
 networking_enabled           = true
