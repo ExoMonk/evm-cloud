@@ -19,6 +19,8 @@ resource "kubernetes_deployment" "erpc" {
   #checkov:skip=CKV_K8S_29:Pod security context deferred to Tier 1
   #checkov:skip=CKV_K8S_30:Container security context deferred to Tier 1
   #checkov:skip=CKV_K8S_43:Image digest pinning is user responsibility via var.image
+  wait_for_rollout = var.wait_for_rollout
+
   metadata {
     name      = "${var.project_name}-erpc"
     namespace = var.namespace

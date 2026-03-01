@@ -103,3 +103,9 @@ variable "memory_limit" {
   type        = string
   default     = "2Gi"
 }
+
+variable "wait_for_rollout" {
+  description = "Wait for the Deployment rollout to complete."
+  type        = bool
+  default     = true
+}

@@ -5,7 +5,7 @@ LOCALSTACK_ENDPOINT ?= http://localhost:4566
 
 LOCAL_ENV = AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(LOCALSTACK_ENDPOINT)
 
-.PHONY: fmt-check validate lint security qa plan verify up down
+.PHONY: fmt-check validate lint security qa plan verify up down test-k8s
 
 # --- QA ---
 
@@ -55,3 +55,10 @@ verify:
 		echo "\n=== Planning $$example ==="; \
 		$(MAKE) plan EXAMPLE=$$example; \
 	done
+
+# --- Kind-based K8s validation ---
+# Requires: kind, kubectl, helm, terraform, docker
+# Creates a throwaway kind cluster, applies EKS K8s modules, validates resources.
+
+test-k8s:
+	@bash tests/kind/run.sh

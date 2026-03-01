@@ -21,3 +21,6 @@ crash.*.log
 
 # Secrets (never commit)
 secrets.auto.tfvars
+
+# Kind test artifacts
+tests/kind/.kubeconfig
