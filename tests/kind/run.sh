@@ -178,69 +178,92 @@ done
 echo ""
 echo "=== Phase 4: Runtime validation ==="
 
-# Wait for eRPC pod to be running (image pull + start, up to 120s)
-echo "  Waiting for eRPC pod to be ready..."
-if kubectl wait --for=condition=available deployment/kind-test-erpc --timeout=120s 2>/dev/null; then
-  pass "eRPC Deployment is available"
+# Helper: wait for a pod to have a container status (image pulled + attempted start)
+# Usage: wait_for_pod_container <label-selector> <timeout-seconds>
+# Sets: POD_NAME, POD_PHASE
+wait_for_pod_container() {
+  local selector="$1" timeout="$2"
+  POD_NAME="" POD_PHASE=""
+  local elapsed=0
+  while [ $elapsed -lt "$timeout" ]; do
+    POD_NAME=$(kubectl get pods -l "$selector" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+    if [ -n "$POD_NAME" ]; then
+      local state
+      state=$(kubectl get pod "$POD_NAME" -o jsonpath='{.status.containerStatuses[0].state}' 2>/dev/null || echo "")
+      if [ -n "$state" ]; then
+        POD_PHASE=$(kubectl get pod "$POD_NAME" -o jsonpath='{.status.phase}' 2>/dev/null)
+        return 0
+      fi
+    fi
+    sleep 5
+    elapsed=$((elapsed + 5))
+  done
+  return 1
+}
+
+# --- eRPC: should fully start (projects: [] is valid, HTTP server binds on :4000) ---
+echo "  Waiting for eRPC deployment to be available (image pull + start, up to 180s)..."
+if kubectl wait --for=condition=available deployment/kind-test-erpc --timeout=180s 2>/dev/null; then
+  ERPC_POD=$(kubectl get pods -l app=kind-test-erpc -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+  POD_NAME="$ERPC_POD"
+  POD_PHASE=$(kubectl get pod "$POD_NAME" -o jsonpath='{.status.phase}' 2>/dev/null)
+  pass "eRPC deployment available (pod: $POD_PHASE)"
+
+  if [ "$POD_PHASE" = "Running" ]; then
+    pass "eRPC pod is Running"
+
+    # Check logs for startup
+    ERPC_LOGS=$(kubectl logs "$POD_NAME" --tail=20 2>/dev/null || echo "")
+    if [ -n "$ERPC_LOGS" ]; then
+      pass "eRPC produced logs"
+      echo "    (last log: $(echo "$ERPC_LOGS" | tail -1 | cut -c1-120))"
+    else
+      fail "eRPC is Running but produced no logs"
+    fi
+
+    # Port-forward and verify HTTP
+    kubectl port-forward "service/kind-test-erpc" 14000:4000 >/dev/null 2>&1 &
+    ERPC_PF_PID=$!
+    sleep 3
+
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:14000/ 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" != "000" ]; then
+      pass "eRPC HTTP responds (status $HTTP_CODE)"
+    else
+      fail "eRPC did not respond to HTTP request"
+    fi
+
+    kill "$ERPC_PF_PID" 2>/dev/null || true
+    wait "$ERPC_PF_PID" 2>/dev/null || true
+  else
+    fail "eRPC pod did not reach Running (stuck in $POD_PHASE)"
+  fi
 else
-  fail "eRPC Deployment did not become available within 120s"
+  fail "eRPC deployment did not become available within 180s"
 fi
 
-# Port-forward and query eRPC
-ERPC_PF_PID=""
-if kubectl get deployment kind-test-erpc -o jsonpath='{.status.availableReplicas}' 2>/dev/null | grep -q "1"; then
-  kubectl port-forward service/kind-test-erpc 14000:4000 >/dev/null 2>&1 &
-  ERPC_PF_PID=$!
-  sleep 2
+# --- rindexer: will crash on ClickHouse connect, but should pull image + attempt start ---
+echo "  Waiting for rindexer pod (image pull + start, up to 120s)..."
+if wait_for_pod_container "app=kind-test-indexer" 120; then
+  pass "rindexer pod created (phase: $POD_PHASE)"
 
-  # eRPC should respond on its HTTP port (may return 4xx for no projects, but that's a valid response)
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:14000/ 2>/dev/null || echo "000")
-  if [ "$HTTP_CODE" != "000" ]; then
-    pass "eRPC responds to HTTP request (status $HTTP_CODE)"
-  else
-    fail "eRPC did not respond to HTTP request"
-  fi
+  # Give container a moment to produce logs before checking
+  sleep 3
 
-  kill "$ERPC_PF_PID" 2>/dev/null || true
-  wait "$ERPC_PF_PID" 2>/dev/null || true
-  ERPC_PF_PID=""
-else
-  echo -e "  ${YELLOW}SKIP${NC}: eRPC pod not available, skipping HTTP check"
-fi
-
-# rindexer: check pod attempted to start (will crash due to no real ClickHouse)
-# Wait briefly for the pod to have started at least once
-echo "  Waiting for rindexer pod to start..."
-sleep 5
-
-INDEXER_POD=$(kubectl get pods -l app=kind-test-indexer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-if [ -n "$INDEXER_POD" ]; then
-  # Check container was created (even if it crashed)
-  CONTAINER_STARTED=$(kubectl get pod "$INDEXER_POD" -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null || echo "")
-  CONTAINER_STATE=$(kubectl get pod "$INDEXER_POD" -o jsonpath='{.status.containerStatuses[0].state}' 2>/dev/null || echo "")
-
-  if [ -n "$CONTAINER_STATE" ]; then
-    pass "rindexer pod created and container attempted to start"
-  else
-    fail "rindexer pod exists but container state unknown"
-  fi
-
-  # Check logs for rindexer startup indicator
-  LOGS=$(kubectl logs "$INDEXER_POD" --tail=20 2>/dev/null || echo "")
-  if [ -n "$LOGS" ]; then
+  INDEXER_LOGS=$(kubectl logs "$POD_NAME" --tail=30 2>/dev/null || echo "")
+  if [ -n "$INDEXER_LOGS" ]; then
     pass "rindexer produced logs (container ran)"
-    echo "    (last log line: $(echo "$LOGS" | tail -1 | cut -c1-100))"
+    echo "    (last log: $(echo "$INDEXER_LOGS" | tail -1 | cut -c1-120))"
   else
-    # Container may have crashed too fast for logs — still OK if it started
-    echo -e "  ${YELLOW}INFO${NC}: rindexer logs empty (container may have exited before writing)"
+    fail "rindexer pod started but produced no logs"
   fi
 else
-  fail "rindexer pod not found"
+  fail "rindexer pod did not start within 120s"
 fi
 
 # --- Phase 5: Helm chart dry-run validation ---
 echo ""
-echo "=== Phase 4: Helm chart dry-run ==="
+echo "=== Phase 5: Helm chart dry-run ==="
 
 if helm template test-rpc "$CHARTS_DIR/rpc-proxy" \
     --values "$CHARTS_DIR/rpc-proxy/values.yaml" 2>&1 \

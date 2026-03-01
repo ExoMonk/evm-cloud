@@ -19,7 +19,16 @@ variable "erpc_config_yaml" {
       listenV4: true
       httpHostV4: 0.0.0.0
       httpPort: 4000
-    projects: []
+    projects:
+      - id: main
+        networks:
+          - architecture: evm
+            evm:
+              chainId: 1
+        upstreams:
+          - id: public
+            endpoint: https://eth.llamarpc.com
+            type: evm
   YAML
 }
 
@@ -28,7 +37,7 @@ variable "rindexer_config_yaml" {
   type        = string
   default     = <<-YAML
     name: kind-test-indexer
-    project_type: no_code
+    project_type: no-code
     networks:
       - name: ethereum
         chain_id: 1

@@ -98,7 +98,7 @@ resource "kubernetes_deployment" "indexer" {
         container {
           name  = "indexer"
           image = var.image
-          args  = ["start", "--path", "/config"]
+          args  = ["start", "--path", "/config", "all"]
 
           # Plain env vars
           dynamic "env" {

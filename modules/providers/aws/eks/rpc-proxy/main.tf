@@ -49,7 +49,8 @@ resource "kubernetes_deployment" "erpc" {
         container {
           name  = "erpc"
           image = var.image
-          args  = ["--config", "/config/erpc.yaml"]
+          command = ["/erpc-server"]
+          args    = ["--config", "/config/erpc.yaml"]
 
           port {
             container_port = var.container_port

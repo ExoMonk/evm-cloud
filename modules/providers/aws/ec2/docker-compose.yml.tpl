@@ -32,7 +32,7 @@ services:
     restart: unless-stopped
     volumes:
       - /opt/evm-cloud/config:/config:ro
-    command: ["start", "--path", "/config", "indexer"]
+    command: ["start", "--path", "/config", "all"]
     env_file:
       - /opt/evm-cloud/.env
     deploy:

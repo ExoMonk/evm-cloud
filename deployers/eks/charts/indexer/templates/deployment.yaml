@@ -25,7 +25,7 @@ spec:
         - name: indexer
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["start", "--path", "/config"]
+          args: ["start", "--path", "/config", "all"]
           env:
             - name: RPC_URL
               value: {{ .Values.rpcUrl | quote }}
