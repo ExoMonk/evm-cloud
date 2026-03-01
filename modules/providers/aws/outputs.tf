@@ -24,18 +24,30 @@ output "eks_cluster_name" {
 }
 
 output "rpc_proxy" {
-  description = "eRPC proxy outputs; null when disabled or workload_mode=external."
-  value = (var.rpc_proxy_enabled && local.terraform_manages_workloads) ? {
-    service_name   = var.compute_engine == "ecs" ? module.rpc_proxy[0].service_name : module.eks_rpc_proxy[0].service_name
-    container_port = var.compute_engine == "ecs" ? module.rpc_proxy[0].container_port : module.eks_rpc_proxy[0].container_port
+  description = "eRPC proxy outputs; null when disabled or external+EKS."
+  value = (var.rpc_proxy_enabled && (var.compute_engine == "ec2" || local.terraform_manages_workloads)) ? {
+    service_name = (
+      var.compute_engine == "ec2" ? "erpc"
+      : module.eks_rpc_proxy[0].service_name
+    )
+    container_port = (
+      var.compute_engine == "ec2" ? 4000
+      : module.eks_rpc_proxy[0].container_port
+    )
   } : null
 }
 
 output "indexer" {
-  description = "rindexer indexer outputs; null when disabled or workload_mode=external."
-  value = (var.indexer_enabled && local.terraform_manages_workloads) ? {
-    service_name   = var.compute_engine == "ecs" ? module.indexer[0].service_name : module.eks_indexer[0].service_name
-    log_group_name = var.compute_engine == "ecs" ? module.indexer[0].log_group_name : module.eks_indexer[0].log_group_name
+  description = "rindexer indexer outputs; null when disabled or external+EKS."
+  value = (var.indexer_enabled && (var.compute_engine == "ec2" || local.terraform_manages_workloads)) ? {
+    service_name = (
+      var.compute_engine == "ec2" ? "rindexer"
+      : module.eks_indexer[0].service_name
+    )
+    log_group_name = (
+      var.compute_engine == "ec2" ? module.ec2[0].cloudwatch_log_group
+      : module.eks_indexer[0].log_group_name
+    )
   } : null
 }
 
@@ -49,11 +61,9 @@ output "workload_handoff" {
     aws_region     = var.aws_region
 
     identity = {
-      ecs_task_execution_role_arn = (var.compute_engine == "ecs" && local.any_ecs_compute) ? aws_iam_role.ecs_task_execution[0].arn : null
-
-      ecs_task_role_arns = (var.compute_engine == "ecs" && local.any_ecs_compute) ? {
-        rpc_proxy = var.rpc_proxy_enabled ? aws_iam_role.ecs_task_rpc_proxy[0].arn : null
-        indexer   = var.indexer_enabled ? aws_iam_role.ecs_task_indexer[0].arn : null
+      ec2_instance_profile = (var.compute_engine == "ec2" && local.any_ec2_compute) ? {
+        name     = aws_iam_instance_profile.ec2[0].name
+        role_arn = aws_iam_role.ec2_instance[0].arn
       } : null
 
       eks_irsa_role_arns = var.compute_engine == "eks" ? {
@@ -64,6 +74,7 @@ output "workload_handoff" {
 
     network = local.networking != null ? {
       vpc_id             = local.networking.vpc_id
+      public_subnet_ids  = local.networking.public_subnet_ids
       private_subnet_ids = local.networking.private_subnet_ids
       security_groups = {
         rpc_proxy = var.rpc_proxy_enabled ? local.networking.security_group_ids["erpc"] : null
@@ -72,12 +83,13 @@ output "workload_handoff" {
     } : null
 
     runtime = {
-      ecs = var.compute_engine == "ecs" ? {
-        cluster_arn = local.any_ecs_compute ? module.ecs_cluster[0].arn : null
-        service_discovery = local.any_ecs_compute ? {
-          namespace_id   = aws_service_discovery_private_dns_namespace.ecs[0].id
-          namespace_name = aws_service_discovery_private_dns_namespace.ecs[0].name
-        } : null
+      ec2 = var.compute_engine == "ec2" ? {
+        instance_id  = local.any_ec2_compute ? module.ec2[0].instance_id : null
+        public_ip    = local.any_ec2_compute ? module.ec2[0].instance_public_ip : null
+        ssh_command  = local.any_ec2_compute ? module.ec2[0].ssh_command : null
+        config_dir   = "/opt/evm-cloud/config"
+        compose_file = "/opt/evm-cloud/docker-compose.yml"
+        secret_arn   = local.any_ec2_compute ? module.ec2[0].secret_arn : null
       } : null
 
       eks = var.compute_engine == "eks" ? {
@@ -89,18 +101,13 @@ output "workload_handoff" {
 
     services = {
       rpc_proxy = var.rpc_proxy_enabled ? {
-        service_name = "${var.project_name}-erpc"
+        service_name = var.compute_engine == "ec2" ? "erpc" : "${var.project_name}-erpc"
         port         = 4000
-        discovery = (var.compute_engine == "ecs" && local.any_ecs_compute) ? {
-          service_arn    = aws_service_discovery_service.rpc_proxy[0].arn
-          service_name   = aws_service_discovery_service.rpc_proxy[0].name
-          namespace_name = aws_service_discovery_private_dns_namespace.ecs[0].name
-          internal_url   = "http://${aws_service_discovery_service.rpc_proxy[0].name}.${aws_service_discovery_private_dns_namespace.ecs[0].name}:4000"
-        } : null
+        internal_url = var.compute_engine == "ec2" ? "http://erpc:4000" : null
       } : null
 
       indexer = var.indexer_enabled ? {
-        service_name           = "${var.project_name}-indexer"
+        service_name           = var.compute_engine == "ec2" ? "rindexer" : "${var.project_name}-indexer"
         single_writer_required = true
         storage_backend        = var.indexer_storage_backend
       } : null
@@ -124,14 +131,7 @@ output "workload_handoff" {
     }
 
     artifacts = {
-      config_channel = var.compute_engine == "ecs" ? "s3" : "k8s_config"
-
-      s3 = (var.compute_engine == "ecs" && local.any_ecs_compute) ? {
-        bucket               = aws_s3_bucket.config[0].id
-        erpc_config_key      = var.rpc_proxy_enabled ? "erpc/erpc.yaml" : null
-        rindexer_config_key  = var.indexer_enabled ? "rindexer/rindexer.yaml" : null
-        rindexer_abis_prefix = var.indexer_enabled ? "rindexer/abis/" : null
-      } : null
+      config_channel = var.compute_engine == "ec2" ? "ssh" : "k8s_config"
     }
   }
 }

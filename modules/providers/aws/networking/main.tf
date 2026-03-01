@@ -1,7 +1,7 @@
 locals {
   az_count = length(var.availability_zones)
 
-  create_nat_gateway = var.enable_nat_gateway && var.environment != "dev"
+  create_nat_gateway = var.enable_nat_gateway
 
   common_tags = {
     Project     = var.project_name
@@ -283,6 +283,42 @@ resource "aws_security_group_rule" "database_ingress_clickhouse_native_from_inde
   security_group_id        = aws_security_group.database.id
   source_security_group_id = aws_security_group.indexer.id
   description              = "Allow indexer to ClickHouse native"
+}
+
+resource "aws_security_group" "ec2" {
+  #checkov:skip=CKV_AWS_24:SSH from 0.0.0.0/0 needed for dev-tier EC2 access
+  #checkov:skip=CKV_AWS_382:EC2 instance needs broad egress for Docker pulls, upstream RPCs, DB, and AWS APIs
+  name        = "${var.project_name}-${var.environment}-ec2-sg"
+  description = "EC2 Docker Compose instance security group"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = "Allow SSH access"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Allow eRPC access"
+    from_port   = 4000
+    to_port     = 4000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow all egress (Docker pulls, upstream RPCs, DB, AWS APIs)"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-${var.environment}-ec2-sg"
+  })
 }
 
 resource "aws_security_group" "monitoring" {

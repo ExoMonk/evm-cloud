@@ -7,36 +7,36 @@ Automated EVM blockchain infrastructure deployment with a provider-abstraction b
 `evm-cloud` is an infra-first Terraform module for EVM indexing stacks on AWS:
 
 - Networking (VPC, subnets, SGs)
-- Compute substrate (`ecs` or `eks`)
-- Managed Postgres (optional) or BYODB clickhouse wiring
-- Runtime config channels (S3 for ECS, ConfigMap/Secret for EKS)
+- Compute substrate (`ec2` with Docker Compose, or `eks` with Kubernetes)
+- Managed Postgres (optional) or BYODB ClickHouse wiring
+- Runtime config channels (cloud-init + bind mounts for EC2, ConfigMap/Secret for EKS)
 - eRPC + rindexer workload paths (when `workload_mode = "terraform"`)
 
-## Layer model (Phase A/A.1)
+## Layer model
 
 `evm-cloud` supports workload ownership modes:
 
 - `workload_mode = "terraform"` (default)
-  - Terraform manages workloads (ECS services or K8s deployments)
+  - Terraform manages workloads (EC2 + Docker Compose services, or K8s deployments)
 - `workload_mode = "external"`
   - Terraform provisions Layer 1 infra and outputs `workload_handoff` v1
   - Workloads are expected to be deployed by external tooling (CI/GitOps)
-
-Phase A.1 adds Layer-1 ECS IAM roles so external deployers can use stable role ARNs from `workload_handoff.identity`.
 
 ## Repository organization
 
 - `examples/` runnable Terraform examples
 - `modules/` provider adapters and infra/workload modules
+- `deployers/` reference deployment scripts (EC2 SSH, EKS GitOps)
 - `tests/` LocalStack harness + fixtures
+- `runbooks/` operational guides
 - root module (`main.tf`, `variables.tf`, `outputs.tf`) for consumers
 
 ## Examples
 
-- `examples/minimal_rds/` — ECS + managed Postgres
-- `examples/minimal_BYO_clickhouse/` — ECS + external ClickHouse
-- `examples/eks_BYO_clickhouse/` — EKS + external ClickHouse
-- `examples/minimal_external_ecs_byo/` — ECS external mode + BYO ClickHouse (handoff-only)
+- `examples/minimal_rds/` — EC2 + Docker Compose + managed Postgres
+- `examples/minimal_BYO_clickhouse/` — EC2 + Docker Compose + external ClickHouse
+- `examples/aws_eks_BYO_clickhouse/` — EKS + external ClickHouse
+- `examples/minimal_external_ec2_byo/` — EC2 external mode + BYO ClickHouse (handoff-only)
 - `examples/minimal_external_eks_byo/` — EKS external mode + BYO ClickHouse (handoff-only)
 
 Each example exposes:
@@ -53,6 +53,26 @@ Each example exposes:
 - `checkov`
 - Docker + Docker Compose
 
+## Quick start
+
+```bash
+cd examples/minimal_BYO_clickhouse
+
+# Set up secrets
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit: indexer_clickhouse_password, ssh_public_key
+
+terraform init
+terraform plan -var-file=minimal_clickhouse.tfvars
+terraform apply -var-file=minimal_clickhouse.tfvars
+
+# SSH into the instance
+ssh -i ~/.ssh/your-key ec2-user@<public-ip>
+
+# Check containers
+sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps
+```
+
 ## QA and verification
 
 Run static checks:
@@ -64,11 +84,11 @@ make qa
 Plan one example against LocalStack:
 
 ```bash
-make plan EXAMPLE=minimal_rds
-make plan EXAMPLE=minimal_BYO_clickhouse
-make plan EXAMPLE=eks_BYO_clickhouse
-make plan EXAMPLE=minimal_external_ecs_byo
-make plan EXAMPLE=minimal_external_eks_byo
+make plan EXAMPLE=minimal_aws_rds
+make plan EXAMPLE=minimal_aws_byo_clickhouse
+make plan EXAMPLE=aws_eks_BYO_clickhouse
+make plan EXAMPLE=minimal_aws_external_ec2_byo
+make plan EXAMPLE=minimal_aws_external_eks_byo
 ```
 
 Run all checks + all examples:
@@ -82,9 +102,9 @@ make verify
 Each example includes `secrets.auto.tfvars.example`.
 
 ```bash
-cd examples/minimal_rds
+cd examples/minimal_aws_byo_clickhouse
 cp secrets.auto.tfvars.example secrets.auto.tfvars
-# edit values
+# edit values (ssh_public_key, passwords)
 ```
 
 `secrets.auto.tfvars` is gitignored and auto-loaded.
@@ -92,14 +112,14 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 ## External mode quick check
 
 ```bash
-cd examples/minimal_BYO_clickhouse
+cd examples/minimal_aws_byo_clickhouse
 terraform init -backend=false
 terraform plan -var-file=minimal_clickhouse.tfvars -var 'workload_mode=external'
 ```
 
 Expected:
 
-- no workload resources (`aws_ecs_service` / k8s deployment resources)
+- no workload resources (EC2 instance / K8s deployment resources)
 - `workload_handoff.mode = "external"`
 - `workload_handoff.version = "v1"`
 

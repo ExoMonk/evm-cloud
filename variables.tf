@@ -81,14 +81,38 @@ variable "workload_mode" {
 }
 
 variable "compute_engine" {
-  description = "Compute engine for workloads: ecs (Fargate) or eks (Kubernetes). Changing on an existing deployment destroys and recreates all compute resources; database is preserved."
+  description = "Compute engine for workloads: ec2 (Docker Compose) or eks (Kubernetes). Changing on an existing deployment destroys and recreates all compute resources; database is preserved."
   type        = string
-  default     = "ecs"
+  default     = "ec2"
 
   validation {
-    condition     = contains(["ecs", "eks"], var.compute_engine)
-    error_message = "compute_engine must be one of: ecs, eks."
+    condition     = contains(["ec2", "eks"], var.compute_engine)
+    error_message = "compute_engine must be one of: ec2, eks."
   }
+}
+
+variable "ssh_public_key" {
+  description = "SSH public key for EC2 deploy key pair. Required when compute_engine=ec2."
+  type        = string
+  default     = ""
+}
+
+variable "ec2_instance_type" {
+  description = "EC2 instance type for Docker Compose compute engine."
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "ec2_rpc_proxy_mem_limit" {
+  description = "Docker memory limit for eRPC container on EC2 (e.g. 512m, 1g, 2g)."
+  type        = string
+  default     = "1g"
+}
+
+variable "ec2_indexer_mem_limit" {
+  description = "Docker memory limit for rindexer container on EC2 (e.g. 1g, 2g, 4g)."
+  type        = string
+  default     = "2g"
 }
 
 variable "networking_enabled" {
@@ -269,7 +293,7 @@ variable "rindexer_config_yaml" {
 }
 
 variable "rindexer_abis" {
-  description = "Map of ABI filename to JSON content, e.g. { \"ERC20.json\" = file(\"abis/ERC20.json\") }. Uploaded to S3 alongside rindexer.yaml."
+  description = "Map of ABI filename to JSON content, e.g. { \"ERC20.json\" = file(\"abis/ERC20.json\") }. Deployed alongside rindexer.yaml."
   type        = map(string)
   default     = {}
 }

@@ -34,14 +34,38 @@ variable "aws_region" {
 }
 
 variable "compute_engine" {
-  description = "Compute engine for workloads: ecs (Fargate) or eks (Kubernetes)."
+  description = "Compute engine for workloads: ec2 (Docker Compose) or eks (Kubernetes)."
   type        = string
-  default     = "ecs"
+  default     = "ec2"
 
   validation {
-    condition     = contains(["ecs", "eks"], var.compute_engine)
-    error_message = "compute_engine must be one of: ecs, eks."
+    condition     = contains(["ec2", "eks"], var.compute_engine)
+    error_message = "compute_engine must be one of: ec2, eks."
   }
+}
+
+variable "ssh_public_key" {
+  description = "SSH public key for EC2 deploy key pair. Required when compute_engine=ec2."
+  type        = string
+  default     = ""
+}
+
+variable "ec2_instance_type" {
+  description = "EC2 instance type for Docker Compose compute engine."
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "ec2_rpc_proxy_mem_limit" {
+  description = "Docker memory limit for eRPC container on EC2 (e.g. 512m, 1g, 2g)."
+  type        = string
+  default     = "1g"
+}
+
+variable "ec2_indexer_mem_limit" {
+  description = "Docker memory limit for rindexer container on EC2 (e.g. 1g, 2g, 4g)."
+  type        = string
+  default     = "2g"
 }
 
 variable "workload_mode" {
@@ -152,7 +176,7 @@ variable "indexer_image" {
 }
 
 variable "indexer_rpc_url" {
-  description = "RPC endpoint URL for the indexer. If empty and rpc_proxy is enabled, must be set to the eRPC proxy URL (no automatic service discovery in Tier 0)."
+  description = "RPC endpoint URL for the indexer. If empty and rpc_proxy is enabled, auto-resolves to the eRPC internal service discovery URL."
   type        = string
   default     = ""
 }
@@ -190,7 +214,7 @@ variable "indexer_clickhouse_db" {
   default     = "default"
 }
 
-# --- Config injection (S3-backed) ---
+# --- Config injection ---
 
 variable "erpc_config_yaml" {
   description = "Full erpc.yaml content. Required when rpc_proxy_enabled=true. eRPC reads this file, not env vars."

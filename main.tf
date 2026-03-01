@@ -73,14 +73,18 @@ module "provider_aws" {
   source = "./modules/providers/aws"
   count  = var.infrastructure_provider == "aws" ? 1 : 0
 
-  project_name      = var.project_name
-  deployment_target = var.deployment_target
-  runtime_arch      = var.runtime_arch
-  database_mode     = var.database_mode
-  streaming_mode    = var.streaming_mode
-  ingress_mode      = var.ingress_mode
-  compute_engine    = var.compute_engine
-  workload_mode     = var.workload_mode
+  project_name            = var.project_name
+  deployment_target       = var.deployment_target
+  runtime_arch            = var.runtime_arch
+  database_mode           = var.database_mode
+  streaming_mode          = var.streaming_mode
+  ingress_mode            = var.ingress_mode
+  compute_engine          = var.compute_engine
+  workload_mode           = var.workload_mode
+  ssh_public_key          = var.ssh_public_key
+  ec2_instance_type       = var.ec2_instance_type
+  ec2_rpc_proxy_mem_limit = var.ec2_rpc_proxy_mem_limit
+  ec2_indexer_mem_limit   = var.ec2_indexer_mem_limit
 
   aws_region                   = var.aws_region
   networking_enabled           = var.networking_enabled

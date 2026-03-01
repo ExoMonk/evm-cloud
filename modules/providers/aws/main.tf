@@ -19,9 +19,20 @@ locals {
   } : null
 
   any_compute_enabled         = var.rpc_proxy_enabled || var.indexer_enabled
-  any_ecs_compute             = local.any_compute_enabled && var.compute_engine == "ecs"
+  any_ec2_compute             = local.any_compute_enabled && var.compute_engine == "ec2"
   any_eks_compute             = local.any_compute_enabled && var.compute_engine == "eks"
   terraform_manages_workloads = var.workload_mode == "terraform"
+
+  # Auto-wire indexer → eRPC when both are enabled and user didn't provide an explicit URL.
+  # EC2: Docker Compose service name. EKS: Kubernetes service DNS.
+  erpc_internal_url = (
+    var.rpc_proxy_enabled && var.compute_engine == "ec2"
+    ? "http://erpc:4000"
+    : var.rpc_proxy_enabled && var.compute_engine == "eks"
+    ? "http://${var.project_name}-erpc:4000"
+    : ""
+  )
+  resolved_indexer_rpc_url = var.indexer_rpc_url != "" ? var.indexer_rpc_url : local.erpc_internal_url
 
   common_tags = {
     Project     = var.project_name
@@ -52,6 +63,17 @@ resource "terraform_data" "compute_requires_networking" {
     precondition {
       condition     = var.networking_enabled
       error_message = "rpc_proxy_enabled and indexer_enabled require networking_enabled=true."
+    }
+  }
+}
+
+resource "terraform_data" "ec2_requires_ssh_key" {
+  count = local.any_ec2_compute ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = var.ssh_public_key != ""
+      error_message = "ssh_public_key is required when compute_engine=ec2."
     }
   }
 }
@@ -111,59 +133,6 @@ resource "terraform_data" "indexer_requires_config" {
   }
 }
 
-# --- Shared ECS Cluster ---
-
-module "ecs_cluster" {
-  #checkov:skip=CKV_TF_1:Registry version pins are standard for community modules
-  source  = "terraform-aws-modules/ecs/aws//modules/cluster"
-  version = "~> 6.0"
-  count   = local.any_ecs_compute ? 1 : 0
-
-  name = "${var.project_name}-${var.network_environment}"
-
-  # Container Insights enabled by default in module (CKV_AWS_65)
-
-  # Use FARGATE as default capacity provider
-  default_capacity_provider_strategy = {
-    FARGATE = {
-      base   = 1
-      weight = 100
-    }
-  }
-
-  tags = local.common_tags
-}
-
-# --- ECS Service Discovery (Cloud Map) ---
-
-resource "aws_service_discovery_private_dns_namespace" "ecs" {
-  count = local.any_ecs_compute ? 1 : 0
-
-  name = "${var.project_name}-${var.network_environment}.internal"
-  vpc  = local.networking.vpc_id
-
-  tags = local.common_tags
-}
-
-resource "aws_service_discovery_service" "rpc_proxy" {
-  count = (local.any_ecs_compute && var.rpc_proxy_enabled) ? 1 : 0
-
-  name = "${var.project_name}-erpc"
-
-  dns_config {
-    namespace_id = aws_service_discovery_private_dns_namespace.ecs[0].id
-
-    dns_records {
-      ttl  = 10
-      type = "A"
-    }
-
-    routing_policy = "MULTIVALUE"
-  }
-
-  tags = local.common_tags
-}
-
 # --- Database: PostgreSQL ---
 
 module "postgres" {
@@ -182,6 +151,57 @@ module "postgres" {
   backup_retention_period = var.postgres_backup_retention
 }
 
+# --- EC2+Docker Compose ---
+
+# Resolve Postgres credentials for EC2 secret payload
+data "aws_secretsmanager_secret_version" "postgres_master_ec2" {
+  count     = (var.indexer_enabled && var.compute_engine == "ec2" && var.indexer_storage_backend == "postgres" && var.postgres_enabled) ? 1 : 0
+  secret_id = module.postgres[0].master_secret_arn
+}
+
+module "ec2" {
+  source = "./ec2"
+  count  = local.any_ec2_compute ? 1 : 0
+
+  project_name          = var.project_name
+  workload_mode         = var.workload_mode
+  environment           = var.network_environment
+  subnet_id             = local.networking.public_subnet_ids[0]
+  security_group_id     = local.networking.security_group_ids["ec2"]
+  instance_profile_name = aws_iam_instance_profile.ec2[0].name
+  ssh_public_key        = var.ssh_public_key
+  instance_type         = var.ec2_instance_type
+  aws_region            = var.aws_region
+  tags                  = local.common_tags
+
+  enable_rpc_proxy    = var.rpc_proxy_enabled
+  enable_indexer      = var.indexer_enabled
+  rpc_proxy_image     = var.rpc_proxy_image
+  indexer_image       = var.indexer_image
+  rpc_url             = local.resolved_indexer_rpc_url
+  rpc_proxy_mem_limit = var.ec2_rpc_proxy_mem_limit
+  indexer_mem_limit   = var.ec2_indexer_mem_limit
+
+  erpc_yaml_content     = var.erpc_config_yaml
+  rindexer_yaml_content = var.rindexer_config_yaml
+  abi_files             = var.rindexer_abis
+
+  storage_backend = var.indexer_storage_backend
+
+  # Postgres: compose DATABASE_URL from RDS secret
+  db_host     = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? module.postgres[0].endpoint : ""
+  db_port     = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? module.postgres[0].port : 5432
+  db_name     = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? module.postgres[0].db_name : ""
+  db_username = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? try(jsondecode(data.aws_secretsmanager_secret_version.postgres_master_ec2[0].secret_string)["username"], "") : ""
+  db_password = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? try(jsondecode(data.aws_secretsmanager_secret_version.postgres_master_ec2[0].secret_string)["password"], "") : ""
+
+  # ClickHouse BYODB
+  clickhouse_url      = var.indexer_clickhouse_url
+  clickhouse_user     = var.indexer_clickhouse_user
+  clickhouse_password = var.indexer_clickhouse_password
+  clickhouse_db       = var.indexer_clickhouse_db
+}
+
 # --- EKS Cluster ---
 
 module "eks_cluster" {
@@ -196,8 +216,6 @@ module "eks_cluster" {
 }
 
 # --- EKS: Postgres secret resolution ---
-# EKS indexer needs a pre-composed DATABASE_URL. Extract RDS password from
-# Secrets Manager at plan time to build it.
 
 data "aws_secretsmanager_secret_version" "rds_master" {
   count     = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads) ? 1 : 0
@@ -208,29 +226,6 @@ locals {
   eks_database_url = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads) ? (
     "postgresql://${jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["username"]}:${jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["password"]}@${module.postgres[0].endpoint}:${module.postgres[0].port}/${module.postgres[0].db_name}"
   ) : ""
-}
-
-# --- RPC Proxy: eRPC (ECS) ---
-
-module "rpc_proxy" {
-  source = "./ecs/rpc-proxy"
-  count  = (var.rpc_proxy_enabled && var.compute_engine == "ecs" && local.terraform_manages_workloads) ? 1 : 0
-
-  project_name      = var.project_name
-  environment       = var.network_environment
-  subnet_ids        = local.networking.private_subnet_ids
-  security_group_id = local.networking.security_group_ids["erpc"]
-  cluster_arn       = module.ecs_cluster[0].arn
-  image             = var.rpc_proxy_image
-  aws_region        = var.aws_region
-
-  task_execution_role_arn = aws_iam_role.ecs_task_execution[0].arn
-  task_role_arn           = aws_iam_role.ecs_task_rpc_proxy[0].arn
-
-  service_discovery_service_arn = aws_service_discovery_service.rpc_proxy[0].arn
-
-  config_bucket_name = aws_s3_bucket.config[0].id
-  config_object_key  = aws_s3_object.erpc_config[0].key
 }
 
 # --- RPC Proxy: eRPC (EKS) ---
@@ -244,42 +239,6 @@ module "eks_rpc_proxy" {
   erpc_config_yaml = var.erpc_config_yaml
 }
 
-# --- Indexer: rindexer (ECS) ---
-
-module "indexer" {
-  source = "./ecs/indexer"
-  count  = (var.indexer_enabled && var.compute_engine == "ecs" && local.terraform_manages_workloads) ? 1 : 0
-
-  project_name      = var.project_name
-  environment       = var.network_environment
-  subnet_ids        = local.networking.private_subnet_ids
-  security_group_id = local.networking.security_group_ids["indexer"]
-  cluster_arn       = module.ecs_cluster[0].arn
-  image             = var.indexer_image
-  rpc_url           = var.indexer_rpc_url
-  aws_region        = var.aws_region
-
-  task_execution_role_arn = aws_iam_role.ecs_task_execution[0].arn
-  task_role_arn           = aws_iam_role.ecs_task_indexer[0].arn
-
-  storage_backend = var.indexer_storage_backend
-
-  # Postgres (from managed RDS — only used when storage_backend=postgres)
-  db_secret_arn = var.indexer_storage_backend == "postgres" ? module.postgres[0].master_secret_arn : ""
-  db_host       = var.indexer_storage_backend == "postgres" ? module.postgres[0].endpoint : ""
-  db_port       = var.indexer_storage_backend == "postgres" ? module.postgres[0].port : 5432
-  db_name       = var.indexer_storage_backend == "postgres" ? module.postgres[0].db_name : ""
-
-  # ClickHouse (BYODB — only used when storage_backend=clickhouse)
-  clickhouse_url      = var.indexer_clickhouse_url
-  clickhouse_user     = var.indexer_clickhouse_user
-  clickhouse_password = var.indexer_clickhouse_password
-  clickhouse_db       = var.indexer_clickhouse_db
-
-  config_bucket_name   = aws_s3_bucket.config[0].id
-  config_object_prefix = "rindexer"
-}
-
 # --- Indexer: rindexer (EKS) ---
 
 module "eks_indexer" {
@@ -288,7 +247,7 @@ module "eks_indexer" {
 
   project_name         = var.project_name
   image                = var.indexer_image
-  rpc_url              = var.indexer_rpc_url
+  rpc_url              = local.resolved_indexer_rpc_url
   rindexer_config_yaml = var.rindexer_config_yaml
   rindexer_abis        = var.rindexer_abis
 

@@ -1,4 +1,4 @@
-# External Deployer Runbook (Phase B)
+# External Deployer Runbook
 
 This runbook describes Layer-2 deployment when Terraform is configured with:
 
@@ -19,7 +19,7 @@ Confirm:
 
 - `version = "v1"`
 - `mode = "external"`
-- `compute_engine` matches your path (`ecs` or `eks`)
+- `compute_engine` matches your path (`ec2` or `eks`)
 
 ## 2) Choose deployer path
 
@@ -30,12 +30,30 @@ Confirm:
 - Apply ArgoCD AppProject/Applications
 - Track sync and health in ArgoCD
 
-### ECS path (CI)
+### EC2 path (SSH)
 
-- Render task definition from handoff
-- Register task definition revision
-- Update ECS service
-- Wait for stable service state
+```bash
+PUBLIC_IP=$(terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip')
+SSH_KEY=~/.ssh/your-key
+
+# Update config files
+scp -i $SSH_KEY config/erpc.yaml ec2-user@$PUBLIC_IP:/opt/evm-cloud/config/erpc.yaml
+scp -i $SSH_KEY config/rindexer.yaml ec2-user@$PUBLIC_IP:/opt/evm-cloud/config/rindexer.yaml
+scp -i $SSH_KEY config/abis/*.json ec2-user@$PUBLIC_IP:/opt/evm-cloud/config/abis/
+
+# SCP docker-compose.yml
+scp -i $SSH_KEY docker-compose.yml ec2-user@$PUBLIC_IP:/opt/evm-cloud/docker-compose.yml
+
+# Pull secrets and start services
+ssh -i $SSH_KEY ec2-user@$PUBLIC_IP 'bash /opt/evm-cloud/scripts/pull-secrets.sh'
+ssh -i $SSH_KEY ec2-user@$PUBLIC_IP 'cd /opt/evm-cloud && sudo docker compose --env-file .env up -d'
+
+# Check container status
+ssh -i $SSH_KEY ec2-user@$PUBLIC_IP 'sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps'
+
+# View logs
+ssh -i $SSH_KEY ec2-user@$PUBLIC_IP 'sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs -f'
+```
 
 ## 3) Mandatory safety gates
 
@@ -54,13 +72,14 @@ Before promoting indexer changes:
 - Sync ArgoCD to previous revision
 - Verify pod health and indexing progression
 
-### ECS rollback
+### EC2 rollback
 
-- Identify previous stable task definition revision
-- Update service to previous revision
-- Verify service steady state and continuity gate
+- SCP previous config files back to `/opt/evm-cloud/config/`
+- Restart Docker Compose services
+- Verify container health and indexing progression
 
 ## 5) Operational notes
 
 - Keep Terraform and deployer concerns separate: infra changes via Terraform, runtime release via deployers.
 - Do not bypass `workload_handoff`; treat it as source-of-truth contract.
+- EC2 config updates go via SSH; Terraform's `lifecycle { ignore_changes = [user_data] }` ensures no instance recreation.

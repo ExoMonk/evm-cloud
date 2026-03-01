@@ -29,7 +29,7 @@ variable "ingress_mode" {
 }
 
 variable "compute_engine" {
-  description = "Compute engine: ecs or eks."
+  description = "Compute engine: ec2 or eks."
   type        = string
 }
 

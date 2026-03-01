@@ -20,6 +20,7 @@ output "security_group_ids" {
     erpc       = aws_security_group.erpc.id
     indexer    = aws_security_group.indexer.id
     database   = aws_security_group.database.id
+    ec2        = aws_security_group.ec2.id
     monitoring = aws_security_group.monitoring.id
   }
 }
