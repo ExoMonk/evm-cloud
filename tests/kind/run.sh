@@ -9,8 +9,11 @@ set -euo pipefail
 
 CLUSTER_NAME="evm-cloud-test"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 KUBECONFIG_PATH="${SCRIPT_DIR}/.kubeconfig"
-CHARTS_DIR="${SCRIPT_DIR}/../../deployers/eks/charts"
+CHARTS_DIR="${REPO_ROOT}/deployers/eks/charts"
+SCRIPTS_DIR="${REPO_ROOT}/deployers/eks/scripts"
+HELM_NS="helm-test"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -25,17 +28,21 @@ cleanup() {
   echo ""
   echo "--- Cleanup ---"
   cd "$SCRIPT_DIR"
+  helm uninstall test-rpc -n "$HELM_NS" 2>/dev/null || true
+  helm uninstall test-idx -n "$HELM_NS" 2>/dev/null || true
+  kubectl delete namespace "$HELM_NS" 2>/dev/null || true
   terraform destroy -auto-approve \
     -var="kubeconfig_path=${KUBECONFIG_PATH}" 2>/dev/null || true
   kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
   rm -f "$KUBECONFIG_PATH"
+  rm -rf "${SCRIPT_DIR}/.test-deployer"
 }
 trap cleanup EXIT INT TERM
 
 # --- Phase 0: Prerequisites ---
 echo "=== Phase 0: Prerequisites ==="
 MISSING=""
-for cmd in kind kubectl helm terraform; do
+for cmd in kind kubectl helm terraform jq python3; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     MISSING="$MISSING $cmd"
   fi
@@ -279,6 +286,341 @@ if helm template test-idx "$CHARTS_DIR/indexer" \
   pass "indexer Helm chart renders and validates against K8s API"
 else
   fail "indexer Helm chart dry-run failed"
+fi
+
+# --- Phase 6: Deployer scripts pipeline test ---
+echo ""
+echo "=== Phase 6: Deployer scripts pipeline ==="
+
+TEST_DIR="${SCRIPT_DIR}/.test-deployer"
+rm -rf "$TEST_DIR"
+mkdir -p "$TEST_DIR/values" "$TEST_DIR/config/abis"
+
+# Create test handoff JSON
+cat > "$TEST_DIR/handoff.json" <<'HANDOFF'
+{
+  "mode": "external",
+  "compute_engine": "eks",
+  "project_name": "kind-test",
+  "data": { "backend": "clickhouse" },
+  "services": { "rpc_proxy": { "port": 4000 } }
+}
+HANDOFF
+
+# Create test config files (same content as Terraform test vars)
+cat > "$TEST_DIR/config/erpc.yaml" <<'ERPC'
+logLevel: info
+server:
+  listenV4: true
+  httpHostV4: 0.0.0.0
+  httpPort: 4000
+projects:
+  - id: main
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 1
+    upstreams:
+      - id: public
+        endpoint: https://ethereum-rpc.publicnode.com
+        type: evm
+ERPC
+
+cat > "$TEST_DIR/config/rindexer.yaml" <<'RINDEXER'
+name: kind-test-indexer
+project_type: no-code
+networks:
+  - name: ethereum
+    chain_id: 1
+    rpc: http://localhost:8545
+storage:
+  clickhouse:
+    enabled: true
+contracts: []
+RINDEXER
+
+echo '{"abi": []}' > "$TEST_DIR/config/abis/ERC20.json"
+
+# 6a. render-values-from-handoff.sh
+if bash "$SCRIPTS_DIR/render-values-from-handoff.sh" "$TEST_DIR/handoff.json" "$TEST_DIR/values" >/dev/null 2>&1; then
+  pass "render-values-from-handoff.sh exits 0"
+else
+  fail "render-values-from-handoff.sh failed"
+fi
+
+if [ -f "$TEST_DIR/values/rpc-proxy-values.yaml" ] && [ -f "$TEST_DIR/values/indexer-values.yaml" ]; then
+  pass "render script created both values files"
+else
+  fail "render script did not create expected values files"
+fi
+
+if grep -q "kind-test-erpc" "$TEST_DIR/values/rpc-proxy-values.yaml"; then
+  pass "rpc-proxy values contain project-derived fullnameOverride"
+else
+  fail "rpc-proxy values missing fullnameOverride"
+fi
+
+# 6b. populate-values-from-config-bundle.sh
+if bash "$SCRIPTS_DIR/populate-values-from-config-bundle.sh" \
+    --values-dir "$TEST_DIR/values" --config-dir "$TEST_DIR/config" >/dev/null 2>&1; then
+  pass "populate-values-from-config-bundle.sh exits 0"
+else
+  fail "populate-values-from-config-bundle.sh failed"
+fi
+
+if grep -q "httpPort: 4000" "$TEST_DIR/values/rpc-proxy-values.yaml" && \
+   grep -q "publicnode.com" "$TEST_DIR/values/rpc-proxy-values.yaml"; then
+  pass "populated rpc-proxy values contain actual erpc.yaml content"
+else
+  fail "populated rpc-proxy values missing erpc config content"
+fi
+
+if grep -q "kind-test-indexer" "$TEST_DIR/values/indexer-values.yaml" && \
+   grep -q "ERC20.json" "$TEST_DIR/values/indexer-values.yaml"; then
+  pass "populated indexer values contain rindexer config + ABIs"
+else
+  fail "populated indexer values missing config or ABIs"
+fi
+
+# 6c. Error case: invalid handoff (wrong mode)
+cat > "$TEST_DIR/bad-handoff.json" <<'BAD'
+{
+  "mode": "terraform",
+  "compute_engine": "eks",
+  "project_name": "bad-test"
+}
+BAD
+
+if bash "$SCRIPTS_DIR/render-values-from-handoff.sh" "$TEST_DIR/bad-handoff.json" "$TEST_DIR/bad-values" >/dev/null 2>&1; then
+  fail "render script should reject mode=terraform handoff"
+else
+  pass "render script correctly rejects invalid handoff (mode=terraform)"
+fi
+
+# --- Phase 7: Helm install + assertions ---
+echo ""
+echo "=== Phase 7: Helm install + assertions ==="
+
+kubectl create namespace "$HELM_NS" 2>/dev/null || true
+
+# Write test values matching Phase 2 config (same eRPC/rindexer/ABIs/creds)
+cat > "$TEST_DIR/helm-rpc-proxy-values.yaml" <<'HELMRPC'
+fullnameOverride: helm-test-erpc
+service:
+  port: 4000
+config:
+  erpcYaml: |
+    logLevel: info
+    server:
+      listenV4: true
+      httpHostV4: 0.0.0.0
+      httpPort: 4000
+    projects:
+      - id: main
+        networks:
+          - architecture: evm
+            evm:
+              chainId: 1
+        upstreams:
+          - id: public
+            endpoint: https://ethereum-rpc.publicnode.com
+            type: evm
+HELMRPC
+
+cat > "$TEST_DIR/helm-indexer-values.yaml" <<'HELMIDX'
+fullnameOverride: helm-test-indexer
+storageBackend: clickhouse
+rpcUrl: "http://localhost:8545"
+clickhouse:
+  url: "http://localhost:8123"
+  user: "default"
+  db: "test_db"
+  password: "test-password"
+config:
+  rindexerYaml: |
+    name: helm-test-indexer
+    project_type: no-code
+    networks:
+      - name: ethereum
+        chain_id: 1
+        rpc: http://localhost:8545
+    storage:
+      clickhouse:
+        enabled: true
+    contracts: []
+  abis:
+    ERC20.json: |-
+      {"abi": []}
+HELMIDX
+
+helm install test-rpc "$CHARTS_DIR/rpc-proxy" \
+  -n "$HELM_NS" -f "$TEST_DIR/helm-rpc-proxy-values.yaml" --wait=false
+
+helm install test-idx "$CHARTS_DIR/indexer" \
+  -n "$HELM_NS" -f "$TEST_DIR/helm-indexer-values.yaml" --wait=false
+
+# Give K8s a moment to create resources
+sleep 3
+
+# 7.1 rpc-proxy ConfigMap
+if kubectl get configmap helm-test-erpc-config -n "$HELM_NS" -o jsonpath='{.data.erpc\.yaml}' 2>/dev/null | grep -q "httpPort: 4000"; then
+  pass "[helm] rpc-proxy ConfigMap contains erpc.yaml with httpPort 4000"
+else
+  fail "[helm] rpc-proxy ConfigMap missing or malformed"
+fi
+
+# 7.2 rpc-proxy Deployment image
+if kubectl get deployment helm-test-erpc -n "$HELM_NS" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | grep -q "erpc"; then
+  pass "[helm] rpc-proxy Deployment uses erpc image"
+else
+  fail "[helm] rpc-proxy Deployment missing or wrong image"
+fi
+
+# 7.3 rpc-proxy Service port
+if kubectl get service helm-test-erpc -n "$HELM_NS" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null | grep -q "4000"; then
+  pass "[helm] rpc-proxy Service exposes port 4000"
+else
+  fail "[helm] rpc-proxy Service missing or wrong port"
+fi
+
+# 7.4 rpc-proxy Service type
+SVC_TYPE=$(kubectl get service helm-test-erpc -n "$HELM_NS" -o jsonpath='{.spec.type}' 2>/dev/null)
+if [ "$SVC_TYPE" = "ClusterIP" ]; then
+  pass "[helm] rpc-proxy Service type is ClusterIP"
+else
+  fail "[helm] rpc-proxy Service type: expected ClusterIP, got $SVC_TYPE"
+fi
+
+# 7.5 indexer ConfigMap (config)
+if kubectl get configmap helm-test-indexer-config -n "$HELM_NS" -o jsonpath='{.data.rindexer\.yaml}' 2>/dev/null | grep -q "helm-test-indexer"; then
+  pass "[helm] indexer ConfigMap contains rindexer.yaml"
+else
+  fail "[helm] indexer ConfigMap missing or malformed"
+fi
+
+# 7.6 indexer ConfigMap (ABIs)
+if kubectl get configmap helm-test-indexer-abis -n "$HELM_NS" -o jsonpath='{.data.ERC20\.json}' 2>/dev/null | grep -q "abi"; then
+  pass "[helm] indexer ABIs ConfigMap contains ERC20.json"
+else
+  fail "[helm] indexer ABIs ConfigMap missing or malformed"
+fi
+
+# 7.7 indexer Secret
+if kubectl get secret helm-test-indexer-secrets -n "$HELM_NS" -o jsonpath='{.data.CLICKHOUSE_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null | grep -q "test-password"; then
+  pass "[helm] indexer Secret contains CLICKHOUSE_PASSWORD"
+else
+  fail "[helm] indexer Secret missing or wrong value"
+fi
+
+# 7.8 indexer Deployment strategy
+STRATEGY=$(kubectl get deployment helm-test-indexer -n "$HELM_NS" -o jsonpath='{.spec.strategy.type}' 2>/dev/null)
+if [ "$STRATEGY" = "Recreate" ]; then
+  pass "[helm] indexer Deployment uses Recreate strategy (single-writer)"
+else
+  fail "[helm] indexer Deployment strategy: expected Recreate, got $STRATEGY"
+fi
+
+# 7.9 indexer Deployment replicas
+REPLICAS=$(kubectl get deployment helm-test-indexer -n "$HELM_NS" -o jsonpath='{.spec.replicas}' 2>/dev/null)
+if [ "$REPLICAS" = "1" ]; then
+  pass "[helm] indexer Deployment has 1 replica"
+else
+  fail "[helm] indexer Deployment replicas: expected 1, got $REPLICAS"
+fi
+
+# 7.10 indexer env vars
+CONTAINER_ENV=$(kubectl get deployment helm-test-indexer -n "$HELM_NS" -o jsonpath='{.spec.template.spec.containers[0].env[*].name}' 2>/dev/null)
+for expected_var in RPC_URL CLICKHOUSE_URL CLICKHOUSE_USER CLICKHOUSE_DB CLICKHOUSE_PASSWORD; do
+  if echo "$CONTAINER_ENV" | grep -q "$expected_var"; then
+    pass "[helm] indexer Deployment has env var $expected_var"
+  else
+    fail "[helm] indexer Deployment missing env var $expected_var"
+  fi
+done
+
+# 7.11 indexer volume mounts (config + abis)
+VOLUME_NAMES=$(kubectl get deployment helm-test-indexer -n "$HELM_NS" -o jsonpath='{.spec.template.spec.volumes[*].name}' 2>/dev/null)
+for expected_vol in config abis; do
+  if echo "$VOLUME_NAMES" | grep -q "$expected_vol"; then
+    pass "[helm] indexer Deployment has volume $expected_vol"
+  else
+    fail "[helm] indexer Deployment missing volume $expected_vol"
+  fi
+done
+
+# --- Phase 8: Helm runtime validation ---
+echo ""
+echo "=== Phase 8: Helm runtime validation ==="
+
+# --- Helm eRPC: should fully start ---
+echo "  Waiting for Helm eRPC deployment to be available (up to 180s)..."
+if kubectl wait --for=condition=available deployment/helm-test-erpc -n "$HELM_NS" --timeout=180s 2>/dev/null; then
+  ERPC_POD=$(kubectl get pods -l "app.kubernetes.io/instance=test-rpc" -n "$HELM_NS" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+  POD_PHASE=$(kubectl get pod "$ERPC_POD" -n "$HELM_NS" -o jsonpath='{.status.phase}' 2>/dev/null)
+  pass "[helm] eRPC deployment available (pod: $POD_PHASE)"
+
+  if [ "$POD_PHASE" = "Running" ]; then
+    pass "[helm] eRPC pod is Running"
+
+    ERPC_LOGS=$(kubectl logs "$ERPC_POD" -n "$HELM_NS" --tail=20 2>/dev/null || echo "")
+    if [ -n "$ERPC_LOGS" ]; then
+      pass "[helm] eRPC produced logs"
+      echo "    (last log: $(echo "$ERPC_LOGS" | tail -1 | cut -c1-120))"
+    else
+      fail "[helm] eRPC is Running but produced no logs"
+    fi
+
+    # Port-forward on different port to avoid collision with Phase 4
+    kubectl port-forward "service/helm-test-erpc" 14001:4000 -n "$HELM_NS" >/dev/null 2>&1 &
+    ERPC_PF_PID=$!
+    sleep 3
+
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:14001/ 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" != "000" ]; then
+      pass "[helm] eRPC HTTP responds (status $HTTP_CODE)"
+    else
+      fail "[helm] eRPC did not respond to HTTP request"
+    fi
+
+    kill "$ERPC_PF_PID" 2>/dev/null || true
+    wait "$ERPC_PF_PID" 2>/dev/null || true
+  else
+    fail "[helm] eRPC pod did not reach Running (stuck in $POD_PHASE)"
+  fi
+else
+  fail "[helm] eRPC deployment did not become available within 180s"
+fi
+
+# --- Helm rindexer: will crash on ClickHouse connect, but should pull image + attempt start ---
+echo "  Waiting for Helm rindexer pod (image pull + start, up to 120s)..."
+HELM_INDEXER_POD="" HELM_INDEXER_PHASE=""
+ELAPSED=0
+while [ $ELAPSED -lt 120 ]; do
+  HELM_INDEXER_POD=$(kubectl get pods -l "app.kubernetes.io/instance=test-idx" -n "$HELM_NS" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+  if [ -n "$HELM_INDEXER_POD" ]; then
+    STATE=$(kubectl get pod "$HELM_INDEXER_POD" -n "$HELM_NS" -o jsonpath='{.status.containerStatuses[0].state}' 2>/dev/null || echo "")
+    if [ -n "$STATE" ]; then
+      HELM_INDEXER_PHASE=$(kubectl get pod "$HELM_INDEXER_POD" -n "$HELM_NS" -o jsonpath='{.status.phase}' 2>/dev/null)
+      break
+    fi
+  fi
+  sleep 5
+  ELAPSED=$((ELAPSED + 5))
+done
+
+if [ -n "$HELM_INDEXER_POD" ] && [ -n "$HELM_INDEXER_PHASE" ]; then
+  pass "[helm] rindexer pod created (phase: $HELM_INDEXER_PHASE)"
+
+  sleep 3
+  INDEXER_LOGS=$(kubectl logs "$HELM_INDEXER_POD" -n "$HELM_NS" --tail=30 2>/dev/null || echo "")
+  if [ -n "$INDEXER_LOGS" ]; then
+    pass "[helm] rindexer produced logs (container ran)"
+    echo "    (last log: $(echo "$INDEXER_LOGS" | tail -1 | cut -c1-120))"
+  else
+    fail "[helm] rindexer pod started but produced no logs"
+  fi
+else
+  fail "[helm] rindexer pod did not start within 120s"
 fi
 
 # --- Summary ---

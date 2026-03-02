@@ -24,3 +24,4 @@ secrets.auto.tfvars
 
 # Kind test artifacts
 tests/kind/.kubeconfig
+tests/kind/.test-deployer

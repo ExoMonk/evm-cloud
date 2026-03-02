@@ -54,6 +54,7 @@ fi
 
 python3 - "$VALUES_DIR" "$CONFIG_DIR" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 values_dir = Path(sys.argv[1])
@@ -65,27 +66,26 @@ indexer_values_file = values_dir / "indexer-values.yaml"
 erpc = (config_dir / "erpc.yaml").read_text()
 rindexer = (config_dir / "rindexer.yaml").read_text()
 
+# --- RPC proxy: replace placeholder block under erpcYaml ---
+# Matches the "# paste erpc.yaml content here" marker and all indented lines after it
 rpc_values = rpc_values_file.read_text()
-rpc_placeholder = (
-    "# paste erpc.yaml content here\n"
-    "    logLevel: info\n"
-    "    server:\n"
-    "      listenV4: true\n"
-    "      httpHostV4: 0.0.0.0\n"
-    "      httpPort: 4000\n"
-    "    projects: []"
+rpc_values = re.sub(
+    r"# paste erpc\.yaml content here\n(    .+\n?)*",
+    erpc.replace("\n", "\n    ") + "\n",
+    rpc_values,
 )
-rpc_values = rpc_values.replace(rpc_placeholder, erpc.replace("\n", "\n    "))
 rpc_values_file.write_text(rpc_values)
 
+# --- Indexer: replace placeholder block under rindexerYaml ---
+# Matches the "# paste rindexer.yaml content here" marker and all indented lines after it
 indexer_values = indexer_values_file.read_text()
-indexer_placeholder = (
-    "# paste rindexer.yaml content here\n"
-    "    name: evm-cloud-external-eks\n"
-    "    project_type: no_code"
+indexer_values = re.sub(
+    r"# paste rindexer\.yaml content here\n(    .+\n?)*",
+    rindexer.replace("\n", "\n    ") + "\n",
+    indexer_values,
 )
-indexer_values = indexer_values.replace(indexer_placeholder, rindexer.replace("\n", "\n    "))
 
+# --- ABIs: replace empty abis dict with actual ABI files ---
 abi_files = sorted((config_dir / "abis").glob("*.json"))
 if abi_files:
     abi_block = "\n".join(
