@@ -23,7 +23,7 @@ postgres_instance_class   = "db.t4g.micro"
 postgres_engine_version   = "16.4"
 postgres_db_name          = "rindexer"
 postgres_db_username      = "rindexer"
-postgres_backup_retention = 7
+postgres_backup_retention = 0
 
 # RPC Proxy
 rpc_proxy_enabled = true

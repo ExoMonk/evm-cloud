@@ -1,0 +1,141 @@
+variable "project_name" {
+  description = "Project identifier used for naming resources."
+  type        = string
+}
+
+variable "compute_engine" {
+  description = "Compute engine: docker_compose."
+  type        = string
+
+  validation {
+    condition     = var.compute_engine == "docker_compose"
+    error_message = "bare_metal compute_engine must be: docker_compose. Kubernetes deployments should use Ansible + Helm."
+  }
+}
+
+variable "workload_mode" {
+  description = "Workload ownership: terraform manages app resources, external delegates to CI/GitOps tools."
+  type        = string
+  default     = "terraform"
+}
+
+# --- SSH connection ---
+
+variable "host_address" {
+  description = "IP or hostname of the VPS."
+  type        = string
+}
+
+variable "ssh_user" {
+  description = "SSH user for the VPS."
+  type        = string
+  default     = "ubuntu"
+}
+
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key file."
+  type        = string
+}
+
+variable "ssh_port" {
+  description = "SSH port."
+  type        = number
+  default     = 22
+}
+
+# --- RPC Proxy (eRPC) ---
+
+variable "rpc_proxy_enabled" {
+  description = "Enable eRPC proxy deployment."
+  type        = bool
+  default     = false
+}
+
+variable "rpc_proxy_image" {
+  description = "Container image for eRPC."
+  type        = string
+  default     = "ghcr.io/erpc/erpc:latest"
+}
+
+variable "rpc_proxy_mem_limit" {
+  description = "Docker memory limit for eRPC container."
+  type        = string
+  default     = "1g"
+}
+
+variable "erpc_config_yaml" {
+  description = "Full erpc.yaml content."
+  type        = string
+  default     = ""
+}
+
+# --- Indexer (rindexer) ---
+
+variable "indexer_enabled" {
+  description = "Enable rindexer indexer deployment."
+  type        = bool
+  default     = false
+}
+
+variable "indexer_image" {
+  description = "Container image for rindexer."
+  type        = string
+  default     = "ghcr.io/joshstevens19/rindexer:latest"
+}
+
+variable "indexer_rpc_url" {
+  description = "RPC endpoint URL for the indexer."
+  type        = string
+  default     = ""
+}
+
+variable "indexer_storage_backend" {
+  description = "Storage backend for rindexer: postgres or clickhouse."
+  type        = string
+  default     = "clickhouse"
+}
+
+variable "indexer_mem_limit" {
+  description = "Docker memory limit for rindexer container."
+  type        = string
+  default     = "2g"
+}
+
+variable "rindexer_config_yaml" {
+  description = "Full rindexer.yaml content."
+  type        = string
+  default     = ""
+}
+
+variable "rindexer_abis" {
+  description = "Map of ABI filename to JSON content."
+  type        = map(string)
+  default     = {}
+}
+
+# --- ClickHouse BYODB ---
+
+variable "indexer_clickhouse_url" {
+  description = "ClickHouse HTTP endpoint."
+  type        = string
+  default     = ""
+}
+
+variable "indexer_clickhouse_user" {
+  description = "ClickHouse username."
+  type        = string
+  default     = "default"
+}
+
+variable "indexer_clickhouse_password" {
+  description = "ClickHouse password."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "indexer_clickhouse_db" {
+  description = "ClickHouse database name."
+  type        = string
+  default     = "default"
+}

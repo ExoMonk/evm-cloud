@@ -1,5 +1,5 @@
 locals {
-  supported_providers = ["aws"]
+  supported_providers = ["aws", "bare_metal"]
 }
 
 provider "aws" {
@@ -13,12 +13,12 @@ provider "aws" {
 # Provider config must live at root — Terraform limitation.
 
 data "aws_eks_cluster" "this" {
-  count = var.compute_engine == "eks" ? 1 : 0
+  count = var.infrastructure_provider == "aws" && var.compute_engine == "eks" ? 1 : 0
   name  = module.provider_aws[0].eks_cluster_name
 }
 
 data "aws_eks_cluster_auth" "this" {
-  count = var.compute_engine == "eks" ? 1 : 0
+  count = var.infrastructure_provider == "aws" && var.compute_engine == "eks" ? 1 : 0
   name  = module.provider_aws[0].eks_cluster_name
 }
 
@@ -49,7 +49,7 @@ resource "terraform_data" "provider_guardrails" {
   lifecycle {
     precondition {
       condition     = contains(local.supported_providers, var.infrastructure_provider)
-      error_message = "Unsupported infrastructure_provider. Implemented adapters: aws. Add modules/providers/<provider> before using a different value."
+      error_message = "Unsupported infrastructure_provider. Implemented adapters: aws, bare_metal."
     }
 
     precondition {
@@ -66,6 +66,27 @@ resource "terraform_data" "provider_guardrails" {
       condition     = !(var.infrastructure_provider != "aws" && var.streaming_mode == "managed")
       error_message = "streaming_mode=managed currently requires infrastructure_provider=aws."
     }
+
+    precondition {
+      condition     = !(var.infrastructure_provider == "bare_metal" && var.compute_engine != "docker_compose")
+      error_message = "bare_metal requires compute_engine=docker_compose."
+    }
+
+    precondition {
+      condition     = !(var.infrastructure_provider == "aws" && !contains(["ec2", "eks"], var.compute_engine))
+      error_message = "aws requires compute_engine=ec2 or compute_engine=eks."
+    }
+
+    precondition {
+      condition     = !(var.infrastructure_provider == "bare_metal" && var.bare_metal_host == "")
+      error_message = "bare_metal_host is required when infrastructure_provider=bare_metal."
+    }
+
+    precondition {
+      condition     = !(var.infrastructure_provider == "bare_metal" && var.bare_metal_ssh_private_key_path == "")
+      error_message = "bare_metal_ssh_private_key_path is required when infrastructure_provider=bare_metal."
+    }
+
   }
 }
 
@@ -123,4 +144,41 @@ module "provider_aws" {
   erpc_config_yaml     = var.erpc_config_yaml
   rindexer_config_yaml = var.rindexer_config_yaml
   rindexer_abis        = var.rindexer_abis
+}
+
+module "provider_bare_metal" {
+  source = "./modules/providers/bare_metal"
+  count  = var.infrastructure_provider == "bare_metal" ? 1 : 0
+
+  project_name   = var.project_name
+  compute_engine = var.compute_engine
+  workload_mode  = var.workload_mode
+
+  # SSH connection
+  host_address         = var.bare_metal_host
+  ssh_user             = var.bare_metal_ssh_user
+  ssh_private_key_path = var.bare_metal_ssh_private_key_path
+  ssh_port             = var.bare_metal_ssh_port
+
+  # RPC Proxy
+  rpc_proxy_enabled   = var.rpc_proxy_enabled
+  rpc_proxy_image     = var.rpc_proxy_image
+  rpc_proxy_mem_limit = var.bare_metal_rpc_proxy_mem_limit
+  erpc_config_yaml    = var.erpc_config_yaml
+
+  # Indexer
+  indexer_enabled         = var.indexer_enabled
+  indexer_image           = var.indexer_image
+  indexer_rpc_url         = var.indexer_rpc_url
+  indexer_storage_backend = var.indexer_storage_backend
+  indexer_mem_limit       = var.bare_metal_indexer_mem_limit
+  rindexer_config_yaml    = var.rindexer_config_yaml
+  rindexer_abis           = var.rindexer_abis
+
+  # ClickHouse BYODB
+  indexer_clickhouse_url      = var.indexer_clickhouse_url
+  indexer_clickhouse_user     = var.indexer_clickhouse_user
+  indexer_clickhouse_password = var.indexer_clickhouse_password
+  indexer_clickhouse_db       = var.indexer_clickhouse_db
+
 }

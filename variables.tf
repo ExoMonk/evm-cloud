@@ -9,7 +9,7 @@ variable "project_name" {
 }
 
 variable "infrastructure_provider" {
-  description = "Provider adapter to use. Currently implemented: aws."
+  description = "Provider adapter to use. Implemented: aws, bare_metal."
   type        = string
   default     = "aws"
 }
@@ -81,13 +81,13 @@ variable "workload_mode" {
 }
 
 variable "compute_engine" {
-  description = "Compute engine for workloads: ec2 (Docker Compose) or eks (Kubernetes). Changing on an existing deployment destroys and recreates all compute resources; database is preserved."
+  description = "Compute engine for workloads: ec2/eks (AWS), docker_compose (bare_metal). Changing on an existing deployment destroys and recreates all compute resources; database is preserved."
   type        = string
   default     = "ec2"
 
   validation {
-    condition     = contains(["ec2", "eks"], var.compute_engine)
-    error_message = "compute_engine must be one of: ec2, eks."
+    condition     = contains(["ec2", "eks", "docker_compose"], var.compute_engine)
+    error_message = "compute_engine must be one of: ec2, eks, docker_compose."
   }
 }
 
@@ -303,3 +303,42 @@ variable "rindexer_abis" {
   type        = map(string)
   default     = {}
 }
+
+# --- Bare Metal ---
+
+variable "bare_metal_host" {
+  description = "IP or hostname of the VPS. Required when infrastructure_provider=bare_metal."
+  type        = string
+  default     = ""
+}
+
+variable "bare_metal_ssh_user" {
+  description = "SSH user for bare metal host."
+  type        = string
+  default     = "ubuntu"
+}
+
+variable "bare_metal_ssh_private_key_path" {
+  description = "Path to SSH private key file. Required when infrastructure_provider=bare_metal."
+  type        = string
+  default     = ""
+}
+
+variable "bare_metal_ssh_port" {
+  description = "SSH port for bare metal host."
+  type        = number
+  default     = 22
+}
+
+variable "bare_metal_rpc_proxy_mem_limit" {
+  description = "Docker memory limit for eRPC container on bare metal (e.g. 512m, 1g, 2g)."
+  type        = string
+  default     = "1g"
+}
+
+variable "bare_metal_indexer_mem_limit" {
+  description = "Docker memory limit for rindexer container on bare metal (e.g. 1g, 2g, 4g)."
+  type        = string
+  default     = "2g"
+}
+

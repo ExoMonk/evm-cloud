@@ -61,9 +61,9 @@ variable "backup_retention_period" {
 }
 
 variable "deletion_protection" {
-  description = "Enable deletion protection."
+  description = "Enable deletion protection. Defaults to null (auto: true in production, false otherwise)."
   type        = bool
-  default     = true
+  default     = null
 }
 
 variable "multi_az" {

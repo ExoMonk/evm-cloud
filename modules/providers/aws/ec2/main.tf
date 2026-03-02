@@ -18,16 +18,20 @@ locals {
     } : {},
   )
 
-  # Render docker-compose.yml from template
-  docker_compose_content = templatefile("${path.module}/docker-compose.yml.tpl", {
+  # Render docker-compose.yml from shared template with AWS logging
+  docker_compose_content = templatefile("${path.module}/../../../core/docker-compose.yml.tpl", {
     enable_rpc_proxy    = var.enable_rpc_proxy
     enable_indexer      = var.enable_indexer
     rpc_proxy_image     = var.rpc_proxy_image
     indexer_image       = var.indexer_image
-    aws_region          = var.aws_region
-    log_group           = aws_cloudwatch_log_group.services.name
     rpc_proxy_mem_limit = var.rpc_proxy_mem_limit
     indexer_mem_limit   = var.indexer_mem_limit
+    logging_driver      = "awslogs"
+    logging_options = {
+      awslogs-region = var.aws_region
+      awslogs-group  = aws_cloudwatch_log_group.services.name
+      awslogs-stream = "evm-cloud"
+    }
   })
 
   # Render cloud-init from template

@@ -1,3 +1,10 @@
+locals {
+  provider_outputs = {
+    aws        = var.infrastructure_provider == "aws" ? module.provider_aws[0] : null
+    bare_metal = var.infrastructure_provider == "bare_metal" ? module.provider_bare_metal[0] : null
+  }
+}
+
 output "provider_selection" {
   description = "Active infrastructure provider selection."
   value = {
@@ -12,32 +19,32 @@ output "capability_contract" {
   value       = module.capabilities.contract
 }
 
-output "aws_adapter_context" {
-  description = "AWS adapter context; null unless infrastructure_provider=aws."
-  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].adapter_context : null
+output "adapter_context" {
+  description = "Active provider adapter context."
+  value       = try(local.provider_outputs[var.infrastructure_provider].adapter_context, null)
 }
 
 output "networking" {
-  description = "Networking outputs from AWS adapter; null unless networking_enabled and provider=aws."
-  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].networking : null
+  description = "Networking outputs; null for bare_metal (user-managed)."
+  value       = try(local.provider_outputs[var.infrastructure_provider].networking, null)
 }
 
 output "postgres" {
   description = "PostgreSQL outputs; null unless postgres_enabled and provider=aws."
-  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].postgres : null
+  value       = try(local.provider_outputs[var.infrastructure_provider].postgres, null)
 }
 
 output "rpc_proxy" {
-  description = "eRPC proxy outputs; null unless rpc_proxy_enabled and provider=aws."
-  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].rpc_proxy : null
+  description = "eRPC proxy outputs from active provider."
+  value       = try(local.provider_outputs[var.infrastructure_provider].rpc_proxy, null)
 }
 
 output "indexer" {
-  description = "rindexer outputs; null unless indexer_enabled and provider=aws."
-  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].indexer : null
+  description = "rindexer outputs from active provider."
+  value       = try(local.provider_outputs[var.infrastructure_provider].indexer, null)
 }
 
 output "workload_handoff" {
-  description = "Handoff contract for external deployers; null unless provider=aws."
-  value       = var.infrastructure_provider == "aws" ? module.provider_aws[0].workload_handoff : null
+  description = "Handoff contract for external deployers."
+  value       = try(local.provider_outputs[var.infrastructure_provider].workload_handoff, null)
 }

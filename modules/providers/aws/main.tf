@@ -232,7 +232,7 @@ locals {
 # --- RPC Proxy: eRPC (EKS) ---
 
 module "eks_rpc_proxy" {
-  source = "./eks/rpc-proxy"
+  source = "../../core/k8s/rpc-proxy"
   count  = (var.rpc_proxy_enabled && var.compute_engine == "eks" && local.terraform_manages_workloads) ? 1 : 0
 
   project_name     = var.project_name
@@ -243,7 +243,7 @@ module "eks_rpc_proxy" {
 # --- Indexer: rindexer (EKS) ---
 
 module "eks_indexer" {
-  source = "./eks/indexer"
+  source = "../../core/k8s/indexer"
   count  = (var.indexer_enabled && var.compute_engine == "eks" && local.terraform_manages_workloads) ? 1 : 0
 
   project_name         = var.project_name

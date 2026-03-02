@@ -29,7 +29,7 @@ indexer_image   = "ghcr.io/joshstevens19/rindexer:latest"
 # indexer_rpc_url → auto-resolves to http://erpc:4000 (Docker Compose service name) when rpc_proxy_enabled=true
 
 # ClickHouse connection (Bring Your Own Database)
-indexer_clickhouse_url  = "https://your.clickhouse:8123"
+indexer_clickhouse_url  = "your_clickhouse_url"
 indexer_clickhouse_user = "default"
 indexer_clickhouse_db   = "rindexer"
 

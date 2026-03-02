@@ -12,8 +12,6 @@ contracts:
     details:
       - network: ethereum
         address: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-        start_block: "19000000"
-        end_block: "19000100"
     abi: ./abis/ERC20.json
     include_events:
       - Transfer

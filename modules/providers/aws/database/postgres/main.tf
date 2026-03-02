@@ -44,7 +44,7 @@ module "rds" {
 
   backup_retention_period = var.backup_retention_period
   skip_final_snapshot     = var.environment != "production"
-  deletion_protection     = var.deletion_protection
+  deletion_protection     = var.deletion_protection != null ? var.deletion_protection : var.environment == "production"
 
   monitoring_interval          = 60
   create_monitoring_role       = true

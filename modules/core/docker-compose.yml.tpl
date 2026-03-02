@@ -16,11 +16,11 @@ services:
         limits:
           memory: ${rpc_proxy_mem_limit}
     logging:
-      driver: awslogs
+      driver: ${logging_driver}
       options:
-        awslogs-region: ${aws_region}
-        awslogs-group: ${log_group}
-        awslogs-stream: erpc
+%{ for key, value in logging_options ~}
+        ${key}: ${value}
+%{ endfor ~}
     networks:
       - evm-cloud
 %{ endif ~}
@@ -45,11 +45,11 @@ services:
         condition: service_started
 %{ endif ~}
     logging:
-      driver: awslogs
+      driver: ${logging_driver}
       options:
-        awslogs-region: ${aws_region}
-        awslogs-group: ${log_group}
-        awslogs-stream: rindexer
+%{ for key, value in logging_options ~}
+        ${key}: ${value}
+%{ endfor ~}
     networks:
       - evm-cloud
 %{ endif ~}

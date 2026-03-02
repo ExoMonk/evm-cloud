@@ -47,8 +47,8 @@ resource "kubernetes_deployment" "erpc" {
 
       spec {
         container {
-          name  = "erpc"
-          image = var.image
+          name    = "erpc"
+          image   = var.image
           command = ["/erpc-server"]
           args    = ["--config", "/config/erpc.yaml"]
 

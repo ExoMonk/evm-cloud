@@ -77,7 +77,7 @@
 - RDS PostgreSQL 16.4 (db.t4g.micro) in private subnets
   - DB name: `rindexer`, user: `rindexer`
   - `manage_master_user_password = true` — AWS creates a Secrets Manager secret with credentials
-  - Storage encrypted, 7-day backup retention, CloudWatch logs enabled
+  - Storage encrypted, CloudWatch logs enabled
   - Enhanced monitoring (60s interval), Performance Insights enabled
 
 ### IAM
@@ -163,11 +163,45 @@ sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs -f
 terraform destroy -var-file=minimal.tfvars
 ```
 
+## Verifying indexer data (querying RDS)
+
+RDS is in a private subnet — query it via SSH tunnel through the EC2 instance.
+
+```bash
+# 1) Get connection details from Terraform outputs + Secrets Manager
+RDS_ENDPOINT=$(terraform output -json postgres | jq -r '.endpoint')
+RDS_SECRET_ARN=$(terraform output -json postgres | jq -r '.master_secret_arn')
+RDS_PASSWORD=$(aws secretsmanager get-secret-value \
+  --secret-id "$RDS_SECRET_ARN" \
+  --query 'SecretString' --output text | jq -r '.password')
+EC2_IP=$(terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip')
+
+# 2) Open SSH tunnel (local port 5432 → RDS via EC2)
+ssh -L 5432:${RDS_ENDPOINT}:5432 -i ~/.ssh/your-key ec2-user@${EC2_IP} -N &
+
+# 3) List tables created by rindexer
+psql "postgresql://rindexer:${RDS_PASSWORD}@localhost:5432/rindexer" \
+  -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public';"
+
+# 4) Check indexed data
+psql "postgresql://rindexer:${RDS_PASSWORD}@localhost:5432/rindexer" \
+  -c "SELECT COUNT(*) FROM transfer_events;"
+```
+
+Alternatively, query from the EC2 instance directly:
+
+```bash
+ssh -i ~/.ssh/your-key ec2-user@<public-ip>
+sudo yum install -y postgresql16
+psql "postgresql://rindexer:<password>@<rds-endpoint>:5432/rindexer"
+```
+
 ## Lifecycle behavior
 
 - **Config changes** (erpc.yaml, rindexer.yaml, ABIs, mem limits): `lifecycle { ignore_changes = [user_data] }` prevents EC2 instance recreation. Update via SSH.
 - **Secret changes** (passwords, RPC URLs): `aws_secretsmanager_secret_version` updates in-place. SSH into instance and re-run `pull-secrets.sh`, then restart services.
 - **Instance type changes**: Triggers EC2 stop + start (expected).
+- **Destroy**: Clean teardown in dev — `ec2_secret_recovery_window_in_days = 0` (immediate secret deletion), `deletion_protection = false`, `skip_final_snapshot = true`, `backup_retention = 0`.
 
 ## Workload ownership mode
 
