@@ -15,7 +15,7 @@ provider "kubernetes" {
 }
 
 module "rpc_proxy" {
-  source = "../../modules/providers/aws/eks/rpc-proxy"
+  source = "../../modules/core/k8s/rpc-proxy"
 
   project_name     = "kind-test"
   erpc_config_yaml = var.erpc_config_yaml
@@ -23,7 +23,7 @@ module "rpc_proxy" {
 }
 
 module "indexer" {
-  source = "../../modules/providers/aws/eks/indexer"
+  source = "../../modules/core/k8s/indexer"
 
   project_name         = "kind-test"
   rpc_url              = "http://localhost:8545"

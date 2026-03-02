@@ -27,7 +27,7 @@ variable "erpc_config_yaml" {
               chainId: 1
         upstreams:
           - id: public
-            endpoint: https://eth.llamarpc.com
+            endpoint: https://ethereum-rpc.publicnode.com
             type: evm
   YAML
 }
