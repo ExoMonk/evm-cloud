@@ -11,7 +11,7 @@ CLUSTER_NAME="evm-cloud-test"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 KUBECONFIG_PATH="${SCRIPT_DIR}/.kubeconfig"
-CHARTS_DIR="${REPO_ROOT}/deployers/eks/charts"
+CHARTS_DIR="${REPO_ROOT}/deployers/charts"
 SCRIPTS_DIR="${REPO_ROOT}/deployers/eks/scripts"
 HELM_NS="helm-test"
 
@@ -180,6 +180,21 @@ for expected_vol in config abis; do
     fail "indexer Deployment missing volume $expected_vol"
   fi
 done
+
+# 13. Helm provider initialized
+if terraform providers 2>/dev/null | grep -q "hashicorp/helm"; then
+  pass "Helm provider initialized in Terraform state"
+else
+  fail "Helm provider not found in Terraform state"
+fi
+
+# 14. Helm smoke test release deployed
+SMOKE_STATUS=$(kubectl get deploy helm-smoke-test-hello-world -n default -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+if [ "${SMOKE_STATUS:-0}" -ge 1 ] 2>/dev/null; then
+  pass "Helm smoke test deployment running"
+else
+  fail "Helm smoke test deployment not ready (replicas: ${SMOKE_STATUS:-0})"
+fi
 
 # --- Phase 4: Runtime validation ---
 echo ""
