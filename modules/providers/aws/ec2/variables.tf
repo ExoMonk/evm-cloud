@@ -26,6 +26,7 @@ variable "instance_profile_name" {
 variable "ssh_public_key" {
   description = "SSH public key for the deploy key pair."
   type        = string
+  sensitive   = true
 }
 
 variable "instance_type" {

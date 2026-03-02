@@ -4,12 +4,12 @@ variable "project_name" {
 }
 
 variable "compute_engine" {
-  description = "Compute engine: docker_compose."
+  description = "Compute engine: docker_compose or k3s."
   type        = string
 
   validation {
-    condition     = var.compute_engine == "docker_compose"
-    error_message = "bare_metal compute_engine must be: docker_compose. Kubernetes deployments should use Ansible + Helm."
+    condition     = contains(["docker_compose", "k3s"], var.compute_engine)
+    error_message = "bare_metal compute_engine must be one of: docker_compose, k3s."
   }
 }
 
@@ -119,6 +119,7 @@ variable "indexer_clickhouse_url" {
   description = "ClickHouse HTTP endpoint."
   type        = string
   default     = ""
+  sensitive   = true
 }
 
 variable "indexer_clickhouse_user" {
@@ -138,4 +139,12 @@ variable "indexer_clickhouse_db" {
   description = "ClickHouse database name."
   type        = string
   default     = "default"
+}
+
+# --- k3s ---
+
+variable "k3s_version" {
+  description = "k3s version to install."
+  type        = string
+  default     = "v1.30.4+k3s1"
 }

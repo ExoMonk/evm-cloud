@@ -1,5 +1,5 @@
 # Bare Metal / VPS provider adapter — deploys rindexer + eRPC on any VPS via SSH.
-# Supports docker_compose compute engine. Kubernetes (k3s) deferred to Ansible-based workflow.
+# Supports docker_compose and k3s compute engines.
 
 locals {
   terraform_manages_workloads = var.workload_mode == "terraform"
@@ -49,7 +49,7 @@ resource "terraform_data" "config_required" {
 
 module "compose" {
   source = "./compose"
-  count  = local.terraform_manages_workloads ? 1 : 0
+  count  = (var.compute_engine == "docker_compose" && local.terraform_manages_workloads) ? 1 : 0
 
   project_name         = var.project_name
   host_address         = var.host_address
@@ -68,4 +68,19 @@ module "compose" {
   rindexer_config_yaml = var.rindexer_config_yaml
   rindexer_abis        = var.rindexer_abis
   secret_payload       = local.secret_payload
+}
+
+# --- k3s mode ---
+
+module "k3s_bootstrap" {
+  source = "../../core/k8s/k3s-bootstrap"
+  count  = var.compute_engine == "k3s" ? 1 : 0
+
+  host_address         = var.host_address
+  ssh_user             = var.ssh_user
+  ssh_private_key_path = var.ssh_private_key_path
+  ssh_port             = var.ssh_port
+  project_name         = var.project_name
+  k3s_version          = var.k3s_version
+  tls_san_entries      = [var.host_address]
 }

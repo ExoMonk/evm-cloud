@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/your-org/evm-cloud.git
     targetRevision: main
-    path: deployers/eks/charts/indexer
+    path: deployers/charts/indexer
     helm:
       valueFiles:
         - ../../values/dev/indexer-values.yaml

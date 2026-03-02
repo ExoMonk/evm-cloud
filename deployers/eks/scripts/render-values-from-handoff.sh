@@ -53,7 +53,7 @@ config:
   rindexerYaml: |
     # paste rindexer.yaml content here
     name: ${PROJECT}
-    project_type: no_code
+    project_type: no-code
   abis: {}
 postgres:
   databaseUrl: ""

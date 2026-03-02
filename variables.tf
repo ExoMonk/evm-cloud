@@ -81,13 +81,13 @@ variable "workload_mode" {
 }
 
 variable "compute_engine" {
-  description = "Compute engine for workloads: ec2/eks (AWS), docker_compose (bare_metal). Changing on an existing deployment destroys and recreates all compute resources; database is preserved."
+  description = "Compute engine for workloads: ec2/eks/k3s (AWS), docker_compose/k3s (bare_metal). Changing on an existing deployment destroys and recreates all compute resources; database is preserved."
   type        = string
   default     = "ec2"
 
   validation {
-    condition     = contains(["ec2", "eks", "docker_compose"], var.compute_engine)
-    error_message = "compute_engine must be one of: ec2, eks, docker_compose."
+    condition     = contains(["ec2", "eks", "docker_compose", "k3s"], var.compute_engine)
+    error_message = "compute_engine must be one of: ec2, eks, docker_compose, k3s."
   }
 }
 
@@ -95,6 +95,7 @@ variable "ssh_public_key" {
   description = "SSH public key for EC2 deploy key pair. Required when compute_engine=ec2."
   type        = string
   default     = ""
+  sensitive   = true
 }
 
 variable "ec2_instance_type" {
@@ -263,6 +264,7 @@ variable "indexer_clickhouse_url" {
   description = "ClickHouse HTTP endpoint (e.g. http://clickhouse.example.com:8123). Required when indexer_storage_backend=clickhouse."
   type        = string
   default     = ""
+  sensitive   = true
 }
 
 variable "indexer_clickhouse_user" {
@@ -340,5 +342,32 @@ variable "bare_metal_indexer_mem_limit" {
   description = "Docker memory limit for rindexer container on bare metal (e.g. 1g, 2g, 4g)."
   type        = string
   default     = "2g"
+}
+
+# --- k3s ---
+
+variable "k3s_version" {
+  description = "k3s version to install (e.g., v1.30.4+k3s1). Pinned for reproducibility."
+  type        = string
+  default     = "v1.30.4+k3s1"
+}
+
+variable "k3s_ssh_private_key_path" {
+  description = "Path to SSH private key for k3s host provisioning. Required when compute_engine=k3s on AWS."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "k3s_instance_type" {
+  description = "EC2 instance type for k3s host when infrastructure_provider=aws."
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "k3s_api_allowed_cidrs" {
+  description = "CIDR blocks allowed to access k3s API (port 6443). Defaults to VPC CIDR when empty and networking is enabled."
+  type        = list(string)
+  default     = []
 }
 

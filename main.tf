@@ -28,6 +28,17 @@ provider "kubernetes" {
   token                  = try(data.aws_eks_cluster_auth.this[0].token, "")
 }
 
+# --- Helm provider (EKS) ---
+# Mirrors kubernetes provider auth. Inert when compute_engine != "eks".
+
+provider "helm" {
+  kubernetes {
+    host                   = try(data.aws_eks_cluster.this[0].endpoint, "")
+    cluster_ca_certificate = try(base64decode(data.aws_eks_cluster.this[0].certificate_authority[0].data), "")
+    token                  = try(data.aws_eks_cluster_auth.this[0].token, "")
+  }
+}
+
 module "capabilities" {
   source = "./modules/core/capabilities"
 
@@ -68,13 +79,28 @@ resource "terraform_data" "provider_guardrails" {
     }
 
     precondition {
-      condition     = !(var.infrastructure_provider == "bare_metal" && var.compute_engine != "docker_compose")
-      error_message = "bare_metal requires compute_engine=docker_compose."
+      condition     = !(var.infrastructure_provider == "bare_metal" && !contains(["docker_compose", "k3s"], var.compute_engine))
+      error_message = "bare_metal requires compute_engine=docker_compose or compute_engine=k3s."
     }
 
     precondition {
-      condition     = !(var.infrastructure_provider == "aws" && !contains(["ec2", "eks"], var.compute_engine))
-      error_message = "aws requires compute_engine=ec2 or compute_engine=eks."
+      condition     = !(var.infrastructure_provider == "aws" && !contains(["ec2", "eks", "k3s"], var.compute_engine))
+      error_message = "aws requires compute_engine=ec2, compute_engine=eks, or compute_engine=k3s."
+    }
+
+    precondition {
+      condition     = !(var.compute_engine == "k3s" && var.workload_mode != "external")
+      error_message = "k3s requires workload_mode=external. Use deployers/k3s/ for workload deployment."
+    }
+
+    precondition {
+      condition     = !(var.compute_engine == "k3s" && var.infrastructure_provider == "aws" && var.ssh_public_key == "")
+      error_message = "ssh_public_key is required when compute_engine=k3s on AWS (needed for EC2 k3s host)."
+    }
+
+    precondition {
+      condition     = !(var.compute_engine == "k3s" && var.infrastructure_provider == "aws" && var.k3s_ssh_private_key_path == "")
+      error_message = "k3s_ssh_private_key_path is required when compute_engine=k3s on AWS (needed for SSH provisioning)."
     }
 
     precondition {
@@ -93,6 +119,12 @@ resource "terraform_data" "provider_guardrails" {
 module "provider_aws" {
   source = "./modules/providers/aws"
   count  = var.infrastructure_provider == "aws" ? 1 : 0
+
+  providers = {
+    aws        = aws
+    kubernetes = kubernetes
+    helm       = helm
+  }
 
   project_name                       = var.project_name
   deployment_target                  = var.deployment_target
@@ -144,6 +176,12 @@ module "provider_aws" {
   erpc_config_yaml     = var.erpc_config_yaml
   rindexer_config_yaml = var.rindexer_config_yaml
   rindexer_abis        = var.rindexer_abis
+
+  # k3s
+  k3s_version              = var.k3s_version
+  k3s_instance_type        = var.k3s_instance_type
+  k3s_api_allowed_cidrs    = var.k3s_api_allowed_cidrs
+  k3s_ssh_private_key_path = var.k3s_ssh_private_key_path
 }
 
 module "provider_bare_metal" {
@@ -181,4 +219,6 @@ module "provider_bare_metal" {
   indexer_clickhouse_password = var.indexer_clickhouse_password
   indexer_clickhouse_db       = var.indexer_clickhouse_db
 
+  # k3s
+  k3s_version = var.k3s_version
 }

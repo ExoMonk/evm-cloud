@@ -34,13 +34,13 @@ variable "aws_region" {
 }
 
 variable "compute_engine" {
-  description = "Compute engine for workloads: ec2 (Docker Compose) or eks (Kubernetes)."
+  description = "Compute engine for workloads: ec2 (Docker Compose), eks (managed K8s), or k3s (lightweight K8s)."
   type        = string
   default     = "ec2"
 
   validation {
-    condition     = contains(["ec2", "eks"], var.compute_engine)
-    error_message = "compute_engine must be one of: ec2, eks."
+    condition     = contains(["ec2", "eks", "k3s"], var.compute_engine)
+    error_message = "compute_engine must be one of: ec2, eks, k3s."
   }
 }
 
@@ -48,6 +48,7 @@ variable "ssh_public_key" {
   description = "SSH public key for EC2 deploy key pair. Required when compute_engine=ec2."
   type        = string
   default     = ""
+  sensitive   = true
 }
 
 variable "ec2_instance_type" {
@@ -199,6 +200,7 @@ variable "indexer_clickhouse_url" {
   description = "ClickHouse HTTP endpoint (e.g. http://clickhouse.example.com:8123). Required when indexer_storage_backend=clickhouse."
   type        = string
   default     = ""
+  sensitive   = true
 }
 
 variable "indexer_clickhouse_user" {
@@ -238,4 +240,31 @@ variable "rindexer_abis" {
   description = "Map of ABI filename to JSON content, e.g. { \"ERC20.json\" = file(\"abis/ERC20.json\") }. Uploaded to S3 alongside rindexer.yaml."
   type        = map(string)
   default     = {}
+}
+
+# --- k3s ---
+
+variable "k3s_version" {
+  description = "k3s version to install."
+  type        = string
+  default     = "v1.30.4+k3s1"
+}
+
+variable "k3s_instance_type" {
+  description = "EC2 instance type for k3s host."
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "k3s_ssh_private_key_path" {
+  description = "Path to SSH private key for k3s host provisioning."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "k3s_api_allowed_cidrs" {
+  description = "CIDR blocks allowed to access k3s API (port 6443). Defaults to VPC CIDR when empty."
+  type        = list(string)
+  default     = []
 }

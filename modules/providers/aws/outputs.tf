@@ -98,6 +98,14 @@ output "workload_handoff" {
         cluster_endpoint  = local.any_eks_compute ? module.eks_cluster[0].cluster_endpoint : null
         oidc_provider_arn = local.any_eks_compute ? module.eks_cluster[0].oidc_provider_arn : null
       } : null
+
+      k3s = var.compute_engine == "k3s" ? {
+        host_ip           = local.any_k3s_compute ? module.k3s_host[0].host_ip : null
+        instance_id       = local.any_k3s_compute ? module.k3s_host[0].instance_id : null
+        cluster_endpoint  = local.any_k3s_compute ? module.k3s_bootstrap[0].cluster_endpoint : null
+        kubeconfig_base64 = local.any_k3s_compute ? module.k3s_bootstrap[0].kubeconfig_base64 : null
+        node_name         = local.any_k3s_compute ? module.k3s_bootstrap[0].node_name : null
+      } : null
     }
 
     services = {
@@ -125,14 +133,19 @@ output "workload_handoff" {
       } : null
 
       clickhouse = (var.indexer_enabled && var.indexer_storage_backend == "clickhouse") ? {
-        url  = var.indexer_clickhouse_url
-        user = var.indexer_clickhouse_user
-        db   = var.indexer_clickhouse_db
+        url      = var.indexer_clickhouse_url
+        user     = var.indexer_clickhouse_user
+        db       = var.indexer_clickhouse_db
+        password = var.compute_engine == "k3s" ? var.indexer_clickhouse_password : null
       } : null
     }
 
     artifacts = {
-      config_channel = var.compute_engine == "ec2" ? "ssh" : "k8s_config"
+      config_channel = (
+        var.compute_engine == "ec2" ? "ssh"
+        : var.compute_engine == "k3s" ? "helm"
+        : "k8s_config"
+      )
     }
   }
 }

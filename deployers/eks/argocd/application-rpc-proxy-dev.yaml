@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/your-org/evm-cloud.git
     targetRevision: main
-    path: deployers/eks/charts/rpc-proxy
+    path: deployers/charts/rpc-proxy
     helm:
       valueFiles:
         - ../../values/dev/rpc-proxy-values.yaml

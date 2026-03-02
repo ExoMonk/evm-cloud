@@ -49,14 +49,21 @@ output "workload_handoff" {
     runtime = {
       ec2 = null
       eks = null
-      bare_metal = {
+      bare_metal = var.compute_engine == "docker_compose" ? {
         host_address = var.host_address
         ssh_user     = var.ssh_user
         ssh_port     = var.ssh_port
         ssh_command  = "ssh -p ${var.ssh_port} ${var.ssh_user}@${var.host_address}"
         config_dir   = "/opt/evm-cloud/config"
         compose_file = "/opt/evm-cloud/docker-compose.yml"
-      }
+      } : null
+
+      k3s = var.compute_engine == "k3s" ? {
+        host_address      = var.host_address
+        cluster_endpoint  = module.k3s_bootstrap[0].cluster_endpoint
+        kubeconfig_base64 = module.k3s_bootstrap[0].kubeconfig_base64
+        node_name         = module.k3s_bootstrap[0].node_name
+      } : null
     }
 
     services = {
@@ -86,7 +93,7 @@ output "workload_handoff" {
     }
 
     artifacts = {
-      config_channel = "ssh"
+      config_channel = var.compute_engine == "k3s" ? "helm" : "ssh"
     }
   }
 }

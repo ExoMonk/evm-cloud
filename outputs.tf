@@ -45,6 +45,7 @@ output "indexer" {
 }
 
 output "workload_handoff" {
-  description = "Handoff contract for external deployers."
+  description = "Handoff contract for external deployers. Sensitive: may contain kubeconfig credentials (k3s) or database passwords."
   value       = try(local.provider_outputs[var.infrastructure_provider].workload_handoff, null)
+  sensitive   = true
 }

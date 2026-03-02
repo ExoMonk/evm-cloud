@@ -4,8 +4,8 @@ This folder provides Helm + ArgoCD reference assets for deploying `rpc-proxy` an
 
 ## Contents
 
-- `charts/rpc-proxy` Helm chart
-- `charts/indexer` Helm chart
+- `../charts/rpc-proxy` Helm chart (shared with k3s deployer)
+- `../charts/indexer` Helm chart (shared with k3s deployer)
 - `values/{dev,staging,prod}` environment overlays
 - `argocd/` AppProject + dev Applications
 - `scripts/render-values-from-handoff.sh`

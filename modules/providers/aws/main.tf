@@ -21,6 +21,7 @@ locals {
   any_compute_enabled         = var.rpc_proxy_enabled || var.indexer_enabled
   any_ec2_compute             = local.any_compute_enabled && var.compute_engine == "ec2"
   any_eks_compute             = local.any_compute_enabled && var.compute_engine == "eks"
+  any_k3s_compute             = var.compute_engine == "k3s"
   terraform_manages_workloads = var.workload_mode == "terraform"
 
   # Auto-wire indexer → eRPC when both are enabled and user didn't provide an explicit URL.
@@ -63,6 +64,17 @@ resource "terraform_data" "compute_requires_networking" {
     precondition {
       condition     = var.networking_enabled
       error_message = "rpc_proxy_enabled and indexer_enabled require networking_enabled=true."
+    }
+  }
+}
+
+resource "terraform_data" "k3s_requires_networking" {
+  count = local.any_k3s_compute ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = var.networking_enabled
+      error_message = "compute_engine=k3s requires networking_enabled=true (VPC for EC2 host)."
     }
   }
 }
@@ -216,6 +228,36 @@ module "eks_cluster" {
   common_tags  = local.common_tags
 }
 
+# --- k3s Host + Bootstrap ---
+
+module "k3s_host" {
+  source = "./k3s-host"
+  count  = local.any_k3s_compute ? 1 : 0
+
+  project_name          = var.project_name
+  environment           = var.network_environment
+  instance_type         = var.k3s_instance_type
+  subnet_id             = local.networking.public_subnet_ids[0]
+  vpc_id                = local.networking.vpc_id
+  vpc_cidr              = var.network_vpc_cidr
+  ssh_public_key        = var.ssh_public_key
+  k3s_api_allowed_cidrs = var.k3s_api_allowed_cidrs
+  tags                  = local.common_tags
+}
+
+module "k3s_bootstrap" {
+  source     = "../../core/k8s/k3s-bootstrap"
+  count      = local.any_k3s_compute ? 1 : 0
+  depends_on = [module.k3s_host]
+
+  host_address         = module.k3s_host[0].host_ip
+  ssh_user             = module.k3s_host[0].ssh_user
+  ssh_private_key_path = var.k3s_ssh_private_key_path
+  project_name         = var.project_name
+  k3s_version          = var.k3s_version
+  tls_san_entries      = [module.k3s_host[0].host_ip]
+}
+
 # --- EKS: Postgres secret resolution ---
 
 data "aws_secretsmanager_secret_version" "rds_master" {
@@ -227,6 +269,20 @@ locals {
   eks_database_url = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads) ? (
     "postgresql://${jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["username"]}:${jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["password"]}@${module.postgres[0].endpoint}:${module.postgres[0].port}/${module.postgres[0].db_name}"
   ) : ""
+}
+
+# --- K8s Addons (Helm charts) ---
+
+module "k8s_addons" {
+  source = "../../core/k8s/addons"
+  count  = (local.any_eks_compute && local.terraform_manages_workloads) ? 1 : 0
+
+  providers = {
+    kubernetes = kubernetes
+    helm       = helm
+  }
+
+  project_name = var.project_name
 }
 
 # --- RPC Proxy: eRPC (EKS) ---
