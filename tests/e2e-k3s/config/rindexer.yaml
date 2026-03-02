@@ -1,0 +1,17 @@
+name: evm-cloud-e2e
+project_type: no-code
+networks:
+  - name: ethereum
+    chain_id: 1
+    rpc: ${RPC_URL}/main/evm/1
+storage:
+  clickhouse:
+    enabled: true
+contracts:
+  - name: USDC
+    details:
+      - network: ethereum
+        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+    abi: ./abis/ERC20.json
+    include_events:
+      - Transfer

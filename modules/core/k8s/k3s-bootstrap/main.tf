@@ -97,8 +97,8 @@ resource "null_resource" "k3s_install" {
       # Delete all non-system workloads so CNI releases their network interfaces
       "if command -v k3s >/dev/null 2>&1; then sudo k3s kubectl delete --all deployments,statefulsets,daemonsets,jobs,pods --all-namespaces --ignore-not-found --timeout=60s 2>/dev/null || true; fi",
 
-      # Wait briefly for CNI to release ENIs
-      "sleep 5",
+      # Wait for CNI to release ENIs
+      "sleep 10",
 
       # Uninstall k3s (removes flannel interfaces, CNI configs, iptables rules)
       "echo '[evm-cloud] Uninstalling k3s...'",
@@ -107,6 +107,13 @@ resource "null_resource" "k3s_install" {
       # Clean up any leftover CNI interfaces and bridges
       "sudo ip link delete flannel.1 2>/dev/null || true",
       "sudo ip link delete cni0 2>/dev/null || true",
+
+      # Wait for AWS to fully release ENIs before EC2 termination.
+      # Flannel CNI creates secondary ENIs in the VPC. Even after k3s-uninstall
+      # and interface deletion, AWS takes 15-30s to fully deregister them.
+      # Without this, IGW/subnet/VPC destroy hangs waiting for ENI detachment.
+      "echo '[evm-cloud] Waiting for AWS ENI cleanup (30s)...'",
+      "sleep 30",
 
       "rm -f $HOME/.kube/k3s-kubeconfig.yaml /tmp/k3s /tmp/k3s-checksums",
       "echo '[evm-cloud] k3s uninstall complete.'",

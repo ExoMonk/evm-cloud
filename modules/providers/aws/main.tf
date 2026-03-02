@@ -258,6 +258,7 @@ module "k3s_bootstrap" {
   tls_san_entries      = [module.k3s_host[0].host_ip]
 }
 
+
 # --- EKS: Postgres secret resolution ---
 
 data "aws_secretsmanager_secret_version" "rds_master" {
