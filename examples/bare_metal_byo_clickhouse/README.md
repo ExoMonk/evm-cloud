@@ -113,10 +113,10 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars:
 # - bare_metal_host                 = "203.0.113.10"
 # - bare_metal_ssh_private_key_path = "~/.ssh/id_ed25519"
+# - indexer_clickhouse_url          = "https://your-clickhouse-host:8443"
 # - indexer_clickhouse_password     = "your-password"
 
 # 3) Edit bare_metal_clickhouse.tfvars for your setup
-#    - indexer_clickhouse_url  = "https://your-clickhouse:8443"
 #    - bare_metal_ssh_user (default: ubuntu)
 #    - Resource limits (rpc_proxy_mem_limit, indexer_mem_limit)
 
@@ -140,7 +140,7 @@ docker compose logs -f
 terraform destroy -var-file=bare_metal_clickhouse.tfvars
 ```
 
-Sensitive values (`bare_metal_host`, `bare_metal_ssh_private_key_path`, `indexer_clickhouse_password`) go in `secrets.auto.tfvars` which is gitignored and auto-loaded by Terraform.
+Sensitive values (`bare_metal_host`, `bare_metal_ssh_private_key_path`, `indexer_clickhouse_url`, `indexer_clickhouse_password`) go in `secrets.auto.tfvars` which is gitignored and auto-loaded by Terraform.
 
 ## Config updates (post-deploy)
 

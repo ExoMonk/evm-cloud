@@ -1,45 +1,6 @@
 variable "project_name" {
-  type = string
-}
-
-variable "infrastructure_provider" {
   type    = string
-  default = "aws"
-}
-
-variable "deployment_target" {
-  type    = string
-  default = "managed"
-}
-
-variable "runtime_arch" {
-  type    = string
-  default = "multi"
-}
-
-variable "database_mode" {
-  type    = string
-  default = "self_hosted"
-}
-
-variable "streaming_mode" {
-  type    = string
-  default = "disabled"
-}
-
-variable "ingress_mode" {
-  type    = string
-  default = "self_hosted"
-}
-
-variable "compute_engine" {
-  type    = string
-  default = "eks"
-}
-
-variable "workload_mode" {
-  type    = string
-  default = "terraform"
+  default = "evm-cloud-k3s"
 }
 
 variable "aws_region" {
@@ -52,16 +13,6 @@ variable "aws_skip_credentials_validation" {
   default = false
 }
 
-variable "networking_enabled" {
-  type    = bool
-  default = false
-}
-
-variable "network_environment" {
-  type    = string
-  default = "dev"
-}
-
 variable "network_vpc_cidr" {
   type    = string
   default = "10.42.0.0/16"
@@ -72,21 +23,44 @@ variable "network_availability_zones" {
   default = ["us-east-1a", "us-east-1b"]
 }
 
-variable "network_enable_nat_gateway" {
-  type    = bool
-  default = false
+# --- SSH Keys ---
+
+variable "ssh_public_key" {
+  description = "SSH public key content for EC2 instance"
+  type        = string
+  sensitive   = true
 }
 
-variable "network_enable_vpc_endpoints" {
-  type    = bool
-  default = false
+variable "k3s_ssh_private_key_path" {
+  description = "Path to SSH private key for k3s provisioner (e.g., ~/.ssh/id_ed25519)"
+  type        = string
+  sensitive   = true
+}
+
+variable "k3s_api_allowed_cidrs" {
+  description = "CIDRs allowed to reach SSH (22) and k3s API (6443). Must include your IP for provisioning. Example: [\"203.0.113.42/32\"]"
+  type        = list(string)
+}
+
+# --- k3s ---
+
+variable "k3s_instance_type" {
+  description = "EC2 instance type for k3s host"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "k3s_version" {
+  description = "k3s version to install"
+  type        = string
+  default     = "v1.30.4+k3s1"
 }
 
 # --- RPC Proxy ---
 
 variable "rpc_proxy_enabled" {
   type    = bool
-  default = false
+  default = true
 }
 
 variable "rpc_proxy_image" {
@@ -98,7 +72,7 @@ variable "rpc_proxy_image" {
 
 variable "indexer_enabled" {
   type    = bool
-  default = false
+  default = true
 }
 
 variable "indexer_image" {
@@ -107,15 +81,15 @@ variable "indexer_image" {
 }
 
 variable "indexer_rpc_url" {
-  type    = string
-  default = ""
+  description = "RPC URL for the indexer. Leave empty to auto-resolve to eRPC when rpc_proxy_enabled=true."
+  type        = string
+  default     = ""
 }
 
 # --- ClickHouse BYODB ---
 
 variable "indexer_clickhouse_url" {
   type      = string
-  default   = ""
   sensitive = true
 }
 
@@ -126,7 +100,6 @@ variable "indexer_clickhouse_user" {
 
 variable "indexer_clickhouse_password" {
   type      = string
-  default   = ""
   sensitive = true
 }
 

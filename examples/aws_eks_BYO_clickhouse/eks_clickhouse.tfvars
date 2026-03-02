@@ -30,7 +30,7 @@ indexer_image   = "ghcr.io/joshstevens19/rindexer:latest"
 # indexer_rpc_url → set in secrets.auto.tfvars
 
 # ClickHouse connection (Bring Your Own Database)
-indexer_clickhouse_url  = "http://clickhouse.example.com:8123"
+# indexer_clickhouse_url → set in secrets.auto.tfvars (contains hostname)
 indexer_clickhouse_user = "default"
 indexer_clickhouse_db   = "rindexer"
 

@@ -43,8 +43,9 @@ variable "workload_mode" {
 }
 
 variable "ssh_public_key" {
-  type    = string
-  default = ""
+  type      = string
+  default   = ""
+  sensitive = true
 }
 
 variable "ec2_instance_type" {
@@ -118,8 +119,9 @@ variable "indexer_rpc_url" {
 }
 
 variable "indexer_clickhouse_url" {
-  type    = string
-  default = ""
+  type      = string
+  default   = ""
+  sensitive = true
 }
 
 variable "indexer_clickhouse_user" {

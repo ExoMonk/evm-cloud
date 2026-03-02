@@ -70,7 +70,8 @@ variable "indexer_rpc_url" {
 # --- ClickHouse BYODB ---
 
 variable "indexer_clickhouse_url" {
-  type = string
+  type      = string
+  sensitive = true
 }
 
 variable "indexer_clickhouse_user" {

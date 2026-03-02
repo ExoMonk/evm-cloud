@@ -20,7 +20,7 @@ indexer_enabled = true
 indexer_image   = "ghcr.io/joshstevens19/rindexer:latest"
 
 # ClickHouse connection
-indexer_clickhouse_url  = "https://your-clickhouse:8443"
+# indexer_clickhouse_url → set in secrets.auto.tfvars (contains hostname)
 indexer_clickhouse_user = "default"
 indexer_clickhouse_db   = "rindexer"
 

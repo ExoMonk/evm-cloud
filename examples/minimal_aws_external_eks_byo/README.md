@@ -84,12 +84,12 @@ echo "Use this rpcUrl in indexer-values.yaml: http://${RPC_SERVICE_NAME}.default
 
 ```bash
 helm upgrade --install evm-cloud-rpc-proxy \
-  deployers/eks/charts/rpc-proxy \
+  deployers/charts/rpc-proxy \
   -f "$OUT_DIR/rpc-proxy-values.yaml" \
   --namespace default --create-namespace
 
 helm upgrade --install evm-cloud-indexer \
-  deployers/eks/charts/indexer \
+  deployers/charts/indexer \
   -f "$OUT_DIR/indexer-values.yaml" \
   --namespace default --create-namespace
 ```
