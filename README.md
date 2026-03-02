@@ -4,9 +4,9 @@
 
 > **🚧 Work in Progress** — Actively building, expect breaking changes.
 
-Open-source infrastructure platform for EVM blockchain data. Deploy, manage, and scale a complete data stack — RPC proxies, event indexers, databases, and networking — on AWS or bare metal with a single `terraform apply`.
+Open-source data infrastructure platform for EVM blockchain data. Deploy, manage, and scale a complete data stack — Nodes, RPC proxies, data indexers, databases, and networking — on AWS or bare metal with a single `terraform apply`.
 
-> **[Full Documentation](./documentation/docs/index.mdx)** | [Getting Started](./documentation/docs/getting-started.mdx) | [Variable Reference](./documentation/docs/variable-reference.mdx) | [Examples](./documentation/docs/examples/index.mdx)
+> **[Architecture](https://evm-cloud.xyz/docs/architecture)** | [Getting Started](https://evm-cloud.xyz/docs/getting-started) | [Examples](https://evm-cloud.xyz/docs/examples)
 
 ## What It Deploys
 
@@ -30,7 +30,7 @@ terraform plan -var-file=minimal_clickhouse.tfvars
 terraform apply -var-file=minimal_clickhouse.tfvars
 ```
 
-See [Getting Started](./documentation/docs/getting-started.mdx) for the full walkthrough.
+See [Getting Started](https://evm-cloud.xyz/docs/getting-started) for the full walkthrough.
 
 ## Examples
 
@@ -44,7 +44,7 @@ See [Getting Started](./documentation/docs/getting-started.mdx) for the full wal
 | [`minimal_aws_external_ec2_byo`](examples/minimal_aws_external_ec2_byo/) | EC2 (infra only) | ClickHouse (BYODB) | ~$35/mo |
 | [`minimal_aws_external_eks_byo`](examples/minimal_aws_external_eks_byo/) | EKS (infra only) | ClickHouse (BYODB) | ~$110/mo |
 
-See [Choosing an Example](./documentation/docs/examples/index.mdx) for help picking the right one.
+See [Choosing an Example](https://evm-cloud.xyz/docs/examples) for help picking the right one.
 
 ## Prerequisites
 
@@ -63,14 +63,14 @@ make test-k8s    # Kubernetes chart tests (kind)
 
 ## Documentation
 
-Full documentation lives in [`documentation/`](./documentation/docs/index.mdx):
+Full documentation lives in [`documentation/`](https://evm-cloud.xyz/docs):
 
-- [Architecture](./documentation/docs/architecture.mdx) — how the modules fit together
-- [Core Concepts](./documentation/docs/concepts.mdx) — providers, compute engines, workload modes
-- [Variable Reference](./documentation/docs/variable-reference.mdx) — all configuration options with sizing guide
-- [Cost Estimates](./documentation/docs/cost-estimates.mdx) — what each pattern costs
-- [Guides](./documentation/docs/guides/secrets-management.mdx) — secrets, config updates, production checklist
-- [Troubleshooting](./documentation/docs/troubleshooting.mdx) — common issues and fixes
+- [Architecture](https://evm-cloud.xyz/docs/architecture) — how the modules fit together
+- [Core Concepts](https://evm-cloud.xyz/docs/concepts) — providers, compute engines, workload modes
+- [Variable Reference](https://evm-cloud.xyz/docs/variable-reference) — all configuration options with sizing guide
+- [Cost Estimates](https://evm-cloud.xyz/docs/cost-estimates) — what each pattern costs
+- [Guides](https://evm-cloud.xyz/docs/guides) — secrets, config updates, production checklist
+- [Troubleshooting](https://evm-cloud.xyz/docs/troubleshooting) — common issues and fixes
 
 ## License
 
