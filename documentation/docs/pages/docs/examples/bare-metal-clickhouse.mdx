@@ -1,0 +1,86 @@
+# Bare Metal + ClickHouse (BYODB)
+
+Deploy evm-cloud on any VPS or dedicated server. No AWS account required. Terraform connects via SSH and deploys Docker Compose services directly on your host. Works with Hetzner, OVH, DigitalOcean, Vultr, or any server with Docker installed.
+
+## Architecture
+
+```
+┌────────────────── Your VPS ─────────────────┐
+│                                              │
+│  Docker Compose                              │
+│  ├── eRPC proxy (port 4000)                  │
+│  └── rindexer indexer                        │
+│       └── writes to ────────────────────────────→ ClickHouse (external)
+│                                              │
+│  Config: /opt/evm-cloud/config/              │
+│  Secrets: /opt/evm-cloud/.env                │
+└──────────────────────────────────────────────┘
+
+Terraform connects via SSH (no AWS provider used)
+```
+
+## What Gets Deployed
+
+- Docker Compose stack on your existing server (via SSH provisioner)
+- eRPC container -- RPC proxy with failover and caching
+- rindexer container -- EVM event indexer
+- Config files deployed to `/opt/evm-cloud/config/`
+- Environment file with ClickHouse credentials
+
+**Not deployed:** No VPC, no IAM, no cloud-specific resources. The AWS Terraform provider is initialized but credentials are skipped.
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- A VPS or server with Docker + Docker Compose installed
+- SSH access to the server (key-based authentication)
+- A ClickHouse instance ([ClickHouse Cloud](https://clickhouse.cloud/) or self-hosted)
+
+## Quick Start
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/bare_metal_byo_clickhouse
+
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars:
+#   bare_metal_host                 = "203.0.113.10"
+#   bare_metal_ssh_user             = "root"
+#   bare_metal_ssh_private_key_path = "~/.ssh/id_ed25519"
+#   indexer_clickhouse_url          = "https://your-instance.clickhouse.cloud:8443"
+#   indexer_clickhouse_password     = "your-password"
+
+terraform init
+terraform apply
+
+# Verify
+ssh root@203.0.113.10 'docker compose -f /opt/evm-cloud/docker-compose.yml ps'
+```
+
+## Key Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `bare_metal_host` | string | - | Server IP or hostname |
+| `bare_metal_ssh_user` | string | - | SSH username |
+| `bare_metal_ssh_private_key_path` | string | - | Path to SSH private key |
+| `bare_metal_ssh_port` | number | `22` | SSH port |
+| `bare_metal_rpc_proxy_mem_limit` | string | - | eRPC container memory limit |
+| `bare_metal_indexer_mem_limit` | string | - | rindexer container memory limit |
+| `indexer_clickhouse_url` | string | - | ClickHouse HTTP endpoint (sensitive) |
+| `indexer_clickhouse_password` | string | - | ClickHouse password (sensitive) |
+
+## When to Use This
+
+**Choose this example when:**
+- You have no AWS account or prefer not to use AWS
+- You have an existing VPS (Hetzner, OVH, DigitalOcean, etc.)
+- You want the absolute lowest cost (~$5-20/mo for a small VPS)
+- You want full control over the host operating system
+
+**Consider alternatives when:**
+- You want managed networking and IAM -- use any AWS example
+- You want Kubernetes -- use [EKS](./eks-clickhouse.mdx) or [k3s](./k3s-clickhouse.mdx)
+- You need managed PostgreSQL -- use [minimal_aws_rds](./ec2-docker-compose-rds.mdx)
+
+See [examples/bare_metal_byo_clickhouse](https://github.com/ExoMonk/evm-cloud/tree/main/examples/bare_metal_byo_clickhouse) for complete details.

@@ -1,0 +1,271 @@
+# External Deployers
+
+When `workload_mode = "external"` (or when using `k3s`), Terraform provisions infrastructure only and outputs a structured `workload_handoff`. External deployers consume this handoff to deploy workloads independently.
+
+## When to Use External Mode
+
+Set `workload_mode = "external"` when:
+
+- **CI/CD pipelines** deploy your containers (GitHub Actions, GitLab CI, Jenkins)
+- **GitOps tools** manage workloads (ArgoCD, Flux)
+- **Different deploy cadences** -- infrastructure changes monthly, application deploys daily
+- **Team separation** -- infra team manages Terraform, app team manages Helm or ArgoCD
+- **Testing** -- you want to iterate on workload configs without touching infrastructure
+
+```hcl
+module "evm_cloud" {
+  source = "github.com/evm-cloud/evm-cloud"
+
+  workload_mode = "external"
+  compute_engine = "eks"
+  # ... other variables
+}
+```
+
+> **Note:** `k3s` always operates in external mode regardless of the `workload_mode` setting. See [Two-Phase Deployment](./two-phase-workflow.mdx) for why.
+
+---
+
+## The Workload Handoff v1 Contract
+
+The `workload_handoff` output is a versioned JSON contract between Terraform (infrastructure) and deployers (workloads). The schema is stable within a major version.
+
+```json
+{
+  "version": "v1",
+  "mode": "external",
+  "compute_engine": "k3s",
+  "project_name": "my-indexer",
+
+  "identity": {
+    "iam_role_arn": "arn:aws:iam::123456789012:role/evm-cloud-my-indexer",
+    "instance_profile": "evm-cloud-my-indexer-profile"
+  },
+
+  "network": {
+    "vpc_id": "vpc-0abc123def456",
+    "private_subnet_ids": ["subnet-0aaa", "subnet-0bbb"],
+    "security_group_ids": ["sg-0ccc"]
+  },
+
+  "runtime": {
+    "ec2": {
+      "ssh_command": "ssh -i key.pem ubuntu@203.0.113.10",
+      "instance_ip": "203.0.113.10",
+      "config_path": "/opt/evm-cloud/config/"
+    },
+    "eks": {
+      "cluster_name": "evm-cloud-prod",
+      "cluster_endpoint": "https://ABCDEF.gr7.us-east-1.eks.amazonaws.com",
+      "oidc_provider_arn": "arn:aws:iam::123456789012:oidc-provider/..."
+    },
+    "k3s": {
+      "kubeconfig_base64": "YXBpVmVyc2lvbjogdjEK...",
+      "cluster_endpoint": "https://203.0.113.10:6443",
+      "host_ip": "203.0.113.10"
+    }
+  },
+
+  "services": {
+    "erpc": { "name": "erpc", "port": 4000, "internal_url": "http://erpc:4000" },
+    "rindexer": { "name": "rindexer", "port": 3001, "internal_url": "http://rindexer:3001" }
+  },
+
+  "data": {
+    "database_type": "postgresql",
+    "host": "evm-cloud-db.abc123.us-east-1.rds.amazonaws.com",
+    "port": 5432,
+    "username": "rindexer",
+    "password": "generated-password",
+    "database": "rindexer"
+  },
+
+  "artifacts": {
+    "config_channel": "helm",
+    "cloudwatch_log_group": "/evm-cloud/my-indexer"
+  }
+}
+```
+
+Only the `runtime` block matching the active `compute_engine` is populated. The others are `null`.
+
+---
+
+## Handoff Consumption Pattern
+
+### Pipe directly (recommended)
+
+Avoids writing credentials to disk:
+
+```bash
+terraform output -json workload_handoff | ./deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
+
+### Save to file
+
+When the deployer will run from a different machine or CI step:
+
+```bash
+terraform output -json workload_handoff > handoff.json
+chmod 0600 handoff.json  # contains credentials!
+```
+
+Then on the deploy machine:
+
+```bash
+./deployers/k3s/deploy.sh handoff.json --config-dir ./config
+```
+
+> **Warning:** `handoff.json` contains database passwords and potentially a full kubeconfig. Treat it as a credential. Do not commit it to version control. Delete it after use. See [Secrets Management](./secrets-management.mdx) for production handling.
+
+### Extract individual fields
+
+For custom pipelines, extract specific values with `jq`:
+
+```bash
+# Get kubeconfig for kubectl
+terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > /tmp/kubeconfig
+
+# Get database connection string
+DB_HOST=$(terraform output -json workload_handoff | jq -r '.data.host')
+DB_PASS=$(terraform output -json workload_handoff | jq -r '.data.password')
+DB_PORT=$(terraform output -json workload_handoff | jq -r '.data.port')
+```
+
+---
+
+## Three Deployer Paths
+
+evm-cloud ships with deployer scripts for each compute engine. All deployers live in the `deployers/` directory and use shared Helm charts from `deployers/charts/`.
+
+### EC2 SSH Deployer (`deployers/ec2/`)
+
+For `compute_engine = "ec2"` with `workload_mode = "external"`.
+
+**What it does:**
+1. Reads SSH connection details from the handoff (`runtime.ec2.ssh_command`)
+2. Copies config files to the instance at `/opt/evm-cloud/config/`
+3. Updates the `.env` file with current credentials
+4. Restarts Docker Compose services
+
+```bash
+terraform output -json workload_handoff | ./deployers/ec2/deploy.sh /dev/stdin --config-dir ./config
+```
+
+**Update workflow:**
+```bash
+# Edit config locally, then redeploy
+vim config/rindexer.yaml
+terraform output -json workload_handoff | ./deployers/ec2/deploy.sh /dev/stdin --config-dir ./config
+```
+
+The deployer uses `scp` to copy files and `ssh` to restart services. No Helm or Kubernetes involved.
+
+### EKS Helm Deployer (`deployers/eks/`)
+
+For `compute_engine = "eks"` with `workload_mode = "external"`.
+
+**What it does:**
+1. Configures kubectl via `aws eks update-kubeconfig` using the cluster name from the handoff
+2. Renders Helm values from handoff data (database connection, service configuration)
+3. Injects config files from `--config-dir`
+4. Runs `helm upgrade --install` for eRPC and rindexer using shared charts
+
+```bash
+terraform output -json workload_handoff | ./deployers/eks/deploy.sh /dev/stdin --config-dir ./config
+```
+
+**ArgoCD integration:**
+
+The EKS deployer also includes ArgoCD Application manifests at `deployers/eks/argocd/`. Point ArgoCD at your config repository and it will sync workloads automatically:
+
+```bash
+# Apply ArgoCD Application resources
+kubectl apply -f deployers/eks/argocd/
+```
+
+### k3s Helm Deployer (`deployers/k3s/`)
+
+For `compute_engine = "k3s"` (always external mode).
+
+**What it does:**
+1. Extracts kubeconfig from `runtime.k3s.kubeconfig_base64` and decodes it
+2. Renders Helm values from handoff data
+3. Injects real configs from `--config-dir`
+4. Runs `helm upgrade --install` for eRPC and rindexer
+
+```bash
+terraform output -json workload_handoff | ./deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
+
+**Teardown:**
+```bash
+terraform output -json workload_handoff | ./deployers/k3s/teardown.sh /dev/stdin
+```
+
+See [Two-Phase Deployment](./two-phase-workflow.mdx) for the full k3s workflow.
+
+---
+
+## Shared Helm Charts
+
+All Kubernetes deployers (k3s and EKS) use the same Helm charts at `deployers/charts/`:
+
+| Chart | Purpose |
+|-------|---------|
+| `deployers/charts/rpc-proxy/` | eRPC proxy deployment, service, and ConfigMap |
+| `deployers/charts/indexer/` | rindexer deployment, service, ConfigMap, and ABI volume |
+
+The charts are designed to be generic. Deployer scripts render values from the handoff and config files, then pass them to `helm upgrade --install`.
+
+---
+
+## CI/CD Examples
+
+### GitHub Actions
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/deploy
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Get handoff
+        run: |
+          cd examples/minimal_aws_k3s_byo_clickhouse
+          terraform init
+          terraform output -json workload_handoff > /tmp/handoff.json
+          chmod 0600 /tmp/handoff.json
+
+      - name: Deploy workloads
+        run: |
+          ./deployers/k3s/deploy.sh /tmp/handoff.json --config-dir ./config
+```
+
+### GitOps (ArgoCD)
+
+For teams using ArgoCD, the infra pipeline outputs the handoff and the app pipeline reads it:
+
+1. Terraform provisions infrastructure and writes handoff to an S3 bucket (encrypted)
+2. ArgoCD Application resources reference the shared Helm charts
+3. ArgoCD syncs workloads using values derived from the handoff
+
+---
+
+## Related Pages
+
+- **[Core Concepts -- Workload Modes](../concepts.mdx#workload-modes)** -- terraform vs external mode
+- **[Two-Phase Deployment](./two-phase-workflow.mdx)** -- Full k3s walkthrough
+- **[Secrets Management](./secrets-management.mdx)** -- Securing the handoff
+- **[Updating Configuration](./config-updates.mdx)** -- Post-deploy config changes per engine
+- **[Architecture](../architecture.mdx)** -- Module map and dependency graph

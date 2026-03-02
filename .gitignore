@@ -25,3 +25,7 @@ secrets.auto.tfvars
 # Kind test artifacts
 tests/kind/.kubeconfig
 tests/kind/.test-deployer
+
+node_modules
+package-lock.json
+dist

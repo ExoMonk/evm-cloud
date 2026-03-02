@@ -1,0 +1,165 @@
+import { DeployDiagram } from '../../components/DeployDiagram'
+import { WhatJustHappened } from '../../components/WhatJustHappened'
+
+# Getting Started
+
+Deploy an EVM blockchain indexer on AWS in under 10 minutes. This guide uses the simplest example: EC2 + Docker Compose + external ClickHouse.
+
+<div style={{ display: 'flex', gap: '12px', margin: '16px 0' }}>
+  <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: '#10b98120', border: '1px solid #10b98150', color: '#10b981', fontSize: '13px', fontWeight: 500 }}>
+    ~5 min to deploy
+  </span>
+  <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: '#0ea5e920', border: '1px solid #0ea5e950', color: '#0ea5e9', fontSize: '13px', fontWeight: 500 }}>
+    $0/mo (AWS free tier)
+  </span>
+  <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: '#8b5cf620', border: '1px solid #8b5cf650', color: '#8b5cf6', fontSize: '13px', fontWeight: 500 }}>
+    EC2 (free tier) + Docker + ClickHouse
+  </span>
+</div>
+
+### What You're About to Build
+
+<DeployDiagram />
+
+## Prerequisites
+
+| Tool | Version | Install |
+|------|---------|---------|
+| **Terraform** | >= 1.5.0 | [terraform.io/downloads](https://developer.hashicorp.com/terraform/downloads) |
+| **AWS CLI** | v2 | [docs.aws.amazon.com/cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
+| **jq** | any | `brew install jq` or `apt install jq` |
+| **SSH key pair** | Ed25519 or RSA | `ssh-keygen -t ed25519` |
+
+Optional (for development/QA):
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| **tflint** | Terraform linting | `brew install tflint` |
+| **checkov** | Security scanning | `pip install checkov` |
+| **Docker** | LocalStack testing | [docker.com](https://docs.docker.com/get-docker/) |
+
+### AWS Credentials
+
+Configure AWS CLI with credentials that have EC2, VPC, IAM, and Secrets Manager permissions:
+
+```bash
+aws configure
+# Or export environment variables:
+export AWS_ACCESS_KEY_ID=your-key
+export AWS_SECRET_ACCESS_KEY=your-secret
+export AWS_DEFAULT_REGION=us-east-1
+```
+
+### SSH Key
+
+If you don't have one:
+
+```bash
+ssh-keygen -t ed25519 -C "evm-cloud" -f ~/.ssh/evm-cloud
+# Public key: ~/.ssh/evm-cloud.pub
+# Private key: ~/.ssh/evm-cloud
+```
+
+## Your First Deployment
+
+We'll use the `minimal_aws_byo_clickhouse` example — EC2 instance running eRPC + rindexer with an external ClickHouse database.
+
+### 1. Clone and Navigate
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/minimal_aws_byo_clickhouse
+```
+
+### 2. Configure Secrets
+
+```bash
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+```
+
+Edit `secrets.auto.tfvars` with your values:
+
+```hcl
+# SSH key (the public key content, not the path)
+ssh_public_key = "ssh-ed25519 AAAA... your-email"
+
+# ClickHouse connection (from ClickHouse Cloud or your own instance)
+indexer_clickhouse_url      = "https://your-instance.clickhouse.cloud:8443"
+indexer_clickhouse_password = "your-password"
+```
+
+> **Don't have ClickHouse?** Sign up for [ClickHouse Cloud](https://clickhouse.cloud/) free tier, or use the `minimal_aws_rds` example instead (uses managed PostgreSQL, no external DB needed).
+
+### 3. Initialize and Plan
+
+```bash
+terraform init
+terraform plan -var-file=minimal_clickhouse.tfvars
+```
+
+Review the plan. You should see resources for:
+- VPC, subnets, security groups
+- EC2 instance (t3.micro — AWS free tier eligible)
+- IAM role + Secrets Manager secret
+- Docker Compose services (eRPC + rindexer)
+
+### 4. Apply
+
+```bash
+terraform apply -var-file=minimal_clickhouse.tfvars
+```
+
+This takes 3-5 minutes. Terraform will:
+1. Create a VPC with public subnets
+2. Launch an EC2 instance with Docker pre-installed
+3. Deploy eRPC (RPC proxy) and rindexer (indexer) as Docker containers
+4. Wire rindexer to your ClickHouse database via Secrets Manager
+
+### 5. Verify
+
+```bash
+# Get the instance IP
+terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip'
+
+# SSH into the instance
+ssh -i ~/.ssh/evm-cloud ubuntu@<public-ip>
+
+# Check containers are running
+sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps
+```
+
+You should see `erpc` and `rindexer` containers in `running` state.
+
+### 6. Teardown
+
+```bash
+terraform destroy -var-file=minimal_clickhouse.tfvars
+```
+
+## What Just Happened
+
+Here's what Terraform created and how data flows:
+
+<WhatJustHappened />
+
+**Key components:**
+- **eRPC** aggregates multiple RPC endpoints with automatic failover, caching, and load balancing
+- **rindexer** reads your `rindexer.yaml` config to index specific contracts/events into your database
+- **Secrets Manager** securely stores database credentials and injects them at runtime
+
+## Next Steps
+
+- **Try a different example**: See [Examples](./examples/index.mdx) for all 7 deployment patterns
+- **Understand the architecture**: Read [Architecture](./architecture.mdx) and [Core Concepts](./concepts.mdx)
+- **Tune performance**: See [Variable Reference](./variable-reference.mdx) for instance types, memory limits, and other knobs
+- **Go to production**: Follow the [Production Checklist](./guides/production-checklist.mdx)
+
+## Other Starting Points
+
+| If you want... | Use this example |
+|----------------|-----------------|
+| Managed PostgreSQL (no external DB) | [`minimal_aws_rds`](./examples/ec2-docker-compose-rds.mdx) |
+| Kubernetes (EKS) | [`aws_eks_BYO_clickhouse`](./examples/eks-clickhouse.mdx) |
+| Lightweight Kubernetes (k3s, no EKS fee) | [`minimal_aws_k3s_byo_clickhouse`](./examples/k3s-clickhouse.mdx) |
+| Any VPS, no AWS | [`bare_metal_byo_clickhouse`](./examples/bare-metal-clickhouse.mdx) |
+| Infra only (deploy workloads yourself) | [`minimal_aws_external_ec2_byo`](./examples/external-ec2.mdx) or [`external_eks`](./examples/external-eks.mdx) |

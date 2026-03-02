@@ -1,0 +1,402 @@
+# Core Concepts
+
+evm-cloud is built around three orthogonal dimensions: **where** your infrastructure runs (provider), **how** compute is managed (engine), and **who** deploys the workloads (mode). Understanding these three choices — and how they compose — is the key to using evm-cloud effectively.
+
+## Infrastructure Providers
+
+The `infrastructure_provider` variable determines what cloud platform (or lack thereof) provisions your resources.
+
+### `aws` (default)
+
+Full AWS stack. Terraform creates and manages:
+- VPC with public/private subnets
+- Compute (EC2, EKS, or k3s on EC2)
+- Database (RDS PostgreSQL or BYODB ClickHouse)
+- Secrets Manager for credentials
+- IAM roles with least-privilege policies
+- Security groups with tight ingress rules
+
+```hcl
+module "evm_cloud" {
+  source = "github.com/evm-cloud/evm-cloud"
+
+  infrastructure_provider = "aws"   # default, can omit
+  compute_engine          = "ec2"
+  # ...
+}
+```
+
+### `bare_metal`
+
+Any VPS with SSH access and Docker installed. No cloud services. Terraform connects over SSH to provision containers directly.
+
+- You manage networking (firewall rules, DNS, TLS)
+- You manage secrets (no Secrets Manager — credentials go in `.env` files)
+- You provide the host IP and SSH key
+
+```hcl
+module "evm_cloud" {
+  source = "github.com/evm-cloud/evm-cloud"
+
+  infrastructure_provider = "bare_metal"
+  compute_engine          = "docker_compose"
+
+  bare_metal_host     = "203.0.113.10"
+  bare_metal_ssh_key  = file("~/.ssh/id_ed25519")
+  bare_metal_ssh_user = "deploy"
+  # ...
+}
+```
+
+### How to Choose
+
+| Factor | AWS | Bare Metal |
+|--------|-----|------------|
+| Cost | ~$50-140/mo minimum | ~$5-20/mo (Hetzner, OVH) |
+| Managed services | RDS, Secrets Manager, IAM | None — you manage everything |
+| Networking | VPC with private subnets | Public IP, your firewall rules |
+| Security baseline | IAM + SGs + encryption at rest | SSH hardening + manual TLS |
+| Compliance / sovereignty | AWS regions, shared responsibility | Full control, any jurisdiction |
+
+Use **AWS** when you want managed services, security defaults, and operational simplicity. Use **bare_metal** when cost matters most, when you need geographic sovereignty, or when you already have VPS infrastructure.
+
+---
+
+## Compute Engines
+
+The `compute_engine` variable determines how containers run on the provisioned infrastructure.
+
+### `ec2`
+
+Docker Compose on a single EC2 instance. The simplest deployment path.
+
+- Terraform provisions the instance, installs Docker, writes config files via cloud-init
+- All services (eRPC, rindexer, database client) run as Docker Compose services
+- Good for dev, staging, and small production workloads
+- No orchestrator overhead
+
+```hcl
+compute_engine = "ec2"
+```
+
+### `eks`
+
+AWS-managed Kubernetes (Elastic Kubernetes Service).
+
+- Terraform creates the EKS cluster, node groups, and OIDC provider
+- Workloads deploy as Kubernetes pods via Helm charts or Terraform K8s resources
+- Best for teams already running K8s who want evm-cloud to fit into their existing cluster operations
+- Adds ~$73/mo for the EKS control plane
+
+```hcl
+compute_engine = "eks"
+```
+
+### `k3s`
+
+Lightweight Kubernetes on a single EC2 instance (or bare metal VPS). Real Kubernetes API at zero control plane cost.
+
+- Phase 1: Terraform provisions the instance and installs k3s
+- Phase 2: A deployer script applies Helm charts to the running cluster
+- Runs the same Helm charts as EKS but on a single node
+- Two-phase deployment is required — see [Two-Phase Deployment](#two-phase-deployment) below
+
+```hcl
+compute_engine = "k3s"
+```
+
+### `docker_compose`
+
+Same model as `ec2` but on a `bare_metal` provider. SSH + Docker Compose on your own VPS.
+
+- Terraform connects over SSH, writes configs, and manages Docker Compose services
+- Functionally identical to `ec2` mode but without AWS networking or cloud-init
+
+```hcl
+infrastructure_provider = "bare_metal"
+compute_engine          = "docker_compose"
+```
+
+### Valid Combinations
+
+Not every engine works with every provider:
+
+| Provider | `ec2` | `eks` | `k3s` | `docker_compose` |
+|----------|-------|-------|-------|-------------------|
+| `aws` | Yes | Yes | Yes | No |
+| `bare_metal` | No | No | Yes | Yes |
+
+Terraform validates this at plan time — invalid combinations produce a clear error message.
+
+---
+
+## Workload Modes
+
+The `workload_mode` variable controls **who** deploys the application workloads (eRPC, rindexer) onto the provisioned compute.
+
+### `terraform` (default)
+
+Terraform deploys and manages both infrastructure AND workloads. One `terraform apply` does everything: provisions compute, creates the database, writes configs, and starts containers.
+
+```hcl
+workload_mode = "terraform"   # default, can omit
+```
+
+This is the simplest path. Use it when:
+- You want a single command to deploy everything
+- You do not need separate infra/app deploy cadences
+- Your team does not already have a CI/CD pipeline for container deployments
+
+### `external`
+
+Terraform provisions infrastructure only (VPC, compute, database) and outputs a structured [workload handoff](#the-workload-handoff) containing everything an external deployer needs. You deploy workloads yourself.
+
+```hcl
+workload_mode = "external"
+```
+
+Use `external` when:
+- You have CI/CD pipelines (GitHub Actions, GitLab CI) that deploy containers
+- You use GitOps (ArgoCD, Flux) to manage Kubernetes workloads
+- Infrastructure and application teams operate independently
+- You need different deploy cadences — infra changes monthly, app deploys daily
+
+**Note:** `k3s` always operates in external mode regardless of the `workload_mode` setting. The two-phase architecture requires it — see [Two-Phase Deployment](#two-phase-deployment).
+
+---
+
+## The Workload Handoff
+
+When `workload_mode = "external"` (or when using `k3s`), Terraform outputs a `workload_handoff` JSON object containing everything an external deployer needs to put workloads onto the provisioned infrastructure.
+
+### Accessing the Handoff
+
+```bash
+terraform output -json workload_handoff
+```
+
+The output is marked `sensitive = true` because it may contain kubeconfig data or database passwords.
+
+### Structure
+
+```json
+{
+  "version": "v1",
+  "mode": "external",
+  "compute_engine": "k3s",
+
+  "runtime": {
+    "ec2": {
+      "ssh_command": "ssh -i key.pem ubuntu@203.0.113.10",
+      "instance_ip": "203.0.113.10",
+      "config_path": "/opt/evm-cloud/config/"
+    },
+    "eks": {
+      "cluster_name": "evm-cloud-prod",
+      "cluster_endpoint": "https://ABCDEF.gr7.us-east-1.eks.amazonaws.com",
+      "oidc_provider_arn": "arn:aws:iam::123456789012:oidc-provider/..."
+    },
+    "k3s": {
+      "kubeconfig_base64": "YXBpVmVyc2lvbjogdjEK...",
+      "cluster_endpoint": "https://203.0.113.10:6443",
+      "host_ip": "203.0.113.10"
+    }
+  },
+
+  "services": {
+    "erpc": { "name": "erpc", "port": 4000, "internal_url": "http://erpc:4000" },
+    "rindexer": { "name": "rindexer", "port": 3001, "internal_url": "http://rindexer:3001" }
+  },
+
+  "data": {
+    "database_type": "postgresql",
+    "host": "evm-cloud-db.abc123.us-east-1.rds.amazonaws.com",
+    "port": 5432,
+    "username": "rindexer",
+    "password": "generated-password",
+    "database": "rindexer"
+  },
+
+  "artifacts": {
+    "config_channel": "helm"
+  }
+}
+```
+
+Only the `runtime` block matching the active `compute_engine` is populated. The others are `null`.
+
+### Using the Handoff in CI/CD
+
+```bash
+# Extract values for a Helm deploy
+KUBECONFIG_B64=$(terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64')
+DB_HOST=$(terraform output -json workload_handoff | jq -r '.data.host')
+DB_PASSWORD=$(terraform output -json workload_handoff | jq -r '.data.password')
+
+echo "$KUBECONFIG_B64" | base64 -d > /tmp/kubeconfig
+export KUBECONFIG=/tmp/kubeconfig
+
+helm upgrade --install rindexer ./deployers/charts/indexer \
+  --set database.host="$DB_HOST" \
+  --set database.password="$DB_PASSWORD"
+```
+
+---
+
+## Config Injection
+
+eRPC and rindexer each require YAML configuration files. How those configs reach the running containers depends on the compute engine and workload mode.
+
+### EC2 (Docker Compose)
+
+cloud-init writes config files to `/opt/evm-cloud/config/` during instance provisioning. Docker Compose bind-mounts this directory into the containers.
+
+```yaml
+# docker-compose.yml (generated)
+services:
+  erpc:
+    volumes:
+      - /opt/evm-cloud/config/erpc.yaml:/etc/erpc/erpc.yaml:ro
+  rindexer:
+    volumes:
+      - /opt/evm-cloud/config/rindexer.yaml:/etc/rindexer/rindexer.yaml:ro
+```
+
+### EKS (terraform mode)
+
+Terraform creates Kubernetes ConfigMaps and Secrets directly. Pod specs mount them as volumes.
+
+### EKS / k3s (external mode)
+
+Helm values embed the config content. The chart templates create ConfigMaps from those values, and pods mount the ConfigMaps.
+
+```bash
+helm upgrade --install rindexer ./deployers/charts/indexer \
+  --set-file rindexerConfig=./config/rindexer.yaml \
+  --set-file erpcConfig=./config/erpc.yaml
+```
+
+### Bare Metal (Docker Compose)
+
+Terraform's SSH file provisioner writes configs to the remote host. Docker Compose bind-mounts them, same as EC2.
+
+---
+
+## Secrets Delivery
+
+Database passwords, API keys, and other credentials need to reach the workloads securely. The delivery mechanism varies by provider and engine.
+
+### EC2 on AWS
+
+1. Terraform stores secrets in AWS Secrets Manager
+2. A `pull-secrets.sh` script on the instance fetches them at boot
+3. Secrets are written to a `.env` file with `chmod 0600`
+4. Docker Compose reads the `.env` file
+
+### EKS (terraform mode)
+
+Terraform creates Kubernetes Secrets directly from the generated credentials. Pod specs reference them as environment variables or mounted files.
+
+### k3s (external mode)
+
+The database password is included in the [workload handoff](#the-workload-handoff). The deployer script passes it to Helm, which creates a Kubernetes Secret.
+
+Future improvement: support for External Secrets Operator to pull from Secrets Manager or Vault.
+
+### Bare Metal
+
+Terraform's SSH provisioner writes a `.env` file to the remote host with `chmod 0600`. Docker Compose loads it.
+
+See the [Secrets Management guide](./guides/secrets-management.mdx) for the full security model, rotation procedures, and production hardening steps.
+
+---
+
+## Two-Phase Deployment
+
+k3s and EKS external mode use a two-phase deployment pattern. This is an architectural requirement, not a preference.
+
+### The Problem
+
+The Terraform `kubernetes` and `helm` providers need a kubeconfig to connect to the cluster. But the kubeconfig does not exist until Terraform finishes creating the cluster. This is a chicken-and-egg problem that cannot be solved within a single `terraform apply`.
+
+### The Solution
+
+**Phase 1: Infrastructure** — `terraform apply`
+
+Provisions compute (EC2 with k3s installed, or EKS cluster), networking, database, and outputs the `workload_handoff`.
+
+```bash
+cd examples/k3s_rds
+terraform init
+terraform apply
+```
+
+**Phase 2: Workloads** — deployer script
+
+Uses the kubeconfig from Phase 1 to deploy Helm charts onto the cluster.
+
+```bash
+cd deployers/k3s
+./deploy.sh ../../examples/k3s_rds
+```
+
+The deployer script reads `workload_handoff` from the Terraform state, extracts the kubeconfig, and runs `helm upgrade --install` for each service.
+
+### Teardown
+
+Reverse order. Remove workloads before destroying infrastructure:
+
+```bash
+# Phase 2 teardown
+cd deployers/k3s
+./teardown.sh ../../examples/k3s_rds
+
+# Phase 1 teardown
+cd examples/k3s_rds
+terraform destroy
+```
+
+If you skip Phase 2 and go straight to `terraform destroy`, the EC2 instance (and its containers) will be terminated. No resources leak, but Helm release state is lost.
+
+See the [Two-Phase Workflow guide](./guides/two-phase-workflow.mdx) for a complete walkthrough with all commands.
+
+---
+
+## Lifecycle Behavior
+
+Understanding what Terraform does (and does not do) when you change configuration after initial deployment.
+
+### Changing `compute_engine`
+
+Changing the compute engine on an existing deployment (e.g., `ec2` to `k3s`) **destroys and recreates all compute resources**. The database is preserved — RDS instances and BYODB connections are independent of compute.
+
+```bash
+# This will destroy the EC2 instance and create a new one with k3s
+compute_engine = "k3s"  # was "ec2"
+terraform apply          # plan will show destroy + create
+```
+
+Always review the plan carefully before applying compute engine changes.
+
+### Changing Config Content
+
+Updating `erpc_config_yaml` or `rindexer_config_yaml` triggers a redeployment on the next `terraform apply`:
+
+- **EC2/Docker Compose**: Terraform detects the config file change and re-provisions via SSH
+- **EKS (terraform mode)**: ConfigMap update triggers a pod rollout
+- **k3s/EKS (external mode)**: Re-run the deployer script with updated configs
+
+### EC2 User Data Behavior
+
+EC2 instances use `lifecycle { ignore_changes = [user_data] }`. This means:
+
+- The **initial** deploy uses cloud-init to configure the instance
+- **Subsequent** config changes do NOT recreate the instance
+- Config updates after initial deploy are applied via SSH provisioner or the external deployer
+
+This prevents accidental instance replacement (and downtime) when config files change. If you need a fresh instance, taint it explicitly:
+
+```bash
+terraform taint 'module.evm_cloud.module.compute.aws_instance.this[0]'
+terraform apply
+```

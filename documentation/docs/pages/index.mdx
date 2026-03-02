@@ -1,0 +1,27 @@
+---
+layout: landing
+---
+
+import { HomePage } from 'vocs/components'
+import { TechBadges } from '../components/TechBadge'
+
+<HomePage.Root>
+  <HomePage.Logo />
+  <HomePage.Tagline>One command. Full EVM data stack.</HomePage.Tagline>
+  <HomePage.Description>
+    Deploy, manage, and scale EVM blockchain data infrastructure — RPC proxies, indexers, databases, and networking — on any cloud or bare metal.
+  </HomePage.Description>
+  <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0 4px' }}>
+    <TechBadges items={['rindexer', 'evm', 'terraform']} />
+  </div>
+  <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0 20px' }}>
+    <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: '#f59e0b20', border: '1px solid #f59e0b50', color: '#f59e0b', fontSize: '13px', fontWeight: 500 }}>
+      🚧 Work in Progress — actively building, expect breaking changes
+    </span>
+  </div>
+  <HomePage.Buttons>
+    <HomePage.Button href="/docs/getting-started" variant="accent">Get Started</HomePage.Button>
+    <HomePage.Button href="/docs/examples">View Examples</HomePage.Button>
+    <HomePage.Button href="/docs/roadmap">Roadmap</HomePage.Button>
+  </HomePage.Buttons>
+</HomePage.Root>

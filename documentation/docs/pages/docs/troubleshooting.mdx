@@ -1,0 +1,235 @@
+# Troubleshooting
+
+Common issues and solutions, organized by compute engine.
+
+## General
+
+### Terraform plan shows instance recreation
+
+**Symptom:** `terraform plan` wants to destroy and recreate the EC2 instance after you changed config files.
+
+**Cause:** EC2 user_data changed. Terraform sees this as a replacement trigger.
+
+**Fix:** EC2 uses `lifecycle { ignore_changes = [user_data] }` so config changes after initial deploy should NOT trigger recreation. If you see recreation, something else changed (instance type, AMI, subnet). Check the plan output carefully.
+
+For config updates after deploy, see [Updating Configuration](./guides/config-updates.mdx).
+
+### Terraform destroy hangs on internet gateway
+
+**Symptom:** `aws_internet_gateway.this: Still destroying... [10m elapsed]`
+
+**Cause:** Orphaned network interfaces (ENIs) from k3s/EKS pods are still attached to the VPC. The IGW can't be deleted until all ENIs are removed.
+
+**Fix:**
+```bash
+# Find orphaned ENIs
+VPC_ID=$(aws ec2 describe-internet-gateways --internet-gateway-ids <igw-id> \
+  --query 'InternetGateways[0].Attachments[0].VpcId' --output text)
+
+aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPC_ID" \
+  --query 'NetworkInterfaces[?Status==`available`].[NetworkInterfaceId]' --output text \
+  | while read eni; do
+    aws ec2 delete-network-interface --network-interface-id "$eni"
+  done
+
+# Re-run destroy
+terraform destroy -var-file=your.tfvars
+```
+
+**Prevention:** Always run the teardown script before `terraform destroy` for K8s deployments:
+```bash
+./deployers/k3s/teardown.sh handoff.json   # or Helm uninstall for EKS
+terraform destroy -var-file=your.tfvars
+```
+
+### Secrets Manager: "already scheduled for deletion"
+
+**Symptom:** `terraform apply` fails with "secret is scheduled for deletion".
+
+**Cause:** You destroyed and re-created with the same project name, but the secret is in its recovery window.
+
+**Fix:**
+```bash
+# Force delete the secret
+aws secretsmanager delete-secret --secret-id <secret-name> --force-delete-without-recovery
+
+# Re-run apply
+terraform apply -var-file=your.tfvars
+```
+
+**Prevention:** Set `ec2_secret_recovery_window_in_days = 0` for dev environments.
+
+---
+
+## EC2 + Docker Compose
+
+### Containers not running after apply
+
+**Symptom:** SSH into instance, `docker compose ps` shows no containers or exited status.
+
+**Check:**
+```bash
+# Check cloud-init completed
+cloud-init status
+
+# Check cloud-init logs for errors
+sudo cat /var/log/cloud-init-output.log | tail -50
+
+# Check Docker Compose logs
+sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs
+```
+
+**Common causes:**
+- Cloud-init still running (takes 2-3 min after instance launch)
+- Docker image pull failed (check egress security group)
+- Config YAML syntax error (check rindexer/eRPC logs)
+
+### rindexer can't connect to database
+
+**Symptom:** rindexer logs show "could not connect to database" or "connection refused".
+
+**Check:**
+```bash
+# Verify secrets were pulled
+sudo cat /opt/evm-cloud/.env
+
+# Test database connectivity from instance
+curl -s https://your-clickhouse:8443/ping
+# Or for Postgres:
+psql -h <rds-endpoint> -U rindexer -d rindexer -c "SELECT 1"
+```
+
+**Common causes:**
+- Security group doesn't allow outbound to database port (8443 for ClickHouse, 5432 for Postgres)
+- ClickHouse URL is wrong (must include protocol and port: `https://host:8443`)
+- RDS is in a private subnet but EC2 is in a different VPC
+
+---
+
+## k3s
+
+### deploy.sh fails: "handoff mode must be 'external'"
+
+**Symptom:** `ERROR: handoff mode must be 'external', got ''`
+
+**Cause:** The handoff JSON was consumed by a previous pipe read (stdin exhaustion) or is empty.
+
+**Fix:** Write the handoff to a file instead of piping:
+```bash
+terraform output -json workload_handoff > handoff.json
+chmod 0600 handoff.json
+./deployers/k3s/deploy.sh handoff.json --config-dir ./config
+```
+
+### Pods can't resolve external DNS names
+
+**Symptom:** `Could not resolve host: your-database.clickhouse.cloud` from inside a pod.
+
+**Cause:** Two possible issues:
+1. **systemd-resolved stub:** Ubuntu's `/etc/resolv.conf` points to `127.0.0.53`, unreachable from pods.
+2. **CIDR collision:** k3s default pod CIDR (`10.42.0.0/16`) overlaps with your VPC CIDR.
+
+**Check:**
+```bash
+# Check CoreDNS logs
+sudo k3s kubectl -n kube-system logs -l k8s-app=kube-dns --tail=20
+
+# If you see "connection refused" to 10.42.0.2 — it's a CIDR collision
+# If you see "connection refused" to 127.0.0.53 — it's systemd-resolved
+```
+
+**Fix:** evm-cloud v12+ handles both automatically:
+- Sets `resolv-conf: /run/systemd/resolve/resolv.conf` in k3s config
+- Uses non-conflicting CIDRs: `10.244.0.0/16` (pods) and `10.245.0.0/16` (services)
+
+If you hit this on an older deployment, SSH in and apply:
+```bash
+sudo tee /etc/rancher/k3s/config.yaml > /dev/null <<'EOF'
+resolv-conf: "/run/systemd/resolve/resolv.conf"
+cluster-cidr: "10.244.0.0/16"
+service-cidr: "10.245.0.0/16"
+EOF
+sudo systemctl stop k3s
+sudo rm -rf /var/lib/rancher/k3s/server/db  # reset cluster state
+sudo systemctl start k3s
+```
+
+### k3s provisioner fails: "Illegal option -o pipefail"
+
+**Symptom:** `/tmp/terraform_XXX.sh: 2: set: Illegal option -o pipefail`
+
+**Cause:** Ubuntu's `/bin/sh` is `dash`, which doesn't support `set -o pipefail`.
+
+**Fix:** This is fixed in evm-cloud v12+. The provisioner uses `set -eu` (POSIX-compatible). If you're on an older version, update the k3s-bootstrap module.
+
+### kubectl: "connection to server was refused"
+
+**Symptom:** `The connection to the server 127.0.0.1:6443 was refused`
+
+**Cause:** k3s service isn't running (crashed after config change, or instance rebooted).
+
+**Fix:**
+```bash
+# Check k3s service
+sudo systemctl status k3s
+sudo journalctl -u k3s --no-pager -n 30
+
+# Restart k3s
+sudo systemctl restart k3s
+```
+
+---
+
+## EKS
+
+### Pods stuck in Pending
+
+**Symptom:** `kubectl get pods` shows pods in `Pending` state.
+
+**Check:**
+```bash
+kubectl describe pod <pod-name>
+# Look for Events section — common causes:
+# - "0/N nodes are available: insufficient memory" → instance type too small
+# - "no nodes match pod topology spread constraints" → node group scaling
+```
+
+**Fix:** Increase node instance type or adjust node group scaling.
+
+### Helm chart deployment fails
+
+**Symptom:** `helm upgrade --install` fails with template errors.
+
+**Check:** Dry-run the chart:
+```bash
+helm template my-release deployers/charts/indexer/ -f values.yaml
+```
+
+**Common causes:**
+- Missing required values (rindexerYaml, databaseUrl)
+- Chart path wrong (should be `deployers/charts/`, not `deployers/eks/charts/`)
+
+---
+
+## Bare Metal
+
+### SSH provisioner fails
+
+**Symptom:** `Error: timeout - last error: dial tcp: connection refused`
+
+**Check:**
+- Is the host reachable? `ping <bare_metal_host>`
+- Is SSH running? `ssh -p <port> <user>@<host>`
+- Is the SSH key correct? Check `bare_metal_ssh_private_key_path` points to the right file
+- Does the user have sudo? Bare metal provisioner needs `sudo` for Docker operations
+
+### Docker not installed
+
+**Symptom:** Provisioner fails with "docker: command not found"
+
+**Fix:** The bare metal provider expects Docker and Docker Compose pre-installed on the host. Install them:
+```bash
+# On Ubuntu/Debian
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+```

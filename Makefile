@@ -5,7 +5,7 @@ LOCALSTACK_ENDPOINT ?= http://localhost:4566
 
 LOCAL_ENV = AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(LOCALSTACK_ENDPOINT)
 
-.PHONY: fmt-check validate lint security qa plan verify up down test-k8s
+.PHONY: fmt-check validate lint security qa plan verify up down test-k8s docs docs-dev
 
 # --- QA ---
 
@@ -62,3 +62,11 @@ verify:
 
 test-k8s:
 	@bash tests/kind/run.sh
+
+# --- Documentation ---
+
+docs:
+	cd documentation && npm run build
+
+docs-dev:
+	cd documentation && npm run dev

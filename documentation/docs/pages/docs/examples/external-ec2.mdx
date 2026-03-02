@@ -1,0 +1,96 @@
+# EC2 External Mode (Infrastructure Only)
+
+Terraform provisions the EC2 instance and networking, but does not deploy workloads. You get a `workload_handoff` output containing SSH connection details and configuration, then deploy eRPC and rindexer using your own CI/CD pipeline, Ansible, or scripts.
+
+## Architecture
+
+```
+┌── Terraform manages ────────────────────────┐
+│                                              │
+│  AWS VPC + subnets + security groups         │
+│  EC2 Instance (Docker installed, no apps)    │
+│  IAM role + Secrets Manager                  │
+│                                              │
+└──────────────────────────────────────────────┘
+          │
+          │ workload_handoff output (SSH IP, configs, secrets)
+          ▼
+┌── Your CI/CD deploys ───────────────────────┐
+│                                              │
+│  eRPC proxy container                        │
+│  rindexer indexer container                  │
+│  Config files + docker-compose.yml           │
+│                                              │
+└──────────────────────────────────────────────┘
+```
+
+## What Gets Deployed (by Terraform)
+
+- VPC with public/private subnets, Internet Gateway, security groups
+- EC2 instance with Docker pre-installed (no application containers)
+- IAM role (CloudWatch Logs + Secrets Manager access)
+- Secrets Manager secret with ClickHouse credentials
+- CloudWatch Log Group
+
+**Not deployed by Terraform:** No Docker Compose services. The `workload_handoff` output provides everything your deploy pipeline needs.
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- AWS CLI v2 with configured credentials (EC2, VPC, IAM, Secrets Manager)
+- SSH key pair
+- A deployment pipeline (GitHub Actions, GitLab CI, Ansible, or scripts)
+- A ClickHouse instance
+
+## Quick Start
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/minimal_aws_external_ec2_byo
+
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars with your values
+
+terraform init
+terraform apply
+
+# Get the handoff output for your deploy pipeline
+terraform output -json workload_handoff
+# Contains: SSH IP, instance ID, security group IDs, secret ARNs, config payloads
+```
+
+## Key Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `workload_mode` | string | `external` | Must be `external` for this example |
+| `compute_engine` | string | `ec2` | EC2 compute backend |
+| `ec2_instance_type` | string | `t2.micro` | EC2 instance size |
+| `ssh_public_key` | string | - | SSH public key for EC2 key pair |
+| `indexer_clickhouse_url` | string | - | ClickHouse HTTP endpoint (sensitive) |
+| `indexer_clickhouse_password` | string | - | ClickHouse password (sensitive) |
+
+## The workload_handoff Output
+
+When `workload_mode = "external"`, Terraform outputs a `workload_handoff` object containing everything your deploy pipeline needs:
+
+- SSH connection details (IP, user, key name)
+- Instance metadata (ID, security groups)
+- Secret ARNs for credentials
+- Config payloads (erpc.yaml, rindexer.yaml, ABIs) if provided at plan time
+
+Your pipeline reads this output and handles container deployment independently.
+
+## When to Use This
+
+**Choose this example when:**
+- You want Terraform to manage infrastructure but not application deployment
+- Your team uses CI/CD pipelines (GitHub Actions, GitLab CI) for deployments
+- You need separation of concerns between infra and app teams
+- You want to test infrastructure changes without affecting running workloads
+
+**Consider alternatives when:**
+- You want Terraform to handle everything end-to-end -- use [EC2 + Docker Compose](./ec2-docker-compose-clickhouse.mdx)
+- You want external mode with Kubernetes -- see [external EKS](./external-eks.mdx)
+
+See [examples/minimal_aws_external_ec2_byo](https://github.com/ExoMonk/evm-cloud/tree/main/examples/minimal_aws_external_ec2_byo) for complete details.

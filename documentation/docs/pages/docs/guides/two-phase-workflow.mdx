@@ -1,0 +1,220 @@
+# Two-Phase Deployment
+
+k3s and EKS external mode require a two-phase deployment. This guide walks through the full workflow from provisioning to teardown.
+
+## Why Two Phases
+
+The Terraform `kubernetes` and `helm` providers need a kubeconfig to connect to the cluster. But the kubeconfig does not exist until Terraform finishes creating the cluster. This is a chicken-and-egg problem:
+
+```
+terraform plan
+  → kubernetes provider tries to connect
+  → kubeconfig doesn't exist yet
+  → plan fails
+```
+
+Separating into two phases resolves this. Phase 1 creates the cluster and outputs the kubeconfig. Phase 2 uses that kubeconfig to deploy workloads.
+
+## When It Applies
+
+| Compute Engine | Workload Mode | Two-Phase Required |
+|----------------|---------------|--------------------|
+| `ec2` | `terraform` | No -- single `terraform apply` does everything |
+| `ec2` | `external` | Yes -- Terraform provisions, external tool deploys |
+| `eks` | `terraform` | No -- Terraform kubernetes provider uses `exec` auth |
+| `eks` | `external` | Yes -- same pattern as k3s |
+| `k3s` | any | **Always** -- k3s forces external mode regardless of `workload_mode` |
+| `docker_compose` | `terraform` | No -- single `terraform apply` |
+
+---
+
+## Phase 1: Infrastructure
+
+`terraform apply` provisions all infrastructure and outputs the `workload_handoff`.
+
+```bash
+cd examples/minimal_aws_k3s_byo_clickhouse
+terraform init
+terraform apply -var-file=minimal_k3s.tfvars
+```
+
+Terraform creates:
+- VPC with public subnets and security groups
+- EC2 instance with k3s installed and running
+- IAM roles and Secrets Manager entries
+- Kubeconfig extracted from the k3s host
+
+After apply completes, the `workload_handoff` output contains everything Phase 2 needs:
+
+```bash
+terraform output -json workload_handoff
+```
+
+```json
+{
+  "version": "v1",
+  "mode": "external",
+  "compute_engine": "k3s",
+  "project_name": "my-indexer",
+  "runtime": {
+    "k3s": {
+      "kubeconfig_base64": "YXBpVmVyc2lvbjogdjEK...",
+      "cluster_endpoint": "https://203.0.113.10:6443",
+      "host_ip": "203.0.113.10"
+    }
+  },
+  "services": {
+    "erpc": { "name": "erpc", "port": 4000 },
+    "rindexer": { "name": "rindexer", "port": 3001 }
+  },
+  "data": {
+    "database_type": "clickhouse",
+    "host": "your-instance.clickhouse.cloud",
+    "port": 8443,
+    "password": "your-password"
+  }
+}
+```
+
+> **Warning:** The handoff contains credentials (kubeconfig, database password). See [Secrets Management](./secrets-management.mdx#sensitive-outputs) for how to handle it securely.
+
+---
+
+## Phase 2: Workloads
+
+The deployer script reads the handoff, extracts the kubeconfig, renders Helm values, and deploys workloads onto the cluster.
+
+```bash
+terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
+
+What the deployer does:
+
+1. Extracts `kubeconfig_base64` from the handoff and decodes it
+2. Renders Helm values from the handoff data (database connection, service ports)
+3. Injects real config files from the `--config-dir` directory (rindexer.yaml, erpc.yaml, ABIs)
+4. Runs `helm upgrade --install` for each service using shared charts at `deployers/charts/`
+
+The `--config-dir` flag points to a directory with your actual configuration files:
+
+```
+config/
+  erpc.yaml          # eRPC proxy configuration
+  rindexer.yaml      # rindexer indexer configuration
+  abis/              # Contract ABI files
+    ERC20.json
+    MyContract.json
+```
+
+---
+
+## Full Walkthrough
+
+Complete sequence from zero to running indexer:
+
+### 1. Configure
+
+```bash
+cd examples/minimal_aws_k3s_byo_clickhouse
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars with your SSH key, ClickHouse credentials
+```
+
+### 2. Phase 1 -- Provision Infrastructure
+
+```bash
+terraform init
+terraform apply -var-file=minimal_k3s.tfvars
+```
+
+### 3. Phase 2 -- Deploy Workloads
+
+```bash
+terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
+
+### 4. Verify
+
+```bash
+# Extract kubeconfig
+KUBECONFIG=$(mktemp)
+terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > "$KUBECONFIG"
+
+# Check pods are running
+kubectl --kubeconfig="$KUBECONFIG" get pods
+
+# Check logs
+kubectl --kubeconfig="$KUBECONFIG" logs -l app=rindexer --tail=50
+kubectl --kubeconfig="$KUBECONFIG" logs -l app=erpc --tail=50
+```
+
+You should see both `erpc` and `rindexer` pods in `Running` state.
+
+---
+
+## Teardown (Reverse Order)
+
+Always remove workloads before destroying infrastructure. This ensures Helm release state is cleaned up properly.
+
+### 1. Remove Workloads (Phase 2)
+
+```bash
+./../../deployers/k3s/teardown.sh handoff.json
+```
+
+Or if you did not save the handoff to a file:
+
+```bash
+terraform output -json workload_handoff | ./../../deployers/k3s/teardown.sh /dev/stdin
+```
+
+### 2. Destroy Infrastructure (Phase 1)
+
+```bash
+terraform destroy -var-file=minimal_k3s.tfvars
+```
+
+> **Note:** If you skip the workload teardown and go straight to `terraform destroy`, the EC2 instance (and all its containers) will be terminated. No resources leak on AWS, but Helm release state is lost. This is acceptable for dev environments but not recommended for production -- see [Production Checklist](./production-checklist.mdx#destroy-safety).
+
+---
+
+## Config Updates
+
+To update configuration after initial deployment (new contracts, changed RPC endpoints, modified eRPC settings):
+
+1. Edit your config files in the `config/` directory
+2. Re-run the deployer:
+
+```bash
+terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
+
+This runs `helm upgrade`, which is idempotent. Only changed values trigger pod restarts. Unchanged services remain running without interruption.
+
+See [Updating Configuration After Deployment](./config-updates.mdx) for config update procedures across all compute engines.
+
+---
+
+## EKS External Mode
+
+The same two-phase pattern applies to EKS with `workload_mode = "external"`. The difference is in how you authenticate:
+
+```bash
+# Phase 1: Terraform provisions EKS cluster
+terraform apply -var-file=eks_external.tfvars
+
+# Phase 2: Deploy using EKS deployer
+terraform output -json workload_handoff | ./../../deployers/eks/deploy.sh /dev/stdin --config-dir ./config
+```
+
+EKS external mode uses the cluster endpoint and OIDC provider from the handoff instead of a kubeconfig file. The EKS deployer configures `kubectl` via `aws eks update-kubeconfig` rather than a base64-encoded kubeconfig.
+
+---
+
+## Related Pages
+
+- **[Core Concepts -- Two-Phase Deployment](../concepts.mdx#two-phase-deployment)** -- Architectural overview
+- **[External Deployers](./external-deployers.mdx)** -- All three deployer paths in detail
+- **[Secrets Management](./secrets-management.mdx)** -- How credentials flow through phases
+- **[Updating Configuration](./config-updates.mdx)** -- Post-deploy config changes
+- **[Getting Started](../getting-started.mdx)** -- Simpler single-phase example (EC2)

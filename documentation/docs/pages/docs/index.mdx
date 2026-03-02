@@ -1,0 +1,65 @@
+import { DeployDiagram } from '../../components/DeployDiagram'
+
+# EVM Cloud
+
+Open-source infrastructure platform for EVM blockchain data. Deploy, manage, and scale a complete data stack — RPC proxies, event indexers, databases, networking, and monitoring — on AWS, GCP, or bare metal with a single command.
+
+## What It Deploys
+
+<DeployDiagram />
+
+## Supported Configurations
+
+### Compute Engines
+
+| Engine | Description | Best For | Monthly Cost |
+|--------|-------------|----------|-------------|
+| **EC2 + Docker Compose** | Single instance, all services in containers | Dev, small projects | ~$15-50 |
+| **EKS** | AWS-managed Kubernetes | Production, teams needing K8s | ~$110-140 |
+| **k3s** | Lightweight Kubernetes on a single EC2 | K8s without EKS cost ($0 control plane) | ~$35-50 |
+| **Bare Metal** | Docker Compose on any VPS via SSH | Self-hosted, no cloud vendor | ~$5-20 |
+
+### Databases
+
+| Backend | Mode | Notes |
+|---------|------|-------|
+| **PostgreSQL** | Managed (RDS) | Default, zero-ops. Terraform provisions and wires it automatically. |
+| **ClickHouse** | BYODB (bring-your-own) | You provide the endpoint. Great for high-throughput analytics. |
+
+### Workload Modes
+
+| Mode | Who Deploys Workloads | Use Case |
+|------|----------------------|----------|
+| `terraform` (default) | Terraform manages everything | Simple, all-in-one deployment |
+| `external` | Your CI/CD, GitOps, or Helm CLI | Separate infra and app lifecycles |
+
+## Quick Links
+
+- **[Getting Started](./getting-started.mdx)** — Deploy your first indexer in 5 minutes
+- **[Architecture](./architecture.mdx)** — How the modules fit together
+- **[Core Concepts](./concepts.mdx)** — Providers, compute engines, workload modes
+- **[Variable Reference](./variable-reference.mdx)** — All configuration options
+- **[Examples](./examples/index.mdx)** — 7 ready-to-use deployment examples
+- **[Guides](./guides/secrets-management.mdx)** — Secrets, config updates, production checklist
+- **[Cost Estimates](./cost-estimates.mdx)** — What each deployment pattern costs
+- **[Troubleshooting](./troubleshooting.mdx)** — Common issues and fixes
+- **[Roadmap](./roadmap.mdx)** — What's coming next
+
+## Repository Layout
+
+```
+evm-cloud/
+  main.tf, variables.tf, outputs.tf   # Root module (consumers use this)
+  modules/
+    core/                              # Provider-neutral logic (capabilities, K8s)
+    providers/aws/                     # AWS adapter (VPC, EC2, EKS, RDS, k3s)
+    providers/bare_metal/              # Bare metal adapter (SSH + Docker Compose)
+  deployers/
+    charts/                            # Shared Helm charts (rpc-proxy, indexer)
+    k3s/                               # k3s Helm deployer scripts
+    eks/                               # EKS deployer + ArgoCD manifests
+  examples/                            # 7 runnable examples
+  tests/                               # LocalStack harness + kind K8s tests
+  runbooks/                            # Operational guides
+  documentation/                         # This documentation (Vocs)
+```

@@ -1,0 +1,213 @@
+import { ArchitectureDiagram } from '../../components/ArchitectureDiagram'
+
+# Roadmap
+
+EVM Cloud is evolving from Terraform modules into a full-stack platform for EVM blockchain data infrastructure.
+
+## Architecture Vision
+
+Where we're headed — every layer pluggable, every component optional:
+
+<ArchitectureDiagram />
+
+## 🔨 Building Now
+
+### Managed ClickHouse
+
+Self-hosted ClickHouse — no more BYODB-only.
+
+```
+terraform apply
+  → EC2 or K8s pod with ClickHouse
+  → Schema auto-provisioned from rindexer config
+  → Automated backups to S3
+  → Wired to rindexer + eRPC automatically
+```
+
+## Status Overview
+
+| Component | Status | Description |
+|-----------|--------|-------------|
+| AWS Provider | ✅ Shipped | VPC, subnets, security groups, IAM |
+| EC2 + Docker | ✅ Shipped | Single-instance Docker Compose deployments |
+| EKS (K8s) | ✅ Shipped | AWS-managed Kubernetes clusters |
+| k3s (K8s) | ✅ Shipped | Lightweight Kubernetes on EC2 |
+| Bare Metal | ✅ Shipped | Docker Compose on any VPS via SSH |
+| eRPC Proxy | ✅ Shipped | Multi-upstream RPC with failover and caching |
+| rindexer | ✅ Shipped | No-code EVM event indexer |
+| PostgreSQL (RDS) | ✅ Shipped | AWS-managed database |
+| ClickHouse BYODB | ✅ Shipped | Bring-your-own ClickHouse endpoint |
+| Secrets Management | ✅ Shipped | AWS Secrets Manager, K8s secrets, env-file |
+| External Mode | ✅ Shipped | Separate infra and workload lifecycles |
+| Managed ClickHouse | 🔨 Building | Self-hosted ClickHouse with auto-provisioning |
+| Monitoring | 🔨 Building | Grafana + Prometheus dashboards and alerting |
+| Ingress / TLS | 🔨 Building | Caddy or ALB with automatic TLS |
+| K8s Test Suite | 🔨 Building | kind-based chart validation and connectivity tests |
+| GCP Provider | 📋 Planned | GCE, GKE, Cloud SQL — same interface as AWS |
+| EVM Cloud CLI | 📋 Planned | `init`, `deploy`, `status`, `logs`, `scale` |
+| Deployment Presets | 📋 Planned | One-variable sizing profiles (dev/prod/analytics) |
+| Bare Metal v2 | 📋 Planned | Docker Swarm, Ansible, automated backups |
+| Event Streaming | 📋 Planned | Kafka, SNS/SQS, CDC fan-out |
+| Self-Hosted Nodes | 📋 Planned | Reth / Erigon on NVMe with eRPC integration |
+
+
+### Monitoring & Observability
+
+```
+┌─────────────────────────────────────────────┐
+│              Grafana Dashboard              │
+├─────────────┬──────────────┬────────────────┤
+│  rindexer   │    eRPC      │   Database     │
+│             │              │                │
+│ Block lag   │ Upstream     │ Query p99      │
+│ Events/sec  │ latency      │ Disk usage     │
+│ Error rate  │ Cache hit %  │ Connections    │
+│ Chain sync  │ Failovers    │ Replication    │
+└─────────────┴──────────────┴────────────────┘
+         ▲               ▲              ▲
+         └───── Prometheus Scraping ────┘
+```
+
+- Pre-built dashboards per service
+- Alerting rules: stalled indexer, RPC errors, disk pressure
+- Deployed as part of the stack — one variable to enable
+
+### Ingress & TLS
+
+```
+Internet
+   │
+   ▼
+┌──────────────────────────┐
+│  Caddy / ALB             │
+│  *.your-domain.com       │
+│  Auto-renewing TLS       │
+├──────────────────────────┤
+│  /graphql  → rindexer    │
+│  /grafana  → monitoring  │
+│  /rpc      → eRPC proxy  │
+└──────────────────────────┘
+```
+
+### K8s Test Suite
+
+Automated validation using [kind](https://kind.sigs.k8s.io/):
+
+```bash
+make test-k8s
+# → Creates throwaway kind cluster
+# → Renders Helm charts
+# → Validates K8s resources
+# → Tests service connectivity
+# → Tears down — zero cleanup needed
+```
+
+---
+
+## 📋 Planned
+
+### Event Streaming
+
+Fan out indexed events to downstream consumers:
+
+```
+rindexer
+   │
+   ├──▶ Kafka (MSK or self-hosted)
+   │       └──▶ Your consumers
+   │
+   ├──▶ SNS/SQS (AWS-native)
+   │       └──▶ Lambda / Fargate
+   │
+   └──▶ CDC (change data capture)
+           └──▶ Real-time DB replication
+```
+
+### Self-Hosted EVM Node
+
+```hcl
+# Add to your terraform config:
+node_enabled      = true
+node_client       = "reth"       # or "erigon"
+node_instance     = "i3en.xlarge" # NVMe storage
+node_chain        = "ethereum"
+
+# eRPC auto-discovers the local node as primary upstream
+# Third-party RPCs become fallback only
+```
+
+- NVMe-optimized instances with large EBS
+- Automatic peer discovery and sync monitoring
+- Local node as eRPC primary, third-party as fallback
+
+### GCP Provider
+
+Same interface, different cloud:
+
+```hcl
+# AWS deployment
+infrastructure_provider = "aws"
+compute_engine          = "ec2_docker"
+
+# Becomes GCP deployment — same variables, same stack
+infrastructure_provider = "gcp"
+compute_engine          = "gce_docker"
+```
+
+- GCE instances, GKE clusters, Cloud SQL
+- VPC networking, firewall rules, IAM
+- Feature parity with AWS provider
+
+### EVM Cloud CLI
+
+```bash
+# Scaffold a new project
+evm-cloud init --chain ethereum --db clickhouse
+
+# Deploy with smart defaults
+evm-cloud deploy --preset dev
+
+# Live status
+evm-cloud status
+# ┌─────────────────────────────────────────────┐
+# │ Chain:     Ethereum mainnet                  │
+# │ Blocks:    19,847,231 / 19,847,235 (-4)     │
+# │ Events:    1,247/sec                         │
+# │ eRPC:      3/3 upstreams healthy             │
+# │ DB:        ClickHouse — 42GB indexed         │
+# │ Cost:      ~$38/mo (EC2 t3.medium)           │
+# └─────────────────────────────────────────────┘
+
+# Stream logs from all services
+evm-cloud logs --follow
+
+# Scale without editing HCL
+evm-cloud scale --instance t3.xlarge
+```
+
+### Deployment Presets
+
+```hcl
+# One variable to configure the full sizing profile
+preset = "dev"         # ~$35-50/mo  — single instance, minimal resources
+preset = "production"  # ~$500-2k/mo — multi-AZ, HA, proper sizing
+preset = "analytics"   # ~$1-5k/mo  — ClickHouse-heavy, read replicas
+```
+
+| Preset | Compute | Database | Monitoring | Cost |
+|--------|---------|----------|------------|------|
+| `dev` | EC2 `t3.medium` | RDS `db.t3.micro` | Off | ~$35-50/mo |
+| `production` | EKS or k3s, multi-AZ | ClickHouse cluster | Full stack | ~$500-2k/mo |
+| `analytics` | EKS, large instances | ClickHouse + replicas | Full stack | ~$1-5k/mo |
+
+### Bare Metal v2
+
+- Multi-node Docker Swarm deployments
+- Ansible integration for fleet management
+- Automated backups and restore scripts
+
+---
+
+## Contributing
+
+Pick any item and open a PR. Check [GitHub Issues](https://github.com/ExoMonk/evm-cloud/issues) for detailed specs on each roadmap item, or start a [Discussion](https://github.com/ExoMonk/evm-cloud/discussions) to propose something new.

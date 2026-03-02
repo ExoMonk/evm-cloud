@@ -1,0 +1,196 @@
+# Updating Configuration After Deployment
+
+How to change eRPC, rindexer, and ABI configurations after your initial deployment, for each compute engine.
+
+## Overview
+
+After the first `terraform apply` (or deployer run), you will need to update configuration for reasons like:
+
+- Adding new contracts or events to index
+- Changing RPC endpoints or adding upstreams to eRPC
+- Updating ABI files for upgraded contracts
+- Tuning performance settings (batch sizes, polling intervals)
+
+The update procedure depends on your compute engine and workload mode.
+
+---
+
+## EC2 (Docker Compose)
+
+### terraform mode (default)
+
+SSH into the instance, edit config files, and restart services:
+
+```bash
+# Get the instance IP
+terraform output -json workload_handoff | jq -r '.runtime.ec2.instance_ip'
+
+# SSH in
+ssh -i ~/.ssh/evm-cloud ubuntu@<instance-ip>
+
+# Edit configurations
+sudo vim /opt/evm-cloud/config/rindexer.yaml
+sudo vim /opt/evm-cloud/config/erpc.yaml
+
+# Restart affected services
+sudo docker compose -f /opt/evm-cloud/docker-compose.yml restart rindexer
+sudo docker compose -f /opt/evm-cloud/docker-compose.yml restart erpc
+```
+
+> **Note:** Terraform uses `lifecycle { ignore_changes = [user_data] }` on EC2 instances. This means config changes made directly on the instance will not be overwritten by a subsequent `terraform apply`, and config changes in your Terraform variables will not trigger instance recreation. This is intentional -- it prevents accidental downtime from instance replacement when only config content changes.
+
+### external mode
+
+Use the EC2 deployer to push updated configs:
+
+```bash
+# Edit local config files
+vim config/rindexer.yaml
+
+# Redeploy
+terraform output -json workload_handoff | ./deployers/ec2/deploy.sh /dev/stdin --config-dir ./config
+```
+
+The deployer copies files via SCP and restarts Docker Compose services.
+
+---
+
+## EKS
+
+### terraform mode
+
+Update the config variables in your `.tfvars` file and run `terraform apply`:
+
+```hcl
+# Update rindexer config content
+rindexer_config_yaml = file("config/rindexer.yaml")
+erpc_config_yaml     = file("config/erpc.yaml")
+```
+
+```bash
+terraform apply -var-file=eks.tfvars
+```
+
+Terraform detects the content hash change on the ConfigMap, updates it, and triggers a pod rollout. Pods restart with the new configuration automatically.
+
+### external mode
+
+Update Helm values or re-run the deployer:
+
+```bash
+# Edit config files
+vim config/rindexer.yaml
+
+# Redeploy via deployer
+terraform output -json workload_handoff | ./deployers/eks/deploy.sh /dev/stdin --config-dir ./config
+```
+
+Or if using ArgoCD, commit the updated config to your GitOps repository and sync:
+
+```bash
+git add config/rindexer.yaml
+git commit -m "Add new contract to indexer config"
+git push
+# ArgoCD detects the change and syncs
+```
+
+---
+
+## k3s
+
+k3s always uses external mode. Edit your config files and re-run the deployer:
+
+```bash
+# Edit config files in your config directory
+vim config/rindexer.yaml
+vim config/erpc.yaml
+
+# Re-run the deployer
+terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
+
+The deployer runs `helm upgrade`, which is idempotent. Only changed values trigger pod restarts. If the config content has not changed, Helm detects this and skips the upgrade -- no pods are restarted.
+
+---
+
+## Bare Metal (Docker Compose)
+
+Update the config variables and run `terraform apply`:
+
+```hcl
+rindexer_config_yaml = file("config/rindexer.yaml")
+erpc_config_yaml     = file("config/erpc.yaml")
+```
+
+```bash
+terraform apply -var-file=bare_metal.tfvars
+```
+
+Terraform detects the content hash change, re-provisions the config files via SSH file provisioner, and restarts Docker Compose services. The `.env` file and Docker Compose definition are updated in place.
+
+Alternatively, SSH in directly and edit configs on the host, same as the EC2 procedure.
+
+---
+
+## ABI Updates
+
+Contract ABIs are delivered alongside the rindexer config. When you add or modify ABIs, the update procedure follows the same path as config updates for your engine.
+
+### Using the `rindexer_abis` variable (terraform mode)
+
+```hcl
+rindexer_abis = {
+  "ERC20.json"       = file("abis/ERC20.json")
+  "MyContract.json"  = file("abis/MyContract.json")
+  "NewContract.json" = file("abis/NewContract.json")  # newly added
+}
+```
+
+```bash
+terraform apply -var-file=my-deployment.tfvars
+```
+
+### Using the config directory (external mode)
+
+Place ABI files in your config directory:
+
+```
+config/
+  abis/
+    ERC20.json
+    MyContract.json
+    NewContract.json    # newly added
+  rindexer.yaml         # references the ABIs
+  erpc.yaml
+```
+
+Re-run the deployer:
+
+```bash
+terraform output -json workload_handoff | ./deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
+
+> **Note:** When adding a new ABI, you also need to update `rindexer.yaml` to reference the new contract and specify which events to index. The ABI file alone does not trigger indexing.
+
+---
+
+## Quick Reference
+
+| Engine | Mode | Update Method | Restarts |
+|--------|------|---------------|----------|
+| EC2 | terraform | SSH + edit + `docker compose restart` | Manual |
+| EC2 | external | `deployers/ec2/deploy.sh` | Automatic |
+| EKS | terraform | Update variables + `terraform apply` | Automatic (rolling) |
+| EKS | external | `deployers/eks/deploy.sh` or ArgoCD sync | Automatic (rolling) |
+| k3s | external | `deployers/k3s/deploy.sh` | Automatic (rolling) |
+| Bare metal | terraform | Update variables + `terraform apply` | Automatic |
+
+---
+
+## Related Pages
+
+- **[Core Concepts -- Config Injection](../concepts.mdx#config-injection)** -- How configs reach containers
+- **[Core Concepts -- Lifecycle Behavior](../concepts.mdx#lifecycle-behavior)** -- What Terraform does on changes
+- **[Two-Phase Deployment](./two-phase-workflow.mdx)** -- k3s deployer workflow
+- **[External Deployers](./external-deployers.mdx)** -- All deployer scripts in detail
+- **[Variable Reference](../variable-reference.mdx)** -- Config-related variables

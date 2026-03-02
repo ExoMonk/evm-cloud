@@ -1,0 +1,36 @@
+# Examples
+
+7 ready-to-use deployment examples. Each is a complete Terraform configuration you can `terraform apply`.
+
+## Which Example Should I Use?
+
+| Example | Provider | Compute | Database | Workload Mode | Monthly Cost | Best For |
+|---------|----------|---------|----------|---------------|-------------|----------|
+| [minimal_aws_rds](./ec2-docker-compose-rds.mdx) | AWS | EC2 + Docker | RDS PostgreSQL | terraform | ~$45 | Simplest start, managed DB |
+| [minimal_aws_byo_clickhouse](./ec2-docker-compose-clickhouse.mdx) | AWS | EC2 + Docker | ClickHouse (BYODB) | terraform | ~$15-35 | Analytics, low cost |
+| [aws_eks_BYO_clickhouse](./eks-clickhouse.mdx) | AWS | EKS | ClickHouse (BYODB) | terraform | ~$110+ | Production K8s |
+| [minimal_aws_k3s_byo_clickhouse](./k3s-clickhouse.mdx) | AWS | k3s on EC2 | ClickHouse (BYODB) | external | ~$35-50 | K8s without EKS cost |
+| [bare_metal_byo_clickhouse](./bare-metal-clickhouse.mdx) | Bare Metal | Docker Compose | ClickHouse (BYODB) | terraform | ~$5-20 | Any VPS, no AWS |
+| [minimal_aws_external_ec2_byo](./external-ec2.mdx) | AWS | EC2 | ClickHouse (BYODB) | external | ~$15-35 | CI/CD owns workloads |
+| [minimal_aws_external_eks_byo](./external-eks.mdx) | AWS | EKS | ClickHouse (BYODB) | external | ~$110+ | GitOps / ArgoCD |
+
+## How to Choose
+
+- **Need managed database?** Use [minimal_aws_rds](./ec2-docker-compose-rds.mdx) -- RDS PostgreSQL with zero external dependencies.
+- **Want cheapest AWS?** Use [minimal_aws_byo_clickhouse](./ec2-docker-compose-clickhouse.mdx) -- single EC2 instance with your own ClickHouse.
+- **Want Kubernetes?** Use [EKS](./eks-clickhouse.mdx) for production or [k3s](./k3s-clickhouse.mdx) for budget K8s without the ~$73/mo control plane fee.
+- **No AWS account?** Use [bare_metal_byo_clickhouse](./bare-metal-clickhouse.mdx) -- works on any VPS (Hetzner, OVH, DigitalOcean).
+- **Separate infra from app deploy?** Use [external_ec2](./external-ec2.mdx) or [external_eks](./external-eks.mdx) -- Terraform provisions infrastructure, your CI/CD deploys workloads.
+
+## Common Prerequisites
+
+All examples require:
+- Terraform >= 1.5.0
+- An SSH key pair (`ssh-keygen -t ed25519`)
+- A ClickHouse instance (except `minimal_aws_rds` which uses managed PostgreSQL)
+
+AWS examples additionally require:
+- AWS CLI v2 with configured credentials
+- Permissions for EC2, VPC, IAM, Secrets Manager (and EKS for K8s examples)
+
+See [Getting Started](../getting-started.mdx) for full prerequisite setup.

@@ -1,0 +1,105 @@
+# Cost Estimates
+
+Estimated monthly costs for each deployment pattern. All prices are US East (N. Virginia) as of 2025. Actual costs vary by usage, data transfer, and reserved instance pricing.
+
+## By Deployment Pattern
+
+| Pattern | Components | Est. Monthly Cost |
+|---------|-----------|------------------|
+| **EC2 + Managed RDS** | t3.medium EC2 + db.t4g.micro RDS + VPC | ~$45-60 |
+| **EC2 + BYO ClickHouse** | t3.medium EC2 + VPC | ~$35-50 (+ your ClickHouse) |
+| **EC2 + BYO ClickHouse (dev)** | t3.micro EC2 + VPC | ~$10-15 (+ your ClickHouse) |
+| **EKS + BYO ClickHouse** | EKS control plane + t3.medium node + VPC | ~$110-140 (+ your ClickHouse) |
+| **k3s + BYO ClickHouse** | t3.medium EC2 (no EKS fee) + VPC | ~$35-50 (+ your ClickHouse) |
+| **Bare Metal + BYO ClickHouse** | Your VPS cost only | ~$5-20 (Hetzner/OVH) |
+
+## What Drives Cost
+
+### Biggest Cost Drivers
+
+| Component | Cost | How to Reduce |
+|-----------|------|--------------|
+| **EC2 instance type** | $8-133/mo | Use `t3.micro` for dev, `t3.medium` for production |
+| **EKS control plane** | $73/mo (fixed) | Use k3s instead ($0 control plane) |
+| **NAT gateway** | ~$35/mo + data | Set `network_enable_nat_gateway = false` for dev |
+| **RDS instance** | $13-175/mo | Use `db.t4g.micro` for dev, or switch to BYO ClickHouse |
+| **EBS storage** | ~$2.40/mo per 30GB gp3 | Default is fine for most workloads |
+| **Data transfer** | $0.09/GB outbound | Minimal for indexers (inbound RPC data is free) |
+
+### Free or Near-Free
+
+| Component | Cost | Notes |
+|-----------|------|-------|
+| VPC, subnets, SGs | $0 | No charge for VPC resources themselves |
+| Secrets Manager | ~$0.40/secret/mo | Negligible |
+| S3 VPC endpoint (gateway) | $0 | Free gateway endpoint |
+| k3s control plane | $0 | Runs on your EC2 instance |
+| ClickHouse Cloud free tier | $0 | 10M rows, good for dev/testing |
+
+## Cost Optimization Tips
+
+### Dev Environment
+
+Save ~80% on dev costs:
+
+```hcl
+# Use smallest instances
+ec2_instance_type    = "t3.micro"     # $8/mo vs $33/mo
+postgres_instance_class = "db.t4g.micro" # $13/mo (if using RDS)
+
+# Skip expensive networking
+network_enable_nat_gateway   = false  # saves ~$35/mo
+network_enable_vpc_endpoints = false  # saves ~$7-22/mo
+
+# Fast secret cleanup
+ec2_secret_recovery_window_in_days = 0  # immediate deletion
+```
+
+### k3s Instead of EKS
+
+If you want Kubernetes but not the EKS bill:
+
+| | EKS | k3s | Savings |
+|---|-----|-----|---------|
+| Control plane | $73/mo | $0 | $73/mo |
+| Worker node | t3.medium ($33) | Same instance runs k3s | $0 |
+| **Total** | **~$106/mo** | **~$33/mo** | **$73/mo** |
+
+Both run the same Helm charts and K8s workloads. Trade-off: k3s is single-node (no HA), uses static kubeconfig (not IAM-based).
+
+### BYO ClickHouse vs Managed RDS
+
+| | RDS PostgreSQL | ClickHouse Cloud (free) | Self-hosted ClickHouse |
+|---|---|---|---|
+| Monthly cost | $13-175 | $0 (10M rows) | Your infra cost |
+| Setup | Automatic | Sign up, get URL | You manage |
+| Best for | Small datasets, ACID | Analytics, time-series | Large-scale analytics |
+
+## Example: Cheapest Production Setup
+
+Bare metal VPS (Hetzner CX22) + ClickHouse Cloud free tier:
+
+| Component | Monthly Cost |
+|-----------|-------------|
+| Hetzner CX22 (2 vCPU, 4GB RAM) | ~$4 |
+| ClickHouse Cloud free tier | $0 |
+| Domain + DNS | ~$1 |
+| **Total** | **~$5/mo** |
+
+```hcl
+infrastructure_provider = "bare_metal"
+compute_engine          = "docker_compose"
+bare_metal_host         = "your-hetzner-ip"
+indexer_storage_backend  = "clickhouse"
+```
+
+## Example: Production AWS Setup
+
+| Component | Monthly Cost |
+|-----------|-------------|
+| t3.medium EC2 | $33 |
+| VPC + NAT gateway | $35 |
+| db.t4g.small RDS | $26 |
+| Secrets Manager | $0.40 |
+| EBS (30GB gp3) | $2.40 |
+| **Total** | **~$97/mo** |

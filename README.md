@@ -1,130 +1,77 @@
-# evm-cloud
+# 🏰 evm-cloud
 
-Automated EVM blockchain infrastructure deployment with a provider-abstraction backbone.
+[![rindexer](https://img.shields.io/badge/powered%20by-rindexer-e44d26?style=flat-square)](https://rindexer.xyz) [![Terraform](https://img.shields.io/badge/Terraform-%235835CC?style=flat-square&logo=terraform&logoColor=white)](https://www.terraform.io) [![AWS](https://img.shields.io/badge/AWS-%23FF9900?style=flat-square&logo=amazon-web-services&logoColor=white)](https://aws.amazon.com) [![Docker](https://img.shields.io/badge/Docker-%232496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 
-## What this project deploys
+> **🚧 Work in Progress** — Actively building, expect breaking changes.
 
-`evm-cloud` is an infra-first Terraform module for EVM indexing stacks on AWS:
+Open-source infrastructure platform for EVM blockchain data. Deploy, manage, and scale a complete data stack — RPC proxies, event indexers, databases, and networking — on AWS or bare metal with a single `terraform apply`.
 
-- Networking (VPC, subnets, SGs)
-- Compute substrate (`ec2` with Docker Compose, or `eks` with Kubernetes)
-- Managed Postgres (optional) or BYODB ClickHouse wiring
-- Runtime config channels (cloud-init + bind mounts for EC2, ConfigMap/Secret for EKS)
-- eRPC + rindexer workload paths (when `workload_mode = "terraform"`)
+> **[Full Documentation](./documentation/docs/index.mdx)** | [Getting Started](./documentation/docs/getting-started.mdx) | [Variable Reference](./documentation/docs/variable-reference.mdx) | [Examples](./documentation/docs/examples/index.mdx)
 
-## Layer model
+## What It Deploys
 
-`evm-cloud` supports workload ownership modes:
+- **eRPC** — multi-upstream RPC proxy with automatic failover and caching
+- **rindexer** — EVM event indexer (no-code YAML config)
+- **Database** — managed PostgreSQL (RDS) or bring-your-own ClickHouse
+- **Networking** — VPC, subnets, security groups (AWS)
+- **Compute** — EC2 + Docker Compose, EKS, k3s, or bare metal
 
-- `workload_mode = "terraform"` (default)
-  - Terraform manages workloads (EC2 + Docker Compose services, or K8s deployments)
-- `workload_mode = "external"`
-  - Terraform provisions Layer 1 infra and outputs `workload_handoff` v1
-  - Workloads are expected to be deployed by external tooling (CI/GitOps)
-
-## Repository organization
-
-- `examples/` runnable Terraform examples
-- `modules/` provider adapters and infra/workload modules
-- `deployers/` reference deployment scripts (EKS GitOps)
-- `tests/` LocalStack harness + fixtures
-- `runbooks/` operational guides
-- root module (`main.tf`, `variables.tf`, `outputs.tf`) for consumers
-
-## Examples
-
-- `examples/minimal_aws_rds/` — EC2 + Docker Compose + managed Postgres
-- `examples/minimal_aws_byo_clickhouse/` — EC2 + Docker Compose + external ClickHouse
-- `examples/aws_eks_BYO_clickhouse/` — EKS + external ClickHouse
-- `examples/minimal_aws_external_ec2_byo/` — EC2 external mode + BYO ClickHouse (handoff-only)
-- `examples/minimal_aws_external_eks_byo/` — EKS external mode + BYO ClickHouse (handoff-only)
-
-Each example exposes:
-
-- `provider_selection`
-- `capability_contract`
-- service outputs (`postgres`, `rpc_proxy`, `indexer` when applicable)
-- `workload_handoff` (v1)
-
-## Prerequisites
-
-- Terraform `>= 1.14.6`
-- `tflint`
-- `checkov`
-- Docker + Docker Compose
-
-## Quick start
+## Quick Start
 
 ```bash
 cd examples/minimal_aws_byo_clickhouse
 
-# Set up secrets
+# Configure secrets
 cp secrets.auto.tfvars.example secrets.auto.tfvars
-# Edit: indexer_clickhouse_password, ssh_public_key
+# Edit: ssh_public_key, indexer_clickhouse_password, indexer_clickhouse_url
 
 terraform init
 terraform plan -var-file=minimal_clickhouse.tfvars
 terraform apply -var-file=minimal_clickhouse.tfvars
-
-# SSH into the instance
-ssh -i ~/.ssh/your-key ec2-user@<public-ip>
-
-# Check containers
-sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps
 ```
 
-## QA and verification
+See [Getting Started](./documentation/docs/getting-started.mdx) for the full walkthrough.
 
-Run static checks:
+## Examples
+
+| Example | Compute | Database | Cost |
+|---------|---------|----------|------|
+| [`minimal_aws_rds`](examples/minimal_aws_rds/) | EC2 + Docker | Managed PostgreSQL | ~$45/mo |
+| [`minimal_aws_byo_clickhouse`](examples/minimal_aws_byo_clickhouse/) | EC2 + Docker | ClickHouse (BYODB) | ~$35/mo |
+| [`aws_eks_BYO_clickhouse`](examples/aws_eks_BYO_clickhouse/) | EKS (Kubernetes) | ClickHouse (BYODB) | ~$110/mo |
+| [`minimal_aws_k3s_byo_clickhouse`](examples/minimal_aws_k3s_byo_clickhouse/) | k3s (lightweight K8s) | ClickHouse (BYODB) | ~$35/mo |
+| [`bare_metal_byo_clickhouse`](examples/bare_metal_byo_clickhouse/) | Docker Compose (any VPS) | ClickHouse (BYODB) | ~$5-20/mo |
+| [`minimal_aws_external_ec2_byo`](examples/minimal_aws_external_ec2_byo/) | EC2 (infra only) | ClickHouse (BYODB) | ~$35/mo |
+| [`minimal_aws_external_eks_byo`](examples/minimal_aws_external_eks_byo/) | EKS (infra only) | ClickHouse (BYODB) | ~$110/mo |
+
+See [Choosing an Example](./documentation/docs/examples/index.mdx) for help picking the right one.
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- AWS CLI v2 (for AWS deployments)
+- SSH key pair
+- `jq` (for k3s/EKS external deployers)
+
+## QA and Verification
 
 ```bash
-make qa
+make qa          # fmt, validate, lint, security (checkov)
+make verify      # qa + plan all examples
+make test-k8s    # Kubernetes chart tests (kind)
 ```
 
-Plan one example against LocalStack:
+## Documentation
 
-```bash
-make plan EXAMPLE=minimal_aws_rds
-make plan EXAMPLE=minimal_aws_byo_clickhouse
-make plan EXAMPLE=aws_eks_BYO_clickhouse
-make plan EXAMPLE=minimal_aws_external_ec2_byo
-make plan EXAMPLE=minimal_aws_external_eks_byo
-```
+Full documentation lives in [`documentation/`](./documentation/docs/index.mdx):
 
-Run all checks + all examples:
+- [Architecture](./documentation/docs/architecture.mdx) — how the modules fit together
+- [Core Concepts](./documentation/docs/concepts.mdx) — providers, compute engines, workload modes
+- [Variable Reference](./documentation/docs/variable-reference.mdx) — all configuration options with sizing guide
+- [Cost Estimates](./documentation/docs/cost-estimates.mdx) — what each pattern costs
+- [Guides](./documentation/docs/guides/secrets-management.mdx) — secrets, config updates, production checklist
+- [Troubleshooting](./documentation/docs/troubleshooting.mdx) — common issues and fixes
 
-```bash
-make verify
-```
+## License
 
-## Secrets
-
-Each example includes `secrets.auto.tfvars.example`.
-
-```bash
-cd examples/minimal_aws_byo_clickhouse
-cp secrets.auto.tfvars.example secrets.auto.tfvars
-# edit values (ssh_public_key, passwords)
-```
-
-`secrets.auto.tfvars` is gitignored and auto-loaded.
-
-## External mode quick check
-
-```bash
-cd examples/minimal_aws_byo_clickhouse
-terraform init -backend=false
-terraform plan -var-file=minimal_clickhouse.tfvars -var 'workload_mode=external'
-```
-
-Expected:
-
-- infra created (networking, EC2 instance, IAM, Secrets Manager) but no Docker Compose services started
-- `workload_handoff.mode = "external"`
-- `workload_handoff.version = "v1"`
-
-## Deployment runbook
-
-For production workflow (remote state, apply order, rollback, destroy safety):
-
-- `runbooks/aws-production-apply.md`
+Apache 2.0

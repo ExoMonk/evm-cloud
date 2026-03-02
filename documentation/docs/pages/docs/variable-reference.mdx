@@ -1,0 +1,190 @@
+# Variable Reference
+
+All configuration variables for evm-cloud, organized by category. Variables marked **sensitive** are redacted in Terraform plan/apply output.
+
+## Most Impactful Variables
+
+These are the variables that most affect your deployment's cost, performance, and architecture:
+
+| Variable | Impact | Default | What It Controls |
+|----------|--------|---------|-----------------|
+| `compute_engine` | Architecture | `ec2` | Entire deployment model: EC2+Docker, EKS, k3s, or bare metal |
+| `ec2_instance_type` / `k3s_instance_type` | Cost + Performance | `t3.medium` | Instance size — biggest cost driver |
+| `ec2_indexer_mem_limit` | Performance | `2g` | How much RAM rindexer can use (increase for large indexing jobs) |
+| `workload_mode` | Workflow | `terraform` | Whether Terraform or external tools manage workloads |
+| `postgres_instance_class` | Cost | `db.t4g.micro` | RDS instance size (when using managed Postgres) |
+| `network_enable_nat_gateway` | Cost | `false` | NAT gateway adds ~$35/mo — skip for dev |
+
+---
+
+## Core
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `project_name` | `string` | (required) | Resource naming prefix. Must be non-empty. |
+| `infrastructure_provider` | `string` | `"aws"` | Provider adapter: `aws` or `bare_metal`. |
+| `compute_engine` | `string` | `"ec2"` | Compute engine: `ec2`, `eks`, `k3s`, or `docker_compose`. See [Concepts](./concepts.mdx) for details. |
+| `workload_mode` | `string` | `"terraform"` | `terraform` (manage workloads) or `external` (output handoff only). |
+| `deployment_target` | `string` | `"managed"` | Deployment mode: `managed`, `hybrid`, or `self_hosted`. |
+| `runtime_arch` | `string` | `"multi"` | Architecture intent: `amd64`, `arm64`, or `multi`. |
+| `database_mode` | `string` | `"managed"` | Database mode: `managed` or `self_hosted`. |
+| `streaming_mode` | `string` | `"disabled"` | Streaming: `managed`, `self_hosted`, or `disabled`. |
+| `ingress_mode` | `string` | `"managed_lb"` | Ingress: `managed_lb` or `self_hosted`. |
+
+### Valid Compute Engine Combinations
+
+| Provider | Allowed Engines |
+|----------|----------------|
+| `aws` | `ec2`, `eks`, `k3s` |
+| `bare_metal` | `docker_compose`, `k3s` |
+
+> **Note:** `k3s` requires `workload_mode = "external"` (two-phase deployment).
+
+---
+
+## Networking (AWS)
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `networking_enabled` | `bool` | `false` | Enable VPC provisioning. Required for most AWS deployments. |
+| `network_environment` | `string` | `"dev"` | Profile: `dev` (minimal SGs), `production` (multi-AZ, NAT), `platform` (full). |
+| `network_vpc_cidr` | `string` | `"10.42.0.0/16"` | VPC CIDR block. |
+| `network_availability_zones` | `list(string)` | `["us-east-1a", "us-east-1b"]` | AZs for subnet placement. |
+| `network_enable_nat_gateway` | `bool` | `false` | NAT gateway for private subnet egress. **Adds ~$35/mo.** Skip for dev. |
+| `network_enable_vpc_endpoints` | `bool` | `false` | S3 gateway + interface endpoints (ECR, CloudWatch, SSM). |
+| `aws_region` | `string` | `"us-east-1"` | AWS region. |
+| `aws_skip_credentials_validation` | `bool` | `false` | Skip credential checks (for LocalStack testing). |
+
+---
+
+## EC2 Compute
+
+Required when `compute_engine = "ec2"`.
+
+| Variable | Type | Default | Sensitive | Description |
+|----------|------|---------|-----------|-------------|
+| `ssh_public_key` | `string` | `""` | Yes | SSH public key content for the EC2 key pair. Required for EC2 and k3s. |
+| `ec2_instance_type` | `string` | `"t3.medium"` | No | EC2 instance type. See [sizing guide](#instance-sizing) below. |
+| `ec2_rpc_proxy_mem_limit` | `string` | `"1g"` | No | Docker memory limit for eRPC container. |
+| `ec2_indexer_mem_limit` | `string` | `"2g"` | No | Docker memory limit for rindexer container. |
+| `ec2_secret_recovery_window_in_days` | `number` | `7` | No | Secrets Manager deletion window. Set to `0` for dev (immediate delete). |
+
+---
+
+## k3s Compute
+
+Required when `compute_engine = "k3s"`.
+
+| Variable | Type | Default | Sensitive | Description |
+|----------|------|---------|-----------|-------------|
+| `k3s_instance_type` | `string` | `"t3.medium"` | No | EC2 instance type for the k3s host. |
+| `k3s_version` | `string` | `"v1.30.4+k3s1"` | No | Pinned k3s version. |
+| `k3s_ssh_private_key_path` | `string` | `""` | Yes | Path to SSH private key for host provisioning. |
+| `k3s_api_allowed_cidrs` | `list(string)` | `[]` | No | CIDRs allowed to access k3s API (port 6443). Defaults to VPC CIDR. **Add your IP for Terraform provisioning.** |
+| `ssh_public_key` | `string` | `""` | Yes | SSH public key for the k3s EC2 key pair. |
+
+> **Important:** `k3s_api_allowed_cidrs` must include your local IP (or `0.0.0.0/0` for dev) so Terraform can SSH into the instance during provisioning.
+
+---
+
+## PostgreSQL (Managed RDS)
+
+Enable with `postgres_enabled = true` and `indexer_storage_backend = "postgres"`.
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `postgres_enabled` | `bool` | `false` | Enable managed PostgreSQL (RDS). |
+| `postgres_instance_class` | `string` | `"db.t4g.micro"` | RDS instance class. See [sizing guide](#instance-sizing). |
+| `postgres_engine_version` | `string` | `"16.4"` | PostgreSQL version. |
+| `postgres_db_name` | `string` | `"rindexer"` | Database name. |
+| `postgres_db_username` | `string` | `"rindexer"` | Master username. |
+| `postgres_backup_retention` | `number` | `7` | Backup retention in days. |
+
+---
+
+## ClickHouse (BYODB)
+
+Required when `indexer_storage_backend = "clickhouse"`. You provide the external ClickHouse endpoint.
+
+| Variable | Type | Default | Sensitive | Description |
+|----------|------|---------|-----------|-------------|
+| `indexer_clickhouse_url` | `string` | `""` | Yes | HTTP(S) endpoint, e.g. `https://your-instance.clickhouse.cloud:8443`. |
+| `indexer_clickhouse_user` | `string` | `"default"` | No | ClickHouse username. |
+| `indexer_clickhouse_password` | `string` | `""` | Yes | ClickHouse password. |
+| `indexer_clickhouse_db` | `string` | `"default"` | No | Database name. |
+
+---
+
+## RPC Proxy (eRPC)
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `rpc_proxy_enabled` | `bool` | `false` | Enable eRPC proxy deployment. |
+| `rpc_proxy_image` | `string` | `"ghcr.io/erpc/erpc:latest"` | Container image. Override for pinned versions or private registries. |
+| `erpc_config_yaml` | `string` | `""` | Full eRPC config YAML content. Required when `rpc_proxy_enabled = true`. |
+
+eRPC aggregates multiple upstream RPC endpoints with automatic failover, caching, and hedged requests. See [eRPC documentation](https://docs.erpc.cloud/) for config syntax.
+
+---
+
+## Indexer (rindexer)
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `indexer_enabled` | `bool` | `false` | Enable rindexer deployment. |
+| `indexer_image` | `string` | `"ghcr.io/joshstevens19/rindexer:latest"` | Container image. |
+| `indexer_rpc_url` | `string` | `""` | RPC endpoint URL. Auto-resolves to eRPC internal URL when both are enabled. |
+| `indexer_storage_backend` | `string` | `"postgres"` | Storage: `postgres` (managed RDS) or `clickhouse` (BYODB). |
+| `rindexer_config_yaml` | `string` | `""` | Full rindexer.yaml content. Use `${RPC_URL}` and `${DATABASE_URL}` for runtime interpolation. |
+| `rindexer_abis` | `map(string)` | `{}` | ABI files: `{ "ERC20.json" = file("abis/ERC20.json") }`. |
+
+> **Tip:** When both `rpc_proxy_enabled` and `indexer_enabled` are true, the indexer's RPC URL automatically points to the eRPC internal service — no manual wiring needed.
+
+---
+
+## Bare Metal
+
+Required when `infrastructure_provider = "bare_metal"`.
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `bare_metal_host` | `string` | `""` | IP or hostname of your VPS. |
+| `bare_metal_ssh_user` | `string` | `"ubuntu"` | SSH user. |
+| `bare_metal_ssh_private_key_path` | `string` | `""` | Path to SSH private key. |
+| `bare_metal_ssh_port` | `number` | `22` | SSH port. |
+| `bare_metal_rpc_proxy_mem_limit` | `string` | `"1g"` | Docker memory limit for eRPC. |
+| `bare_metal_indexer_mem_limit` | `string` | `"2g"` | Docker memory limit for rindexer. |
+
+---
+
+## Instance Sizing
+
+### EC2 / k3s Host
+
+| Instance | vCPU | RAM | Monthly Cost | Use Case |
+|----------|------|-----|-------------|----------|
+| `t3.micro` | 2 | 1 GB | ~$8 | Testing only (eRPC barely fits) |
+| `t3.small` | 2 | 2 GB | ~$16 | Light dev (1 small indexer) |
+| `t3.medium` | 2 | 4 GB | ~$33 | **Default.** Fits eRPC (1G) + rindexer (2G) + OS |
+| `t3.large` | 2 | 8 GB | ~$67 | Heavy indexing, multiple contracts |
+| `t3.xlarge` | 4 | 16 GB | ~$133 | Large-scale backfills |
+
+**Rule of thumb:** `ec2_indexer_mem_limit` + `ec2_rpc_proxy_mem_limit` + 1 GB (OS) should not exceed instance RAM.
+
+### RDS PostgreSQL
+
+| Instance | vCPU | RAM | Monthly Cost | Use Case |
+|----------|------|-----|-------------|----------|
+| `db.t4g.micro` | 2 | 1 GB | ~$13 | **Default.** Dev/staging |
+| `db.t4g.small` | 2 | 2 GB | ~$26 | Small production |
+| `db.t4g.medium` | 2 | 4 GB | ~$52 | Medium production |
+| `db.r6g.large` | 2 | 16 GB | ~$175 | Heavy read workloads |
+
+### Memory Limits (Docker)
+
+| Component | Default | Recommended Minimum | Heavy Use |
+|-----------|---------|-------------------|-----------|
+| eRPC | `1g` | `512m` | `2g` |
+| rindexer | `2g` | `1g` | `4g` |
+
+Increase `ec2_indexer_mem_limit` if rindexer is OOM-killed during large backfills. Check with `docker stats` on the instance.

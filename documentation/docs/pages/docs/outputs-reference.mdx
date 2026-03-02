@@ -1,0 +1,187 @@
+# Outputs Reference
+
+Terraform outputs from evm-cloud. Access any output with `terraform output -json <name>`.
+
+## Output Summary
+
+| Output | Description | Always Present |
+|--------|-------------|---------------|
+| `provider_selection` | Active provider, deployment target, architecture | Yes |
+| `capability_contract` | Provider-neutral capability flags | Yes |
+| `adapter_context` | Provider-specific adapter metadata | Yes |
+| `networking` | VPC, subnet, and security group IDs | AWS only |
+| `postgres` | RDS endpoint, port, database name, secret ARN | When `postgres_enabled = true` |
+| `rpc_proxy` | eRPC service name and port | When `rpc_proxy_enabled = true` |
+| `indexer` | rindexer service name and log group | When `indexer_enabled = true` |
+| `workload_handoff` | Full deployment contract for external tools | Yes (sensitive) |
+
+## Accessing Outputs
+
+```bash
+# All outputs (redacts sensitive values)
+terraform output
+
+# Specific output as JSON
+terraform output -json workload_handoff
+
+# Extract a nested field
+terraform output -json workload_handoff | jq '.runtime.ec2.public_ip'
+```
+
+> **Note:** `workload_handoff` is marked `sensitive = true` because it may contain kubeconfig credentials (k3s) or database passwords. Use `terraform output -json` to access it.
+
+## workload_handoff v1 Schema
+
+The `workload_handoff` is the primary integration point for external deployers. It contains everything needed to deploy workloads outside of Terraform.
+
+### Top-Level Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | `string` | Contract version: `"v1"` |
+| `mode` | `string` | `"terraform"` or `"external"` |
+| `compute_engine` | `string` | `"ec2"`, `"eks"`, or `"k3s"` |
+| `project_name` | `string` | Project identifier |
+| `aws_region` | `string` | AWS region (when provider=aws) |
+
+### identity
+
+IAM identity for workloads.
+
+| Field | Present When | Contents |
+|-------|-------------|----------|
+| `identity.ec2_instance_profile` | `compute_engine = "ec2"` | `{ name, role_arn }` |
+| `identity.eks_irsa_role_arns` | `compute_engine = "eks"` | `{ rpc_proxy, indexer }` |
+
+### network
+
+VPC and security group information.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `network.vpc_id` | `string` | VPC ID |
+| `network.public_subnet_ids` | `list` | Public subnet IDs |
+| `network.private_subnet_ids` | `list` | Private subnet IDs |
+| `network.security_groups.rpc_proxy` | `string` | SG ID for eRPC |
+| `network.security_groups.indexer` | `string` | SG ID for rindexer |
+
+### runtime
+
+Compute-engine-specific connection details. Only one of `ec2`, `eks`, or `k3s` is populated.
+
+#### runtime.ec2
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `instance_id` | `string` | EC2 instance ID |
+| `public_ip` | `string` | Instance public IP |
+| `ssh_command` | `string` | Ready-to-use SSH command |
+| `config_dir` | `string` | Config path on instance (`/opt/evm-cloud/config`) |
+| `compose_file` | `string` | Docker Compose file path |
+| `secret_arn` | `string` | Secrets Manager secret ARN |
+| `cloudwatch_log_group` | `string` | CloudWatch log group name |
+
+#### runtime.eks
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cluster_name` | `string` | EKS cluster name |
+| `cluster_endpoint` | `string` | EKS API endpoint |
+| `oidc_provider_arn` | `string` | OIDC provider for IRSA |
+
+#### runtime.k3s
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `host_ip` | `string` | EC2 instance public IP |
+| `instance_id` | `string` | EC2 instance ID |
+| `cluster_endpoint` | `string` | k3s API endpoint (`https://IP:6443`) |
+| `kubeconfig_base64` | `string` | Base64-encoded kubeconfig (sensitive) |
+| `node_name` | `string` | k3s node name |
+
+### services
+
+Workload service metadata.
+
+| Field | Present When | Contents |
+|-------|-------------|----------|
+| `services.rpc_proxy` | `rpc_proxy_enabled` | `{ service_name, port, internal_url }` |
+| `services.indexer` | `indexer_enabled` | `{ service_name, single_writer_required, storage_backend }` |
+
+### data
+
+Database connection information.
+
+| Field | Present When | Contents |
+|-------|-------------|----------|
+| `data.backend` | `indexer_enabled` | `"postgres"` or `"clickhouse"` |
+| `data.postgres` | backend=postgres + postgres_enabled | `{ host, port, db_name, secret_arn }` |
+| `data.clickhouse` | backend=clickhouse | `{ url, user, db, password }` |
+
+### artifacts
+
+| Field | Type | Values |
+|-------|------|--------|
+| `artifacts.config_channel` | `string` | `"ssh"` (EC2), `"helm"` (k3s), `"k8s_config"` (EKS) |
+
+## Example: EC2 Handoff
+
+```json
+{
+  "version": "v1",
+  "mode": "external",
+  "compute_engine": "ec2",
+  "project_name": "my-indexer",
+  "aws_region": "us-east-1",
+  "runtime": {
+    "ec2": {
+      "instance_id": "i-0abc123def456",
+      "public_ip": "54.123.45.67",
+      "ssh_command": "ssh -i ~/.ssh/key ubuntu@54.123.45.67",
+      "config_dir": "/opt/evm-cloud/config",
+      "compose_file": "/opt/evm-cloud/docker-compose.yml",
+      "secret_arn": "arn:aws:secretsmanager:us-east-1:123456:secret:my-indexer-abc",
+      "cloudwatch_log_group": "/evm-cloud/my-indexer"
+    },
+    "eks": null,
+    "k3s": null
+  },
+  "services": {
+    "rpc_proxy": { "service_name": "erpc", "port": 4000, "internal_url": "http://erpc:4000" },
+    "indexer": { "service_name": "rindexer", "single_writer_required": true, "storage_backend": "clickhouse" }
+  },
+  "data": {
+    "backend": "clickhouse",
+    "postgres": null,
+    "clickhouse": { "url": "https://ch.example.com:8443", "user": "default", "db": "default", "password": null }
+  },
+  "artifacts": { "config_channel": "ssh" }
+}
+```
+
+## Example: k3s Handoff
+
+```json
+{
+  "version": "v1",
+  "mode": "external",
+  "compute_engine": "k3s",
+  "project_name": "evm-cloud-k3s",
+  "runtime": {
+    "ec2": null,
+    "eks": null,
+    "k3s": {
+      "host_ip": "44.213.127.224",
+      "instance_id": "i-0def789abc012",
+      "cluster_endpoint": "https://44.213.127.224:6443",
+      "kubeconfig_base64": "YXBpVmVyc2lvbjogdjEK...",
+      "node_name": "evm-cloud-k3s-server-0"
+    }
+  },
+  "data": {
+    "backend": "clickhouse",
+    "clickhouse": { "url": "https://ch.clickhouse.cloud:8443", "user": "default", "db": "default", "password": "secret" }
+  },
+  "artifacts": { "config_channel": "helm" }
+}
+```

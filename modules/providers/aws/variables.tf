@@ -54,7 +54,7 @@ variable "ssh_public_key" {
 variable "ec2_instance_type" {
   description = "EC2 instance type for Docker Compose compute engine."
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "ec2_rpc_proxy_mem_limit" {

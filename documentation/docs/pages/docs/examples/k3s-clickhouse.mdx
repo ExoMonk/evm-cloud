@@ -1,0 +1,92 @@
+# k3s + ClickHouse (BYODB)
+
+Lightweight Kubernetes on a single EC2 instance using k3s. Gets you Kubernetes semantics (Helm, kubectl, pods) without the ~$73/mo EKS control plane fee. Uses a two-phase deployment workflow.
+
+## Architecture
+
+```
+┌────────────────── AWS VPC ──────────────────┐
+│                                              │
+│  EC2 Instance (k3s single-node cluster)      │
+│  ├── eRPC pod (RPC proxy)                    │
+│  └── rindexer pod (indexer)                  │
+│       └── writes to ────────────────────────────→ ClickHouse (external)
+│                                              │
+│  k3s API server (port 6443)                  │
+│  SSH access for provisioning                 │
+└──────────────────────────────────────────────┘
+```
+
+## What Gets Deployed
+
+**Phase 1 (Terraform):**
+- VPC with public subnets, Internet Gateway, security groups
+- EC2 instance with k3s installed via SSH provisioner
+- SSH key pair for access
+- Security group allowing SSH + k3s API (port 6443) from allowed CIDRs
+
+**Phase 2 (Helm/kubectl -- you run this):**
+- eRPC and rindexer deployed as Kubernetes pods via Helm charts or manifests
+- Config and secrets injected via the `workload_handoff` output
+
+## Two-Phase Workflow
+
+This example uses `workload_mode = "external"`. Terraform provisions the infrastructure (Phase 1), then you deploy workloads yourself (Phase 2) using the `workload_handoff` output.
+
+See the [two-phase deployment guide](../guides/two-phase-workflow) for the full workflow.
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- AWS CLI v2 with configured credentials (EC2, VPC, IAM)
+- SSH key pair (both public and private key paths)
+- `kubectl` and `helm` (for Phase 2)
+- A ClickHouse instance ([ClickHouse Cloud](https://clickhouse.cloud/) or self-hosted)
+
+## Quick Start
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/minimal_aws_k3s_byo_clickhouse
+
+# Phase 1: Provision infrastructure
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars:
+#   ssh_public_key           = "ssh-ed25519 AAAA..."
+#   k3s_ssh_private_key_path = "~/.ssh/evm-cloud"
+#   indexer_clickhouse_url   = "https://your-instance.clickhouse.cloud:8443"
+#   indexer_clickhouse_password = "your-password"
+
+terraform init
+terraform apply
+
+# Phase 2: Deploy workloads
+terraform output -json workload_handoff  # contains kubeconfig + connection details
+# Use the output to configure kubectl and deploy via Helm
+```
+
+## Key Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `k3s_instance_type` | string | - | EC2 instance size for k3s node |
+| `k3s_ssh_private_key_path` | string | - | Path to SSH private key for provisioner |
+| `k3s_version` | string | - | k3s release version |
+| `k3s_api_allowed_cidrs` | list(string) | - | CIDRs allowed to reach k3s API (port 6443) |
+| `ssh_public_key` | string | - | SSH public key content for EC2 key pair |
+| `indexer_clickhouse_url` | string | - | ClickHouse HTTP endpoint (sensitive) |
+| `indexer_clickhouse_password` | string | - | ClickHouse password (sensitive) |
+
+## When to Use This
+
+**Choose this example when:**
+- You want Kubernetes features (Helm, rolling updates, health checks) without EKS cost
+- You are comfortable managing a single-node k3s cluster
+- Your workload fits on one instance (dev/staging or small-scale production)
+
+**Consider alternatives when:**
+- You want a managed Kubernetes control plane -- use [EKS](./eks-clickhouse.mdx)
+- You want the simplest possible setup -- use [EC2 + Docker Compose](./ec2-docker-compose-clickhouse.mdx)
+- You do not need Kubernetes at all -- Docker Compose examples are simpler to operate
+
+See [examples/minimal_aws_k3s_byo_clickhouse](https://github.com/ExoMonk/evm-cloud/tree/main/examples/minimal_aws_k3s_byo_clickhouse) for complete details.

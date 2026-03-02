@@ -1,0 +1,173 @@
+import { ArchitectureDiagram } from '../../components/ArchitectureDiagram'
+import { DataFlowDiagram } from '../../components/DataFlowDiagram'
+
+# Architecture
+
+How evm-cloud's Terraform modules fit together to deploy a complete EVM indexing stack.
+
+## High-Level Overview
+
+<ArchitectureDiagram />
+
+## Data Flow at Runtime
+
+<DataFlowDiagram />
+
+## Layer Model
+
+evm-cloud separates concerns into two layers. The `workload_mode` variable controls how much Terraform manages.
+
+### Layer 1: Infrastructure
+
+Everything needed before workloads can run.
+
+| Component | What Terraform Creates |
+|-----------|----------------------|
+| **Networking** | VPC, public/private subnets, security groups, NAT gateway, VPC endpoints |
+| **Compute** | EC2 instances, EKS cluster + node groups, or k3s host |
+| **Database** | RDS PostgreSQL instance (or outputs for BYODB) |
+| **IAM** | Instance profiles, roles, policies for Secrets Manager access |
+| **Secrets** | AWS Secrets Manager entries for DB credentials, RPC keys |
+
+### Layer 2: Workloads
+
+The actual containers and configuration that run on top of infrastructure.
+
+| Component | What Gets Deployed |
+|-----------|--------------------|
+| **eRPC** | RPC proxy container with your `erpc.yaml` config |
+| **rindexer** | Indexer container with your `rindexer.yaml` + ABI files |
+| **Config injection** | YAML/ABI files delivered to containers via bind mounts, ConfigMaps, or Secrets Manager |
+
+### Workload Modes
+
+```hcl
+variable "workload_mode" {
+  type    = string
+  default = "terraform"  # or "external"
+}
+```
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `terraform` | Terraform manages both Layer 1 and Layer 2. Containers are deployed via cloud-init (EC2), Helm (k3s/EKS), or SSH provisioner (bare metal). | Simple deployments, dev/staging, teams that want one `terraform apply` for everything. |
+| `external` | Terraform manages Layer 1 only. Outputs a `workload_handoff` object with connection details, endpoints, and credentials for external tools to deploy workloads. | Teams with existing CI/CD, GitOps (ArgoCD/Flux), or Helm-based deploy pipelines. Separates infra and app lifecycles. |
+
+**`workload_handoff` output** (available when `workload_mode = "external"`):
+
+```hcl
+output "workload_handoff" {
+  value = {
+    runtime = {
+      ec2 = { public_ip, private_ip, ssh_user, ssh_key_name }
+      eks = { cluster_name, cluster_endpoint, kubeconfig_cmd }
+      k3s = { kubeconfig, node_ip }
+    }
+    database = {
+      host, port, username, password_secret_arn, database_name
+    }
+    networking = {
+      vpc_id, private_subnet_ids, security_group_ids
+    }
+    config = {
+      erpc_config_path, rindexer_config_path, abi_dir_path
+    }
+  }
+}
+```
+
+## Module Map
+
+| Module | Path | Purpose |
+|--------|------|---------|
+| **core/capabilities** | `modules/core/capabilities/` | Provider-neutral capability contracts. Defines the interface every provider adapter must implement. |
+| **core/k8s/k3s-bootstrap** | `modules/core/k8s/k3s-bootstrap/` | Installs k3s on any host via SSH. Used by both `aws/k3s-host` and `bare_metal` providers. |
+| **aws/networking** | `modules/providers/aws/networking/` | VPC, subnets, security groups, NAT gateway, VPC endpoints. |
+| **aws/ec2** | `modules/providers/aws/ec2/` | EC2 instance with Docker Compose workloads. Cloud-init for setup, bind mounts for config. |
+| **aws/eks_cluster** | `modules/providers/aws/eks/` | EKS cluster, managed node groups, OIDC provider, CoreDNS/kube-proxy addons. |
+| **aws/k3s-host** | `modules/providers/aws/k3s-host/` | EC2 instance bootstrapped with k3s via the `core/k8s/k3s-bootstrap` module. |
+| **aws/postgres** | `modules/providers/aws/postgres/` | RDS PostgreSQL with automated backups, security group rules, and Secrets Manager integration. |
+| **bare_metal** | `modules/providers/bare_metal/` | SSH + Docker Compose on any VPS. No cloud provider required. |
+
+### Module Dependency Graph
+
+```
+root module (main.tf)
+  │
+  ├── modules/core/capabilities/          # Capability contracts
+  │
+  ├── modules/providers/aws/              # AWS adapter
+  │   ├── networking/                     # VPC, subnets, SGs
+  │   ├── ec2/                            # EC2 + Docker Compose
+  │   ├── eks/                            # EKS cluster
+  │   ├── k3s-host/                       # EC2 + k3s
+  │   │   └── modules/core/k8s/k3s-bootstrap/
+  │   └── postgres/                       # RDS PostgreSQL
+  │
+  └── modules/providers/bare_metal/       # Bare metal adapter
+      └── modules/core/k8s/k3s-bootstrap/ (optional)
+```
+
+## Compute Engine Comparison
+
+| | EC2 + Docker Compose | EKS | k3s | Bare Metal |
+|---|---|---|---|---|
+| **Provider** | AWS | AWS | AWS or bare_metal | bare_metal |
+| **Kubernetes** | No | Yes (managed) | Yes (lightweight) | No |
+| **Control plane cost** | $0 | ~$73/mo | $0 | $0 |
+| **Workload management** | Docker Compose | K8s deployments | K8s deployments | Docker Compose |
+| **Config delivery** | cloud-init + bind mounts | ConfigMap/Secret | Helm values -> ConfigMap | SSH + file provisioner |
+| **Scaling** | Vertical only | HPA, node autoscaler | Manual / limited HPA | Vertical only |
+| **Best for** | Dev/staging, simple setups | Production K8s teams | Cost-conscious K8s, single-node prod | Self-hosted, no cloud vendor |
+
+**Decision guide:**
+
+- **Just want it to work** -- EC2 + Docker Compose. Simplest path, lowest cost.
+- **Need Kubernetes but not the EKS bill** -- k3s. Same K8s API, $0 control plane.
+- **Production K8s with managed upgrades** -- EKS. AWS handles the control plane.
+- **No AWS account / own hardware** -- Bare Metal. SSH to any box with Docker installed.
+
+## Data Flow
+
+See [Data Flow at Runtime](#data-flow-at-runtime) above for the full pipeline diagram.
+
+## Provider Abstraction
+
+The root module is provider-neutral. The `infrastructure_provider` variable routes to the correct adapter.
+
+```
+variables.tf (root)
+  │
+  │  infrastructure_provider = "aws"    ──→  modules/providers/aws/
+  │  infrastructure_provider = "bare_metal" ──→  modules/providers/bare_metal/
+  │
+  └── Every adapter implements the same output contract:
+        - networking: { vpc_id, subnet_ids, security_group_ids }
+        - compute:    { host_ip, ssh_user, connection_type }
+        - database:   { host, port, credentials_arn }
+        - workload:   { deploy_method, config_paths }
+```
+
+### How It Works
+
+1. **Root module** declares provider-neutral variables (`instance_type`, `database_engine`, `compute_engine`, etc.)
+2. **`infrastructure_provider`** selects which adapter directory to use
+3. **Adapter module** translates generic variables into provider-specific resources (e.g., `instance_type = "medium"` becomes `t3.medium` on AWS)
+4. **Adapter outputs** conform to the capability contract defined in `modules/core/capabilities/`
+5. **Workload deployment** reads adapter outputs to place containers on the provisioned infrastructure
+
+### Adding a New Provider
+
+Adding support for a new cloud provider (GCP, Azure, Hetzner, etc.) requires:
+
+1. Create `modules/providers/<provider>/` with networking, compute, and database sub-modules
+2. Implement the output contract from `modules/core/capabilities/`
+3. Add the provider option to `infrastructure_provider` validation in `variables.tf`
+4. No changes to root module logic, workload deployers, or existing providers
+
+## Related Pages
+
+- **[Getting Started](./getting-started.mdx)** -- Deploy your first indexer
+- **[Core Concepts](./concepts.mdx)** -- Providers, compute engines, workload modes in depth
+- **[Variable Reference](./variable-reference.mdx)** -- All configuration options
+- **[Examples](./examples/index.mdx)** -- 7 runnable deployment patterns

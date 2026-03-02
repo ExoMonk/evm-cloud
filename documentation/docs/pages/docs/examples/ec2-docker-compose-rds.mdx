@@ -1,0 +1,81 @@
+# EC2 + Docker Compose + Managed PostgreSQL
+
+The simplest evm-cloud deployment. A single EC2 instance running eRPC and rindexer with an AWS-managed RDS PostgreSQL database. No external database required.
+
+## Architecture
+
+```
+┌────────────────── AWS VPC ──────────────────┐
+│                                              │
+│  EC2 Instance (Docker Compose)               │
+│  ├── eRPC proxy (port 4000)                  │
+│  └── rindexer indexer                        │
+│       └── writes to ─────────────────┐       │
+│                                      │       │
+│  RDS PostgreSQL (managed)  <─────────┘       │
+│                                              │
+│  Secrets Manager (DB creds, RPC URL)         │
+│  CloudWatch Logs (30-day retention)          │
+└──────────────────────────────────────────────┘
+```
+
+## What Gets Deployed
+
+- VPC with public/private subnets, Internet Gateway, security groups
+- EC2 instance with Docker + Compose pre-installed (cloud-init)
+- eRPC container -- RPC proxy with failover and caching
+- rindexer container -- EVM event indexer
+- RDS PostgreSQL instance (single-AZ, configurable class)
+- IAM role (CloudWatch Logs + Secrets Manager access)
+- Secrets Manager secret for database credentials
+- CloudWatch Log Group with 30-day retention
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- AWS CLI v2 with configured credentials (EC2, VPC, IAM, RDS, Secrets Manager)
+- SSH key pair
+
+## Quick Start
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/minimal_aws_rds
+
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars: set ssh_public_key
+
+terraform init
+terraform plan
+terraform apply
+
+# Verify
+terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip'
+ssh -i ~/.ssh/evm-cloud ubuntu@<public-ip> 'sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps'
+```
+
+## Key Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ec2_instance_type` | string | `t2.micro` | EC2 instance size |
+| `postgres_instance_class` | string | `db.t3.micro` | RDS instance class |
+| `postgres_engine_version` | string | - | PostgreSQL engine version |
+| `postgres_db_name` | string | - | Database name |
+| `postgres_backup_retention` | number | - | Backup retention in days |
+| `ec2_indexer_mem_limit` | string | `512m` | rindexer container memory limit |
+| `indexer_storage_backend` | string | `postgres` | Set to `postgres` for this example |
+
+## When to Use This
+
+**Choose this example when:**
+- You want the simplest possible setup with zero external dependencies
+- You prefer a managed database (AWS handles backups, patching, failover)
+- Your workload fits PostgreSQL (transactional queries, moderate write volume)
+
+**Consider alternatives when:**
+- You need analytics-oriented queries (wide scans, aggregations) -- use [ClickHouse examples](./ec2-docker-compose-clickhouse.mdx) instead
+- You want Kubernetes orchestration -- see [EKS](./eks-clickhouse.mdx) or [k3s](./k3s-clickhouse.mdx)
+- You want to minimize AWS spend -- RDS adds ~$15-30/mo; the [BYODB ClickHouse example](./ec2-docker-compose-clickhouse.mdx) avoids this
+
+See [examples/minimal_aws_rds](https://github.com/ExoMonk/evm-cloud/tree/main/examples/minimal_aws_rds) for complete details.

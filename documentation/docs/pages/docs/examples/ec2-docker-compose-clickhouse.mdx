@@ -1,0 +1,84 @@
+# EC2 + Docker Compose + ClickHouse (BYODB)
+
+Low-cost AWS deployment. A single EC2 instance running eRPC and rindexer with your own external ClickHouse database. Best for analytics workloads on a budget.
+
+## Architecture
+
+```
+┌────────────────── AWS VPC ──────────────────┐
+│                                              │
+│  EC2 Instance (Docker Compose)               │
+│  ├── eRPC proxy (port 4000)                  │
+│  └── rindexer indexer                        │
+│       └── writes to ────────────────────────────→ ClickHouse (external)
+│                                              │
+│  Secrets Manager (CH creds, RPC URL)         │
+│  CloudWatch Logs (30-day retention)          │
+└──────────────────────────────────────────────┘
+```
+
+## What Gets Deployed
+
+- VPC with public/private subnets, Internet Gateway, security groups
+- EC2 instance with Docker + Compose pre-installed (cloud-init)
+- eRPC container -- RPC proxy with failover and caching (256m memory)
+- rindexer container -- EVM event indexer (512m memory)
+- IAM role (CloudWatch Logs + Secrets Manager access)
+- Secrets Manager secret for ClickHouse credentials
+- CloudWatch Log Group with 30-day retention
+
+**Not deployed:** No database -- you bring your own ClickHouse instance (ClickHouse Cloud free tier works).
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- AWS CLI v2 with configured credentials (EC2, VPC, IAM, Secrets Manager)
+- SSH key pair
+- A ClickHouse instance ([ClickHouse Cloud](https://clickhouse.cloud/) free tier or self-hosted)
+
+## Quick Start
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/minimal_aws_byo_clickhouse
+
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars:
+#   ssh_public_key             = "ssh-ed25519 AAAA..."
+#   indexer_clickhouse_url      = "https://your-instance.clickhouse.cloud:8443"
+#   indexer_clickhouse_password = "your-password"
+
+terraform init
+terraform plan -var-file=minimal_clickhouse.tfvars
+terraform apply -var-file=minimal_clickhouse.tfvars
+
+# Verify
+terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip'
+ssh -i ~/.ssh/evm-cloud ubuntu@<public-ip> 'sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps'
+```
+
+## Key Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ec2_instance_type` | string | `t3.micro` | EC2 instance size |
+| `indexer_clickhouse_url` | string | - | ClickHouse HTTP endpoint (sensitive) |
+| `indexer_clickhouse_user` | string | `default` | ClickHouse username |
+| `indexer_clickhouse_password` | string | - | ClickHouse password (sensitive) |
+| `indexer_clickhouse_db` | string | `default` | ClickHouse database name |
+| `ec2_rpc_proxy_mem_limit` | string | `256m` | eRPC container memory limit |
+| `ec2_indexer_mem_limit` | string | `512m` | rindexer container memory limit |
+
+## When to Use This
+
+**Choose this example when:**
+- You want the cheapest AWS deployment (~$15-35/mo for the EC2 instance alone)
+- Your workload is analytics-heavy (ClickHouse excels at wide scans and aggregations)
+- You already have a ClickHouse instance or want to use the free tier
+
+**Consider alternatives when:**
+- You want zero external dependencies -- use [minimal_aws_rds](./ec2-docker-compose-rds.mdx) (managed PostgreSQL)
+- You need Kubernetes -- see [EKS](./eks-clickhouse.mdx) or [k3s](./k3s-clickhouse.mdx)
+- You have no AWS account -- see [bare_metal_byo_clickhouse](./bare-metal-clickhouse.mdx)
+
+See [examples/minimal_aws_byo_clickhouse](https://github.com/ExoMonk/evm-cloud/tree/main/examples/minimal_aws_byo_clickhouse) for complete details.
