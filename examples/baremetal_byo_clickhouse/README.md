@@ -73,7 +73,7 @@
 
 ## Differences from other examples
 
-| | `minimal_BYO_clickhouse` | `bare_metal_byo_clickhouse` | `eks_BYO_clickhouse` | `bare_metal_k3s_byo_clickhouse` |
+| | `minimal_BYO_clickhouse` | `baremetal_byo_clickhouse` | `eks_BYO_clickhouse` | `bare_metal_k3s_byo_clickhouse` |
 |---|---|---|---|---|
 | **Provider** | AWS | Bare Metal | AWS | Bare Metal |
 | **Compute** | EC2 + Docker Compose | Docker Compose (SSH) | EKS (Kubernetes) | k3s (Kubernetes) |
@@ -106,7 +106,7 @@ eth.llamarpc.com
 
 ```bash
 # 1) Move into this example
-cd examples/bare_metal_byo_clickhouse
+cd examples/baremetal_byo_clickhouse
 
 # 2) Copy secrets template and fill in real values
 cp secrets.auto.tfvars.example secrets.auto.tfvars
@@ -188,4 +188,9 @@ Behavior by mode:
 - `terraform`: Docker Compose services are provisioned and managed via SSH by Terraform.
 - `external`: Terraform emits `workload_handoff` only; no provisioner resources created.
 
-Use `workload_handoff` v1 output (with `runtime.bare_metal` SSH details) as the handoff contract for external deployment flows.
+In external mode, use the compose deployer with the `workload_handoff` output:
+
+```bash
+terraform output -json workload_handoff | ./../../deployers/compose/deploy.sh /dev/stdin \
+  --config-dir ./config --ssh-key ~/.ssh/id_ed25519
+```

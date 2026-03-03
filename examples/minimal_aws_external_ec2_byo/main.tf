@@ -55,5 +55,6 @@ output "capability_contract" {
 }
 
 output "workload_handoff" {
-  value = module.evm_cloud.workload_handoff
+  value     = module.evm_cloud.workload_handoff
+  sensitive = true
 }

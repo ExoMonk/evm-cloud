@@ -1,5 +1,5 @@
-# Multi-node k3s example: server (live indexer + eRPC) + 1 worker (backfill indexer)
-project_name = "evm-cloud-k3s-multi"
+# Production multi-node k3s: server + spot worker, secrets via AWS Secrets Manager + ESO
+project_name = "evm-cloud-k3s-prod"
 aws_region   = "us-east-1"
 
 # Networking
@@ -31,6 +31,13 @@ indexer_instances = [
 indexer_clickhouse_user = "default"
 indexer_clickhouse_db   = "rindexer"
 
+# Secrets — provider mode (AWS SM + ESO)
+# ClickHouse password stored in Secrets Manager, synced to K8s via ESO.
+# No passwords in the handoff JSON or Helm values.
+secrets_mode                       = "provider"
+ec2_secret_recovery_window_in_days = 0 # Immediate deletion for dev/test
+
 # Sensitive values go in secrets.auto.tfvars:
 #   ssh_public_key, k3s_ssh_private_key_path,
 #   indexer_clickhouse_password, indexer_clickhouse_url
+# Optional: secrets_manager_secret_arn (BYOA — skip SM secret creation)

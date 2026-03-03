@@ -162,20 +162,29 @@ Sensitive values (`indexer_clickhouse_password`, `ssh_public_key`) go in `secret
 
 ## Config updates (post-deploy)
 
-Config files are baked into the EC2 instance via cloud-init on first boot. To update config after deployment:
+Edit config files locally, then re-apply:
 
 ```bash
-# Update config files via SSH
-scp config/erpc.yaml ec2-user@<public-ip>:/opt/evm-cloud/config/erpc.yaml
-scp config/rindexer.yaml ec2-user@<public-ip>:/opt/evm-cloud/config/rindexer.yaml
+vim config/erpc.yaml
+vim config/rindexer.yaml
 
-# Restart affected services
-ssh ec2-user@<public-ip> 'cd /opt/evm-cloud && sudo docker compose restart'
+terraform apply -var-file=minimal_clickhouse.tfvars
+```
+
+Terraform detects config changes via content hash and automatically pushes updated files to the EC2 instance via SSH, then force-recreates Docker Compose containers. The EC2 instance is **not** recreated — only configs and containers are updated.
+
+> **Requires:** `ec2_ssh_private_key_path` must be set in `secrets.auto.tfvars` (path to the SSH private key matching `ssh_public_key`).
+
+If using `workload_mode = "external"`, use the compose deployer instead:
+
+```bash
+terraform output -json workload_handoff | ./../../deployers/compose/deploy.sh /dev/stdin \
+  --config-dir ./config --ssh-key ~/.ssh/id_ed25519
 ```
 
 ## Lifecycle behavior
 
-- **Config changes** (erpc.yaml, rindexer.yaml, ABIs, mem limits): `lifecycle { ignore_changes = [user_data] }` prevents EC2 instance recreation. Update via SSH.
+- **Config changes** (erpc.yaml, rindexer.yaml, ABIs, mem limits): `lifecycle { ignore_changes = [user_data] }` prevents EC2 instance recreation. A `null_resource` with a config content hash trigger pushes updates via SSH automatically on `terraform apply`.
 - **Secret changes** (passwords, RPC URLs): `aws_secretsmanager_secret_version` updates in-place. SSH into instance and re-run `pull-secrets.sh`, then restart services.
 - **Instance type changes**: Triggers EC2 stop + start (expected).
 

@@ -196,9 +196,31 @@ sudo yum install -y postgresql16
 psql "postgresql://rindexer:<password>@<rds-endpoint>:5432/rindexer"
 ```
 
+## Config updates (post-deploy)
+
+Edit config files locally, then re-apply:
+
+```bash
+vim config/erpc.yaml
+vim config/rindexer.yaml
+
+terraform apply -var-file=minimal.tfvars
+```
+
+Terraform detects config changes via content hash and automatically pushes updated files to the EC2 instance via SSH, then force-recreates Docker Compose containers. The EC2 instance is **not** recreated — only configs and containers are updated.
+
+> **Requires:** `ec2_ssh_private_key_path` must be set in `secrets.auto.tfvars` (path to the SSH private key matching `ssh_public_key`).
+
+If using `workload_mode = "external"`, use the compose deployer instead:
+
+```bash
+terraform output -json workload_handoff | ./../../deployers/compose/deploy.sh /dev/stdin \
+  --config-dir ./config --ssh-key ~/.ssh/id_ed25519
+```
+
 ## Lifecycle behavior
 
-- **Config changes** (erpc.yaml, rindexer.yaml, ABIs, mem limits): `lifecycle { ignore_changes = [user_data] }` prevents EC2 instance recreation. Update via SSH.
+- **Config changes** (erpc.yaml, rindexer.yaml, ABIs, mem limits): `lifecycle { ignore_changes = [user_data] }` prevents EC2 instance recreation. A `null_resource` with a config content hash trigger pushes updates via SSH automatically on `terraform apply`.
 - **Secret changes** (passwords, RPC URLs): `aws_secretsmanager_secret_version` updates in-place. SSH into instance and re-run `pull-secrets.sh`, then restart services.
 - **Instance type changes**: Triggers EC2 stop + start (expected).
 - **Destroy**: Clean teardown in dev — `ec2_secret_recovery_window_in_days = 0` (immediate EC2 secret deletion), `postgres_manage_master_user_password = false` with own `recovery_window_in_days = 0` secret (immediate RDS secret deletion), `deletion_protection = false`, `skip_final_snapshot = true`, `backup_retention = 0`.

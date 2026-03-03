@@ -54,6 +54,12 @@ module "evm_cloud" {
   # Multi-instance indexer — live on server, backfill on worker node
   indexer_instances = var.indexer_instances
 
+  # Secrets — provider mode: AWS Secrets Manager + ESO (no passwords in handoff)
+  secrets_mode                       = var.secrets_mode
+  secrets_manager_secret_arn         = var.secrets_manager_secret_arn
+  secrets_manager_kms_key_id         = var.secrets_manager_kms_key_id
+  ec2_secret_recovery_window_in_days = var.ec2_secret_recovery_window_in_days
+
   # Config injection — used by workload_handoff for the deployer
   erpc_config_yaml     = file("${path.module}/config/erpc.yaml")
   rindexer_config_yaml = file("${path.module}/config/rindexer.yaml")

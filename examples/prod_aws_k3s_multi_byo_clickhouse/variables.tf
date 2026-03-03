@@ -122,6 +122,33 @@ variable "indexer_clickhouse_db" {
   default = "default"
 }
 
+# --- Secrets Management ---
+
+variable "secrets_mode" {
+  description = "How secrets reach workloads: inline (passwords in handoff), provider (AWS SM + ESO), or external (user-managed store)."
+  type        = string
+  default     = "provider"
+}
+
+variable "secrets_manager_secret_arn" {
+  description = "ARN of a pre-existing Secrets Manager secret. When set, skips secret creation (BYOA)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "secrets_manager_kms_key_id" {
+  description = "KMS key ID or alias for Secrets Manager encryption. Omit for AWS default key."
+  type        = string
+  default     = ""
+}
+
+variable "ec2_secret_recovery_window_in_days" {
+  description = "SM secret deletion recovery window. 0 = immediate (dev/test), 7-30 for production."
+  type        = number
+  default     = 0
+}
+
 # --- Multi-instance indexer ---
 
 variable "indexer_instances" {

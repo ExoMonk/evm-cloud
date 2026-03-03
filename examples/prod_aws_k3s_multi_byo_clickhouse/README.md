@@ -1,4 +1,6 @@
-# Multi-Node k3s + ClickHouse BYODB Example
+# Production Multi-Node k3s + ClickHouse BYODB + Secrets Manager
+
+Production-grade example with AWS Secrets Manager + External Secrets Operator (ESO). ClickHouse passwords never appear in the handoff JSON or Helm values.
 
 ## Architecture
 
@@ -12,13 +14,18 @@
 │  │  │                                                               │  │  │
 │  │  │  ┌─ EC2: Server (t3.small)   ─────────────────────────────┐   │  │  │
 │  │  │  │  k3s server (control plane + workloads)               │   │  │  │
+│  │  │  │  IAM instance profile → SM:GetSecretValue             │   │  │  │
 │  │  │  │  ┌────────────────┐    ┌──────────────────────┐       │   │  │  │
 │  │  │  │  │ eRPC Proxy     │    │ rindexer (live)      │       │   │  │  │
 │  │  │  │  │ (K8s pod)      │    │ (K8s pod)            │       │   │  │  │
 │  │  │  │  └────────────────┘    └──────────────────────┘       │   │  │  │
+│  │  │  │  ┌────────────────┐    ┌──────────────────────┐       │   │  │  │
+│  │  │  │  │ ESO            │    │ ClusterSecretStore   │       │   │  │  │
+│  │  │  │  │ (K8s operator) │    │ → AWS SM (IMDS auth) │       │   │  │  │
+│  │  │  │  └────────────────┘    └──────────────────────┘       │   │  │  │
 │  │  │  └───────────────────────────────────────────────────────┘   │  │  │
 │  │  │                                                               │  │  │
-│  │  │  ┌─ EC2: Worker (t3.small, spot).  ──────────────────────┐    │  │  │
+│  │  │  ┌─ EC2: Worker (t3.small, spot)  ──────────────────────┐    │  │  │
 │  │  │  │  k3s agent — label: evm-cloud/role=indexer           │    │  │  │
 │  │  │  │  ┌──────────────────────┐                            │    │  │  │
 │  │  │  │  │ rindexer (backfill)  │                            │    │  │  │
@@ -30,6 +37,11 @@
 │  │  │  Internet Gateway                                             │  │  │
 │  │  └───────────────────────────────────────────────────────────────┘  │  │
 │  │                                                                     │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                           │
+│  ┌─ AWS Secrets Manager ───────────────────────────────────────────────┐  │
+│  │  evm-cloud/evm-cloud-k3s-prod/workload-env                         │  │
+│  │  { CLICKHOUSE_URL, CLICKHOUSE_PASSWORD, CLICKHOUSE_USER, ... }     │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────────────┘
 
@@ -45,25 +57,45 @@
 
 ## What's Different from `minimal_aws_k3s_byo_clickhouse`
 
-| | `minimal_aws_k3s_byo_clickhouse` | **`aws_k3s_multi_byo_clickhouse`** |
+| | `minimal_aws_k3s_byo_clickhouse` | **`prod_aws_k3s_multi_byo_clickhouse`** |
 | --- | --- | --- |
 | **Nodes** | 1 EC2 (server only) | 2 EC2 (1 server + 1 spot worker) |
+| **Secrets** | `inline` (password in handoff) | `provider` (AWS SM + ESO, no password in handoff) |
+| **IAM** | None | Instance profile with SM:GetSecretValue |
+| **ESO** | Not installed | Installed, manages ExternalSecret CRs |
 | **Node labels** | None | `evm-cloud/role=indexer` on worker |
 | **Firewall** | SSH + k3s API + NodePort | + Flannel VXLAN (UDP 8472) + Kubelet (TCP 10250) |
-| **Use case** | Dev / single-service | Live indexer on server + backfill on spot worker |
+| **Use case** | Dev / single-service | Production: live + backfill, hardened secrets |
+
+## Secrets Flow
+
+```
+terraform apply
+  → Creates SM secret (evm-cloud/<project>/workload-env)
+  → Creates IAM instance profile (SM:GetSecretValue)
+  → Installs ESO Helm chart
+  → Outputs workload_handoff (NO passwords)
+
+deploy.sh
+  → Waits for ESO CRDs + deployment ready
+  → Creates ClusterSecretStore (AWS SM via IMDS auth)
+  → Helm install → ExternalSecret CR
+  → ESO syncs SM → K8s Secret
+  → Pods mount secret
+```
 
 ## Two-Phase Deployment
 
 | Phase | Tool | What happens |
 |-------|------|--------------|
-| **Phase 1** | `terraform apply` | Provisions VPC, 2 EC2 instances, security groups. Installs k3s server, extracts node token, joins worker. Extracts kubeconfig. |
-| **Phase 2** | `deployers/k3s/deploy.sh` | Reads the `workload_handoff` output, checks all nodes are Ready, deploys eRPC + rindexer via `helm upgrade --install`. |
+| **Phase 1** | `terraform apply` | Provisions VPC, 2 EC2 instances, security groups, SM secret, IAM. Installs k3s + ESO. |
+| **Phase 2** | `deployers/k3s/deploy.sh` | Creates ClusterSecretStore, deploys eRPC + rindexer with ExternalSecret (ESO syncs from SM). |
 
 ## Usage
 
 ```bash
 # 1) Move into this example
-cd examples/aws_k3s_multi_byo_clickhouse
+cd examples/prod_aws_k3s_multi_byo_clickhouse
 
 # 2) Copy secrets template and fill in real values
 cp secrets.auto.tfvars.example secrets.auto.tfvars
@@ -78,27 +110,31 @@ terraform init
 terraform plan -var-file=k3s_multinode.tfvars
 terraform apply -var-file=k3s_multinode.tfvars
 
-# 4) Verify cluster nodes (requires your IP in k3s_api_allowed_cidrs)
-KUBECONFIG=$(mktemp)
-terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > "$KUBECONFIG"
-kubectl --kubeconfig="$KUBECONFIG" get nodes --show-labels
+# 4) Verify cluster nodes
+sudo kubectl get nodes --show-labels
 # Should show: server + backfill worker with evm-cloud/role=indexer label
 
 # 5) Deploy workloads (Phase 2) — eRPC + live indexer only
 terraform output -json workload_handoff | \
   ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config --instance indexer
+# deploy.sh will:
+#   - Wait for ESO CRDs and deployment
+#   - Create ClusterSecretStore → AWS SM
+#   - Helm install with secretsMode=provider (ExternalSecret, not Secret)
 
 # 5b) Later, deploy backfill on demand:
 terraform output -json workload_handoff | \
   ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config --instance backfill --job
 
-# 6) Verify pods
-kubectl --kubeconfig="$KUBECONFIG" get pods -A
+# 6) Verify pods + ExternalSecret sync
+sudo kubectl get pods -A
+sudo kubectl get externalsecrets -A
+# STATUS should show "SecretSynced"
 rm -f "$KUBECONFIG"
 
 # 7) Teardown (reverse order)
 terraform output -json workload_handoff | \
-./../../deployers/k3s/teardown.sh /dev/stdin   # Remove Helm releases
+  ./../../deployers/k3s/teardown.sh /dev/stdin   # Remove Helm releases
 terraform destroy -var-file=k3s_multinode.tfvars  # Drain worker, uninstall k3s, terminate EC2s
 ```
 
@@ -150,16 +186,19 @@ k3s_worker_nodes = [
 
 ## Security Notes
 
+- **Secrets Manager**: ClickHouse credentials stored in SM, synced via ESO. No passwords in handoff or Helm values.
+- **IAM instance profile**: Scoped to `secretsmanager:GetSecretValue` on `evm-cloud/<project>/*` secrets only.
 - **kubeconfig contains static cluster admin credentials** (~1 year validity). Use `terraform output -json` to access it.
 - **node_token is stored in Terraform state only** (not in handoff JSON). Use an encrypted state backend.
 - k3s API (port 6443) is restricted to VPC CIDR by default. Override with `k3s_api_allowed_cidrs`.
 - Flannel VXLAN (UDP 8472) and Kubelet (TCP 10250) are restricted to VPC CIDR.
+- `handoff.json` is automatically `chmod 0600` by `deploy.sh`.
 
 ## Lifecycle
 
 ```
-terraform apply              → Phase 1: VPC + 2 EC2s + k3s server + worker joins
-deployers/k3s/deploy.sh     → Phase 2: Helm install eRPC + rindexer (live + backfill)
+terraform apply              → Phase 1: VPC + 2 EC2s + k3s + ESO + SM secret + IAM
+deployers/k3s/deploy.sh     → Phase 2: ClusterSecretStore + Helm install (ExternalSecret)
 deployers/k3s/teardown.sh   → Uninstall Helm releases
 terraform destroy            → Drain worker, delete node, uninstall k3s, terminate EC2s
 ```

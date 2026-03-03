@@ -48,6 +48,11 @@ variable "ssh_public_key" {
   sensitive = true
 }
 
+variable "ec2_ssh_private_key_path" {
+  type    = string
+  default = ""
+}
+
 variable "ec2_instance_type" {
   type    = string
   default = "t2.micro"

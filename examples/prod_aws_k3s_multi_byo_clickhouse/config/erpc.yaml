@@ -7,7 +7,7 @@ projects:
           chainId: 1
     upstreams:
       - id: primary
-        endpoint: https://eth.llamarpc.com
+        endpoint: https://ethereum-rpc.publicnode.com
         type: evm
 server:
   listenV4: true

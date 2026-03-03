@@ -41,7 +41,18 @@ terraform output -json workload_handoff
 
 ## Deployer Workflow
 
-After `terraform apply`, the EC2 instance is running with Docker ready. Deploy workloads via SSH:
+After `terraform apply`, the EC2 instance is running with Docker ready. Use the compose deployer:
+
+```bash
+# Initial deploy + config updates (idempotent)
+terraform output -json workload_handoff | ../../deployers/compose/deploy.sh /dev/stdin \
+  --config-dir ./config \
+  --ssh-key ~/.ssh/id_
+```
+
+The script uploads configs via SCP and runs `docker compose up --force-recreate`. Re-run the same command after editing config files to push updates.
+
+### Manual workflow (alternative)
 
 ```bash
 # 1. Get connection info from handoff
@@ -54,7 +65,7 @@ scp -i $SSH_KEY config/rindexer.yaml ec2-user@$PUBLIC_IP:/opt/evm-cloud/config/r
 scp -i $SSH_KEY config/abis/*.json ec2-user@$PUBLIC_IP:/opt/evm-cloud/config/abis/
 
 # 3. SCP docker-compose.yml (edit the reference file in this example first)
-scp -i $SSH_KEY docker-compose.yml ec2-user@$PUBLIC_IP:/opt/evm-cloud/docker-compose.yml
+scp -i $SSH_KEY config/docker-compose.yml ec2-user@$PUBLIC_IP:/opt/evm-cloud/docker-compose.yml
 
 # 4. Pull secrets and start services
 ssh -i $SSH_KEY ec2-user@$PUBLIC_IP 'bash /opt/evm-cloud/scripts/pull-secrets.sh'

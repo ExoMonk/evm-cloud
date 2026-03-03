@@ -25,7 +25,7 @@ provider "aws" {
 # destroy+re-apply cycles. For production, omit postgres_master_password to use
 # AWS-managed credentials (automatic rotation, 7-day recovery).
 resource "random_password" "rds_master" {
-  count            = var.postgres_enabled ? 1 : 0
+  count   = var.postgres_enabled ? 1 : 0
   length  = 32
   special = false
 }
@@ -59,6 +59,7 @@ module "evm_cloud" {
   compute_engine                     = var.compute_engine
   workload_mode                      = var.workload_mode
   ssh_public_key                     = var.ssh_public_key
+  ec2_ssh_private_key_path           = var.ec2_ssh_private_key_path
   ec2_instance_type                  = var.ec2_instance_type
   ec2_secret_recovery_window_in_days = 0 # Dev: immediate deletion for easy re-apply
 
