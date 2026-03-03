@@ -61,6 +61,20 @@ When `secrets_mode != "inline"`, the deploy script:
 
 See the [Secrets Management guide](https://evm-cloud.xyz/docs/guides/secrets-management) for full details.
 
+## Ingress & TLS
+
+The deployer supports automatic TLS termination via the `ingress_mode` Terraform variable:
+
+| Mode | What deploy.sh Does |
+|------|---------------------|
+| `none` (default) | No ingress setup |
+| `cloudflare` | Installs ingress-nginx, creates Cloudflare origin TLS secret, configures CF-Connecting-IP forwarding |
+| `ingress_nginx` | Installs ingress-nginx + cert-manager, creates Let's Encrypt ClusterIssuer (staging or prod) |
+
+The `caddy` mode is handled by the EC2/bare_metal Docker Compose path and is not applicable to k3s.
+
+When ingress is enabled, the Helm charts create Kubernetes `Ingress` resources that route traffic to the appropriate service.
+
 ## Security
 
 - **kubeconfig contains static cluster admin credentials** (~1 year validity). This is different from EKS which uses ephemeral STS tokens.

@@ -37,6 +37,10 @@ PG_URL=$(jq -r '.data.postgres.url // empty' "$HANDOFF")
 
 mkdir -p "$OUT_DIR"
 
+# Extract ingress config from handoff
+INGRESS_MODE=$(jq -r '.ingress.mode // "none"' "$HANDOFF")
+INGRESS_DOMAIN=$(jq -r '.ingress.domain // empty' "$HANDOFF")
+
 cat > "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
 fullnameOverride: ${PROJECT}-erpc
 service:
@@ -51,6 +55,30 @@ config:
       httpPort: ${RPC_PORT}
     projects: []
 EOF
+
+# Ingress: configure when mode is cloudflare or ingress_nginx (k3s paths)
+if [[ "$INGRESS_MODE" == "cloudflare" ]]; then
+  cat >> "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
+ingress:
+  enabled: true
+  host: "${INGRESS_DOMAIN}"
+  tlsProvider: "cloudflare"
+  tlsSecretName: "cloudflare-origin-tls"
+EOF
+elif [[ "$INGRESS_MODE" == "ingress_nginx" ]]; then
+  TLS_STAGING=$(jq -r '.ingress.tls_staging // false' "$HANDOFF")
+  ISSUER="letsencrypt-prod"
+  if [[ "$TLS_STAGING" == "true" ]]; then
+    ISSUER="letsencrypt-staging"
+  fi
+  cat >> "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
+ingress:
+  enabled: true
+  host: "${INGRESS_DOMAIN}"
+  tlsProvider: "cert-manager"
+  clusterIssuer: "${ISSUER}"
+EOF
+fi
 
 # Multi-node: pin eRPC to server node so it doesn't land on a worker
 WORKER_COUNT=$(jq '[.runtime.k3s.worker_nodes // [] | length] | add' "$HANDOFF")

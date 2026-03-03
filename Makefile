@@ -69,7 +69,7 @@ test-k8s:
 # See tests/e2e-k3s/README.md for setup instructions.
 # Connects to persistent cluster, deploys via real deployer, validates, tears down.
 
-test-e2e-k8s:
+test-e2e-k3s:
 	@bash tests/e2e-k3s/run.sh
 
 # --- Documentation ---

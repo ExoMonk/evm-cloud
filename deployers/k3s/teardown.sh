@@ -51,4 +51,26 @@ for INSTANCE in $(echo "$INSTANCES" | jq -c '.[]'); do
   helm uninstall "${PROJECT}-${NAME}" --wait 2>/dev/null && echo "  Removed ${PROJECT}-${NAME}" || true
 done
 
+# Clean up ingress resources (best-effort, regardless of current ingress mode)
+INGRESS_MODE=$(jq -r '.ingress.mode // "none"' "$HANDOFF_FILE")
+echo "[evm-cloud] Cleaning ingress resources (mode: $INGRESS_MODE)..."
+
+# Remove Cloudflare TLS secret from likely namespaces (historical + current)
+kubectl delete secret cloudflare-origin-tls 2>/dev/null && echo "  Removed cloudflare-origin-tls secret (default)" || true
+kubectl delete secret cloudflare-origin-tls -n "${PROJECT}" 2>/dev/null && echo "  Removed cloudflare-origin-tls secret (${PROJECT})" || true
+
+# Remove cert-manager issuers first (cluster-scoped)
+kubectl delete clusterissuer letsencrypt-prod letsencrypt-staging 2>/dev/null || true
+
+# Uninstall cert-manager (if present)
+helm uninstall cert-manager -n cert-manager --wait 2>/dev/null && echo "  Removed cert-manager" || true
+
+# Uninstall ingress-nginx (if present)
+helm uninstall ingress-nginx -n ingress-nginx --wait 2>/dev/null && echo "  Removed ingress-nginx" || true
+
+# Remove leftover namespaced resources and namespaces (ignore not found)
+kubectl delete configmap ingress-nginx-custom-headers -n ingress-nginx 2>/dev/null || true
+kubectl delete namespace cert-manager --ignore-not-found=true 2>/dev/null || true
+kubectl delete namespace ingress-nginx --ignore-not-found=true 2>/dev/null || true
+
 echo "[evm-cloud] Teardown complete. Safe to run 'terraform destroy'."

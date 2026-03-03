@@ -194,6 +194,165 @@ CSSEOF
   fi
 fi
 
+# --- Ingress setup ---
+
+INGRESS_MODE=$(jq -r '.ingress.mode // "none"' "$HANDOFF_FILE")
+
+if [[ "$INGRESS_MODE" != "none" ]]; then
+  INGRESS_DOMAIN=$(jq -r '.ingress.domain // empty' "$HANDOFF_FILE")
+  HSTS_PRELOAD=$(jq -r '.ingress.hsts_preload // false' "$HANDOFF_FILE")
+  REQUEST_BODY_MAX=$(jq -r '.ingress.request_body_max_size // "1m"' "$HANDOFF_FILE")
+  echo "[evm-cloud] Ingress mode: ${INGRESS_MODE} (domain: ${INGRESS_DOMAIN})"
+
+  # Ensure namespace exists
+  kubectl create namespace "${PROJECT}" --dry-run=client -o yaml | kubectl apply -f -
+
+  # Install ingress-nginx if needed (cloudflare + ingress_nginx modes on k3s)
+  if [[ "$INGRESS_MODE" == "cloudflare" || "$INGRESS_MODE" == "ingress_nginx" ]]; then
+    NGINX_CHART_VERSION=$(jq -r '.ingress.nginx_chart_version // "4.11.3"' "$HANDOFF_FILE")
+
+    if ! kubectl get ingressclass nginx >/dev/null 2>&1; then
+      echo "[evm-cloud] Installing ingress-nginx (v${NGINX_CHART_VERSION})..."
+      helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
+      helm repo update ingress-nginx
+
+      NGINX_EXTRA_ARGS=()
+      if [[ "$INGRESS_MODE" == "cloudflare" ]]; then
+        # Trust Cloudflare's CF-Connecting-IP header for real client IP
+        NGINX_EXTRA_ARGS+=("--set" "controller.config.use-forwarded-headers=true")
+        NGINX_EXTRA_ARGS+=("--set" "controller.config.forwarded-for-header=CF-Connecting-IP")
+        NGINX_EXTRA_ARGS+=("--set" "controller.config.compute-full-forwarded-for=true")
+      fi
+
+      # Create namespace first so the custom-headers ConfigMap can be applied
+      kubectl create namespace ingress-nginx 2>/dev/null || true
+
+      # Security headers via custom-headers ConfigMap (server-snippet blocked since ingress-nginx >= 4.8 / CVE-2023-5043)
+      kubectl apply -f - <<HEADERSEOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-nginx-custom-headers
+  namespace: ingress-nginx
+data:
+  X-Frame-Options: "DENY"
+  X-Content-Type-Options: "nosniff"
+  Referrer-Policy: "strict-origin-when-cross-origin"
+  Content-Security-Policy: "default-src 'none'; frame-ancestors 'none'"
+HEADERSEOF
+
+      helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+        --namespace ingress-nginx \
+        --version "$NGINX_CHART_VERSION" \
+        --set controller.config.hsts="true" \
+        --set controller.config.hsts-max-age="31536000" \
+        --set controller.config.hsts-include-subdomains="true" \
+        --set controller.config.hsts-preload="${HSTS_PRELOAD}" \
+        --set controller.config.hide-headers="Server" \
+        --set controller.config.ssl-protocols="TLSv1.2 TLSv1.3" \
+        --set controller.config.proxy-body-size="${REQUEST_BODY_MAX}" \
+        --set controller.config.add-headers="ingress-nginx/ingress-nginx-custom-headers" \
+        --set controller.hostPort.enabled=true \
+        --set controller.service.type=ClusterIP \
+        "${NGINX_EXTRA_ARGS[@]}" \
+        --atomic --timeout 300s
+      echo "[evm-cloud] ingress-nginx installed."
+    else
+      echo "[evm-cloud] ingress-nginx already present."
+    fi
+  fi
+
+  # cert-manager: install + create ClusterIssuer (ingress_nginx mode only)
+  if [[ "$INGRESS_MODE" == "ingress_nginx" ]]; then
+    CERT_MANAGER_VERSION=$(jq -r '.ingress.cert_manager_chart_version // "1.16.2"' "$HANDOFF_FILE")
+    TLS_EMAIL=$(jq -r '.ingress.tls_email // empty' "$HANDOFF_FILE")
+    TLS_STAGING=$(jq -r '.ingress.tls_staging // false' "$HANDOFF_FILE")
+
+    if ! kubectl get crd certificates.cert-manager.io >/dev/null 2>&1; then
+      echo "[evm-cloud] Installing cert-manager (v${CERT_MANAGER_VERSION})..."
+      helm repo add jetstack https://charts.jetstack.io 2>/dev/null || true
+      helm repo update jetstack
+      helm upgrade --install cert-manager jetstack/cert-manager \
+        --namespace cert-manager --create-namespace \
+        --version "$CERT_MANAGER_VERSION" \
+        --set crds.enabled=true \
+        --atomic --timeout 300s
+      echo "[evm-cloud] cert-manager installed."
+    else
+      echo "[evm-cloud] cert-manager CRDs already present."
+    fi
+
+    # Wait for cert-manager webhook to be ready
+    kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=120s || {
+      echo "ERROR: cert-manager webhook not ready after 120s." >&2
+      exit 1
+    }
+
+    # Create ClusterIssuer(s) for Let's Encrypt
+    ACME_SERVER="https://acme-v02.api.letsencrypt.org/directory"
+    ISSUER_NAME="letsencrypt-prod"
+    if [[ "$TLS_STAGING" == "true" ]]; then
+      ACME_SERVER="https://acme-staging-v02.api.letsencrypt.org/directory"
+      ISSUER_NAME="letsencrypt-staging"
+    fi
+
+    echo "[evm-cloud] Creating ClusterIssuer: ${ISSUER_NAME}..."
+
+    # Write manifest to temp file for retry loop
+    ISSUER_MANIFEST=$(mktemp /tmp/cluster-issuer.XXXXXX.yaml)
+    cat > "$ISSUER_MANIFEST" <<ISSUEREOF
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: ${ISSUER_NAME}
+spec:
+  acme:
+    server: ${ACME_SERVER}
+    email: ${TLS_EMAIL}
+    privateKeySecretRef:
+      name: ${ISSUER_NAME}-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+ISSUEREOF
+
+    # Retry loop: webhook admission registration can lag behind deployment readiness
+    for _attempt in $(seq 1 6); do
+      if kubectl apply -f "$ISSUER_MANIFEST" 2>/dev/null; then
+        echo "[evm-cloud] ClusterIssuer ${ISSUER_NAME} applied."
+        break
+      fi
+      if [ "$_attempt" -eq 6 ]; then
+        echo "ERROR: cert-manager webhook not accepting ClusterIssuer after 30s." >&2
+        rm -f "$ISSUER_MANIFEST"
+        exit 1
+      fi
+      echo "  Waiting for cert-manager webhook (attempt $_attempt/6)..."
+      sleep 5
+    done
+    rm -f "$ISSUER_MANIFEST"
+  fi
+
+  # Cloudflare mode: create TLS secret from origin cert
+  if [[ "$INGRESS_MODE" == "cloudflare" ]]; then
+    CF_ORIGIN_CERT=$(jq -r '.ingress.cloudflare.origin_cert // empty' "$HANDOFF_FILE")
+    CF_ORIGIN_KEY=$(jq -r '.ingress.cloudflare.origin_key // empty' "$HANDOFF_FILE")
+
+    if [[ -z "$CF_ORIGIN_CERT" || -z "$CF_ORIGIN_KEY" ]]; then
+      echo "ERROR: Cloudflare origin cert/key missing from handoff.ingress.cloudflare" >&2
+      exit 1
+    fi
+
+    echo "[evm-cloud] Creating Cloudflare origin TLS secret..."
+    kubectl create secret tls cloudflare-origin-tls \
+      --cert=<(echo "$CF_ORIGIN_CERT") \
+      --key=<(echo "$CF_ORIGIN_KEY") \
+      --dry-run=client -o yaml | kubectl apply -f -
+    echo "[evm-cloud] Cloudflare origin TLS secret created."
+  fi
+fi
+
 # --- Deploy workloads ---
 
 RPC_PROXY_ENABLED=$(jq -r '.services.rpc_proxy != null' "$HANDOFF_FILE")
