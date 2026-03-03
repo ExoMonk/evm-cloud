@@ -84,3 +84,27 @@ module "k3s_bootstrap" {
   k3s_version          = var.k3s_version
   tls_san_entries      = [var.host_address]
 }
+
+# --- k3s worker nodes ---
+
+module "k3s_agent" {
+  source = "../../core/k8s/k3s-agent"
+  count  = var.compute_engine == "k3s" && length(var.k3s_worker_nodes) > 0 ? 1 : 0
+
+  worker_nodes = [for node in var.k3s_worker_nodes : {
+    name                 = node.name
+    host                 = node.host
+    ssh_user             = coalesce(node.ssh_user, var.ssh_user)
+    ssh_private_key_path = coalesce(node.ssh_private_key_path, var.ssh_private_key_path)
+    ssh_port             = node.ssh_port
+    role                 = node.role
+  }]
+
+  server_host                 = var.host_address
+  server_ssh_user             = var.ssh_user
+  server_ssh_private_key_path = var.ssh_private_key_path
+  server_ssh_port             = var.ssh_port
+  node_token                  = module.k3s_bootstrap[0].node_token
+  k3s_version                 = var.k3s_version
+  project_name                = var.project_name
+}

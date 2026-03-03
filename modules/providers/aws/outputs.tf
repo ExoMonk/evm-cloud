@@ -105,6 +105,7 @@ output "workload_handoff" {
         cluster_endpoint  = local.any_k3s_compute ? module.k3s_bootstrap[0].cluster_endpoint : null
         kubeconfig_base64 = local.any_k3s_compute ? module.k3s_bootstrap[0].kubeconfig_base64 : null
         node_name         = local.any_k3s_compute ? module.k3s_bootstrap[0].node_name : null
+        worker_nodes      = (local.any_k3s_compute && length(var.k3s_worker_nodes) > 0) ? module.k3s_agent[0].worker_nodes : []
       } : null
     }
 
@@ -115,11 +116,13 @@ output "workload_handoff" {
         internal_url = var.compute_engine == "ec2" ? "http://erpc:4000" : null
       } : null
 
-      indexer = var.indexer_enabled ? {
+      indexer = var.indexer_enabled ? merge({
         service_name           = var.compute_engine == "ec2" ? "rindexer" : "${var.project_name}-indexer"
         single_writer_required = true
         storage_backend        = var.indexer_storage_backend
-      } : null
+        }, length(var.indexer_instances) > 0 ? {
+        instances = var.indexer_instances
+      } : {}) : null
     }
 
     data = {

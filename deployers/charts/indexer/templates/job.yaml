@@ -1,19 +1,14 @@
-{{- if ne .Values.workloadType "job" }}
-apiVersion: apps/v1
-kind: Deployment
+{{- if eq .Values.workloadType "job" }}
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: {{ include "indexer.fullname" . }}
   labels:
     app.kubernetes.io/name: {{ include "indexer.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
-  replicas: {{ .Values.replicas }}
-  strategy:
-    type: {{ .Values.strategy.type }}
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: {{ include "indexer.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+  backoffLimit: {{ .Values.job.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
   template:
     metadata:
       annotations:
@@ -22,6 +17,7 @@ spec:
         app.kubernetes.io/name: {{ include "indexer.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      restartPolicy: Never
       containers:
         - name: indexer
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -51,16 +47,6 @@ spec:
 {{- end }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
-          readinessProbe:
-            exec:
-              command: ["sh", "-c", "test -f /config/rindexer.yaml"]
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            exec:
-              command: ["sh", "-c", "test -f /config/rindexer.yaml"]
-            initialDelaySeconds: 15
-            periodSeconds: 20
           volumeMounts:
             - name: config
               mountPath: /config/rindexer.yaml

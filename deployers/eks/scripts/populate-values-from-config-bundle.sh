@@ -8,9 +8,10 @@ Usage:
 
 Expected files:
   <values-dir>/rpc-proxy-values.yaml
-  <values-dir>/indexer-values.yaml
+  <values-dir>/indexer-values.yaml   (or per-instance: <name>-values.yaml)
   <config-dir>/erpc.yaml
-  <config-dir>/rindexer.yaml
+  <config-dir>/rindexer.yaml         (default indexer config)
+  <config-dir>/<config_key>/rindexer.yaml  (optional per-instance override)
   <config-dir>/abis/*.json
 EOF
 }
@@ -35,10 +36,6 @@ if [[ ! -f "$VALUES_DIR/rpc-proxy-values.yaml" ]]; then
   echo "missing file: $VALUES_DIR/rpc-proxy-values.yaml" >&2
   exit 1
 fi
-if [[ ! -f "$VALUES_DIR/indexer-values.yaml" ]]; then
-  echo "missing file: $VALUES_DIR/indexer-values.yaml" >&2
-  exit 1
-fi
 if [[ ! -f "$CONFIG_DIR/erpc.yaml" ]]; then
   echo "missing file: $CONFIG_DIR/erpc.yaml" >&2
   exit 1
@@ -52,22 +49,31 @@ if [[ ! -d "$CONFIG_DIR/abis" ]]; then
   exit 1
 fi
 
-python3 - "$VALUES_DIR" "$CONFIG_DIR" <<'PY'
+# Find all indexer values files (indexer-values.yaml or <name>-values.yaml)
+# Excludes rpc-proxy-values.yaml
+INDEXER_VALUES_FILES=()
+for f in "$VALUES_DIR"/*-values.yaml; do
+  [[ "$(basename "$f")" == "rpc-proxy-values.yaml" ]] && continue
+  INDEXER_VALUES_FILES+=("$f")
+done
+
+if [[ ${#INDEXER_VALUES_FILES[@]} -eq 0 ]]; then
+  echo "ERROR: No indexer values files found in $VALUES_DIR" >&2
+  exit 1
+fi
+
+python3 - "$VALUES_DIR" "$CONFIG_DIR" "${INDEXER_VALUES_FILES[@]}" <<'PY'
 from pathlib import Path
 import re
 import sys
 
 values_dir = Path(sys.argv[1])
 config_dir = Path(sys.argv[2])
-
-rpc_values_file = values_dir / "rpc-proxy-values.yaml"
-indexer_values_file = values_dir / "indexer-values.yaml"
-
-erpc = (config_dir / "erpc.yaml").read_text()
-rindexer = (config_dir / "rindexer.yaml").read_text()
+indexer_values_files = [Path(f) for f in sys.argv[3:]]
 
 # --- RPC proxy: replace placeholder block under erpcYaml ---
-# Matches the "# paste erpc.yaml content here" marker and all indented lines after it
+erpc = (config_dir / "erpc.yaml").read_text()
+rpc_values_file = values_dir / "rpc-proxy-values.yaml"
 rpc_values = rpc_values_file.read_text()
 rpc_values = re.sub(
     r"# paste erpc\.yaml content here\n(    .+\n?)*",
@@ -75,18 +81,11 @@ rpc_values = re.sub(
     rpc_values,
 )
 rpc_values_file.write_text(rpc_values)
+print(f"Populated config in {rpc_values_file}")
 
-# --- Indexer: replace placeholder block under rindexerYaml ---
-# Matches the "# paste rindexer.yaml content here" marker and all indented lines after it
-indexer_values = indexer_values_file.read_text()
-indexer_values = re.sub(
-    r"# paste rindexer\.yaml content here\n(    .+\n?)*",
-    rindexer.replace("\n", "\n    ") + "\n",
-    indexer_values,
-)
-
-# --- ABIs: replace empty abis dict with actual ABI files ---
-abi_files = sorted((config_dir / "abis").glob("*.json"))
+# --- Read ABIs (shared across all instances) ---
+abi_dir = config_dir / "abis"
+abi_files = sorted(abi_dir.glob("*.json"))
 if abi_files:
     abi_block = "\n".join(
         f"    {abi.name}: |-\n" + "\n".join("      " + line for line in abi.read_text().splitlines())
@@ -95,9 +94,30 @@ if abi_files:
 else:
     abi_block = "    {}"
 
-indexer_values = indexer_values.replace("  abis: {}", "  abis:\n" + abi_block)
-indexer_values_file.write_text(indexer_values)
-PY
+# --- Indexer: populate each values file with its config ---
+default_rindexer = (config_dir / "rindexer.yaml").read_text()
 
-echo "Populated config in $VALUES_DIR/rpc-proxy-values.yaml"
-echo "Populated config in $VALUES_DIR/indexer-values.yaml"
+for ivf in indexer_values_files:
+    # Derive config_key from filename: "backfill-values.yaml" -> "backfill"
+    # "indexer-values.yaml" -> "indexer" (uses default config)
+    stem = ivf.name.replace("-values.yaml", "")
+
+    # Look for per-instance config: config/<config_key>/rindexer.yaml
+    instance_config = config_dir / stem / "rindexer.yaml"
+    if instance_config.exists():
+        rindexer = instance_config.read_text()
+        print(f"  {ivf.name}: using instance config from {instance_config}")
+    else:
+        rindexer = default_rindexer
+        print(f"  {ivf.name}: using default config")
+
+    indexer_values = ivf.read_text()
+    indexer_values = re.sub(
+        r"# paste rindexer\.yaml content here\n(    .+\n?)*",
+        rindexer.replace("\n", "\n    ") + "\n",
+        indexer_values,
+    )
+    indexer_values = indexer_values.replace("  abis: {}", "  abis:\n" + abi_block)
+    ivf.write_text(indexer_values)
+    print(f"Populated config in {ivf}")
+PY

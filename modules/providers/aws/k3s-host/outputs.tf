@@ -1,11 +1,11 @@
 output "host_ip" {
   description = "Public IP of the k3s host."
-  value       = aws_instance.k3s.public_ip
+  value       = var.use_spot ? aws_spot_instance_request.k3s[0].public_ip : aws_instance.k3s[0].public_ip
 }
 
 output "instance_id" {
   description = "EC2 instance ID."
-  value       = aws_instance.k3s.id
+  value       = var.use_spot ? aws_spot_instance_request.k3s[0].spot_instance_id : aws_instance.k3s[0].id
 }
 
 output "ssh_user" {

@@ -258,6 +258,44 @@ module "k3s_bootstrap" {
   tls_san_entries      = [module.k3s_host[0].host_ip]
 }
 
+# --- k3s Worker Nodes ---
+
+module "k3s_worker_host" {
+  source   = "./k3s-host"
+  for_each = { for node in var.k3s_worker_nodes : node.name => node if local.any_k3s_compute }
+
+  project_name          = "${var.project_name}-worker-${each.key}"
+  environment           = var.network_environment
+  instance_type         = each.value.instance_type
+  use_spot              = each.value.use_spot
+  subnet_id             = local.networking.public_subnet_ids[0]
+  vpc_id                = local.networking.vpc_id
+  vpc_cidr              = var.network_vpc_cidr
+  ssh_public_key        = var.ssh_public_key
+  k3s_api_allowed_cidrs = var.k3s_api_allowed_cidrs
+  tags                  = merge(local.common_tags, { "evm-cloud/role" = each.value.role })
+}
+
+module "k3s_agent" {
+  source = "../../core/k8s/k3s-agent"
+  count  = local.any_k3s_compute && length(var.k3s_worker_nodes) > 0 ? 1 : 0
+
+  worker_nodes = [for node in var.k3s_worker_nodes : {
+    name                 = node.name
+    host                 = module.k3s_worker_host[node.name].host_ip
+    ssh_user             = module.k3s_worker_host[node.name].ssh_user
+    ssh_private_key_path = var.k3s_ssh_private_key_path
+    ssh_port             = 22
+    role                 = node.role
+  }]
+
+  server_host                 = module.k3s_host[0].host_ip
+  server_ssh_user             = module.k3s_host[0].ssh_user
+  server_ssh_private_key_path = var.k3s_ssh_private_key_path
+  node_token                  = module.k3s_bootstrap[0].node_token
+  k3s_version                 = var.k3s_version
+  project_name                = var.project_name
+}
 
 # --- EKS: Postgres secret resolution ---
 

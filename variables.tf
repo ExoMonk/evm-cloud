@@ -306,6 +306,16 @@ variable "rindexer_abis" {
   default     = {}
 }
 
+variable "indexer_instances" {
+  description = "Multiple indexer instances with independent configs. Empty = single instance (backward compat). Each instance becomes a separate Helm release."
+  type = list(object({
+    name       = string
+    config_key = optional(string)
+    node_role  = optional(string)
+  }))
+  default = []
+}
+
 # --- Bare Metal ---
 
 variable "bare_metal_host" {
@@ -369,5 +379,17 @@ variable "k3s_api_allowed_cidrs" {
   description = "CIDR blocks allowed to access k3s API (port 6443). Defaults to VPC CIDR when empty and networking is enabled."
   type        = list(string)
   default     = []
+}
+
+variable "k3s_worker_nodes" {
+  description = "Worker nodes to join the k3s cluster. For AWS: each gets a dedicated EC2 instance (use instance_type, use_spot). For bare_metal: each must have a host address."
+  type = list(object({
+    name          = string
+    role          = optional(string, "general")
+    instance_type = optional(string, "t3.medium")
+    use_spot      = optional(bool, false)
+    host          = optional(string)
+  }))
+  default = []
 }
 

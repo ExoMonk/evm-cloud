@@ -58,6 +58,10 @@ export default defineConfig({
         { text: "EKS + ClickHouse", link: "/docs/examples/eks-clickhouse" },
         { text: "k3s + ClickHouse", link: "/docs/examples/k3s-clickhouse" },
         {
+          text: "k3s Multi-Node + ClickHouse",
+          link: "/docs/examples/k3s-multi-clickhouse",
+        },
+        {
           text: "Bare Metal + ClickHouse",
           link: "/docs/examples/bare-metal-clickhouse",
         },

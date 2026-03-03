@@ -41,6 +41,12 @@ variable "k3s_api_allowed_cidrs" {
   default     = []
 }
 
+variable "use_spot" {
+  description = "Use a spot instance instead of on-demand. Only recommended for interruptible workloads (e.g. backfill workers)."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Common resource tags."
   type        = map(string)

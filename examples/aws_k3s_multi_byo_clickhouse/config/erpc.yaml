@@ -1,0 +1,15 @@
+logLevel: warn
+projects:
+  - id: main
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 1
+    upstreams:
+      - id: primary
+        endpoint: https://ethereum-rpc.publicnode.com
+        type: evm
+server:
+  listenV4: true
+  httpHostV4: 0.0.0.0
+  httpPort: 4000

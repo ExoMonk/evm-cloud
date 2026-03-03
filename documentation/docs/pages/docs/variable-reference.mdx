@@ -81,9 +81,32 @@ Required when `compute_engine = "k3s"`.
 | `k3s_version` | `string` | `"v1.30.4+k3s1"` | No | Pinned k3s version. |
 | `k3s_ssh_private_key_path` | `string` | `""` | Yes | Path to SSH private key for host provisioning. |
 | `k3s_api_allowed_cidrs` | `list(string)` | `[]` | No | CIDRs allowed to access k3s API (port 6443). Defaults to VPC CIDR. **Add your IP for Terraform provisioning.** |
+| `k3s_worker_nodes` | `list(object)` | `[]` | No | Worker nodes to join the k3s cluster. See below. |
 | `ssh_public_key` | `string` | `""` | Yes | SSH public key for the k3s EC2 key pair. |
 
 > **Important:** `k3s_api_allowed_cidrs` must include your local IP (or `0.0.0.0/0` for dev) so Terraform can SSH into the instance during provisioning.
+
+### k3s Worker Nodes
+
+Add worker nodes to create a multi-node k3s cluster. Each worker gets a dedicated EC2 instance with a role label for pod scheduling.
+
+```hcl
+k3s_worker_nodes = [
+  { name = "backfill", role = "indexer", instance_type = "t3.small", use_spot = true },
+]
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `string` | (required) | Unique name for the worker node. |
+| `role` | `string` | `"general"` | Node label `evm-cloud/role=<value>`. Values: `indexer`, `database`, `evm-node`, `monitoring`, `general`. |
+| `instance_type` | `string` | `"t3.medium"` | EC2 instance type for this worker. |
+| `use_spot` | `bool` | `false` | Use a spot instance (~70% cheaper). Recommended for interruptible workloads like backfill indexers. |
+| `host` | `string` | (auto) | For bare_metal provider: the worker's IP/hostname. For AWS: auto-provisioned. |
+
+When `k3s_worker_nodes = []` (default), only the server node is created — backward compatible with existing single-node deployments.
+
+See the [k3s multi-node example](./examples/k3s-multi-clickhouse) for a complete walkthrough.
 
 ---
 

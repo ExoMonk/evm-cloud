@@ -1,0 +1,149 @@
+# k3s Multi-Node + ClickHouse (BYODB)
+
+Multi-node k3s cluster on AWS: a server node running the control plane + live indexer + eRPC, and a spot worker node for backfill indexing. Gets you workload isolation and ~70% cheaper backfill compute without EKS fees.
+
+## Architecture
+
+```
+┌────────────────────── AWS VPC ──────────────────────┐
+│                                                      │
+│  EC2: Server (t3.small, on-demand)                   │
+│  ├── k3s control plane                               │
+│  ├── eRPC pod (RPC proxy)                            │
+│  └── rindexer pod (live indexer)                     │
+│       └── writes to ──────────────────────────────────→ ClickHouse (external)
+│                                                      │
+│  EC2: Worker (t3.small, spot)                        │
+│  ├── k3s agent — label: evm-cloud/role=indexer       │
+│  └── rindexer pod (backfill indexer / job)           │
+│       └── writes to ──────────────────────────────────→ ClickHouse (external)
+│                                                      │
+│  Flannel VXLAN (UDP 8472) connects nodes             │
+└──────────────────────────────────────────────────────┘
+```
+
+## What Gets Deployed
+
+**Phase 1 (Terraform):**
+- VPC with public subnets, Internet Gateway, security groups
+- Server EC2 instance with k3s installed via SSH provisioner
+- Worker EC2 spot instance that auto-joins the cluster with role labels
+- Security groups: SSH + k3s API + Flannel VXLAN (UDP 8472) + Kubelet (TCP 10250)
+
+**Phase 2 (Helm/kubectl -- you run this):**
+- eRPC and rindexer (live) deployed on server node
+- rindexer (backfill) deployed on worker node via Kubernetes affinity rules
+- Config and secrets injected via the `workload_handoff` output
+
+## What's Different from Single-Node k3s
+
+| | Single-node k3s | **Multi-node k3s** |
+| --- | --- | --- |
+| **Nodes** | 1 EC2 (server only) | 2 EC2 (1 server + 1 spot worker) |
+| **Node labels** | None | `evm-cloud/role=indexer` on worker |
+| **Firewall** | SSH + k3s API + NodePort | + Flannel VXLAN (UDP 8472) + Kubelet (TCP 10250) |
+| **Spot support** | No | Yes (`use_spot = true` on workers) |
+| **Use case** | Dev / single-service | Live + backfill separation, cost optimization |
+
+## Two-Phase Workflow
+
+This example uses `workload_mode = "external"`. Terraform provisions the infrastructure (Phase 1), then you deploy workloads yourself (Phase 2) using the `workload_handoff` output.
+
+See the [two-phase deployment guide](../guides/two-phase-workflow) for the full workflow.
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- AWS CLI v2 with configured credentials (EC2, VPC, IAM)
+- SSH key pair (both public and private key paths)
+- `kubectl` and `helm` (for Phase 2)
+- A ClickHouse instance ([ClickHouse Cloud](https://clickhouse.cloud/) or self-hosted)
+
+## Quick Start
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/aws_k3s_multi_byo_clickhouse
+
+# Phase 1: Provision infrastructure
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars:
+#   ssh_public_key           = "ssh-ed25519 AAAA..."
+#   k3s_ssh_private_key_path = "~/.ssh/evm-cloud"
+#   indexer_clickhouse_url   = "https://your-instance.clickhouse.cloud:8443"
+#   indexer_clickhouse_password = "your-password"
+
+terraform init
+terraform apply -var-file=k3s_multinode.tfvars
+
+# Verify nodes
+KUBECONFIG=$(mktemp)
+terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > "$KUBECONFIG"
+kubectl --kubeconfig="$KUBECONFIG" get nodes --show-labels
+# Should show: server + backfill worker with evm-cloud/role=indexer label
+
+# Phase 2: Deploy workloads
+terraform output -json workload_handoff | \
+  ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config --instance indexer
+# Deploy backfill on demand (runs on worker spot node, exits on completion):
+terraform output -json workload_handoff | \
+  ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config --instance backfill --job
+# Deploy everything at once (eRPC + live + backfill):
+terraform output -json workload_handoff | \
+  ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+
+
+# Teardown (reverse order, shutting down all pods)
+terraform output -json workload_handoff | \
+./../../deployers/k3s/teardown.sh /dev/stdin
+```
+
+## Key Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `k3s_instance_type` | string | `t3.small` | EC2 instance size for k3s server node |
+| `k3s_worker_nodes` | list(object) | 1 backfill worker | Worker nodes to join the cluster (see below) |
+| `k3s_ssh_private_key_path` | string | - | Path to SSH private key for provisioner |
+| `k3s_version` | string | `v1.30.4+k3s1` | k3s release version |
+| `k3s_api_allowed_cidrs` | list(string) | - | CIDRs allowed to reach k3s API (port 6443) |
+
+### Worker Node Configuration
+
+```hcl
+k3s_worker_nodes = [
+  { name = "backfill", role = "indexer", instance_type = "t3.small", use_spot = true },
+]
+```
+
+Each worker node object accepts:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | (required) | Unique name for the worker |
+| `role` | string | `general` | Node role label (`indexer`, `database`, `evm-node`, `monitoring`, `general`) |
+| `instance_type` | string | `t3.medium` | EC2 instance type |
+| `use_spot` | bool | `false` | Use a spot instance (~70% cheaper, interruptible). Recommended for backfill workers. |
+
+## Spot Instances
+
+Setting `use_spot = true` on a worker launches an AWS spot instance instead of on-demand:
+
+- **~70% cost savings** on t3.small/medium instances
+- **Best for backfill indexers** — if the instance is reclaimed, the backfill simply resumes from the last indexed block
+- AWS provides a **2-minute interruption warning**; the k3s agent drains the node gracefully
+- **Never use spot for the server node** — the control plane + live indexer must be always-on
+
+## When to Use This
+
+**Choose this example when:**
+- You want separate nodes for live indexing and backfill to avoid resource contention
+- You want cheaper backfill compute via spot instances
+- You need Kubernetes features without EKS cost
+
+**Consider alternatives when:**
+- Your workload fits on a single node -- use [k3s single-node](./k3s-clickhouse.mdx)
+- You want a managed Kubernetes control plane -- use [EKS](./eks-clickhouse.mdx)
+- You do not need Kubernetes at all -- [EC2 + Docker Compose](./ec2-docker-compose-clickhouse.mdx) is simpler
+
+See [examples/aws_k3s_multi_byo_clickhouse](https://github.com/ExoMonk/evm-cloud/tree/main/examples/aws_k3s_multi_byo_clickhouse) for complete details.

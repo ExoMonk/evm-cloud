@@ -165,6 +165,7 @@ module "provider_aws" {
   indexer_image           = var.indexer_image
   indexer_rpc_url         = var.indexer_rpc_url
   indexer_storage_backend = var.indexer_storage_backend
+  indexer_instances       = var.indexer_instances
 
   # ClickHouse BYODB
   indexer_clickhouse_url      = var.indexer_clickhouse_url
@@ -182,6 +183,7 @@ module "provider_aws" {
   k3s_instance_type        = var.k3s_instance_type
   k3s_api_allowed_cidrs    = var.k3s_api_allowed_cidrs
   k3s_ssh_private_key_path = var.k3s_ssh_private_key_path
+  k3s_worker_nodes         = var.k3s_worker_nodes
 }
 
 module "provider_bare_metal" {
@@ -209,6 +211,7 @@ module "provider_bare_metal" {
   indexer_image           = var.indexer_image
   indexer_rpc_url         = var.indexer_rpc_url
   indexer_storage_backend = var.indexer_storage_backend
+  indexer_instances       = var.indexer_instances
   indexer_mem_limit       = var.bare_metal_indexer_mem_limit
   rindexer_config_yaml    = var.rindexer_config_yaml
   rindexer_abis           = var.rindexer_abis
@@ -220,5 +223,6 @@ module "provider_bare_metal" {
   indexer_clickhouse_db       = var.indexer_clickhouse_db
 
   # k3s
-  k3s_version = var.k3s_version
+  k3s_version      = var.k3s_version
+  k3s_worker_nodes = var.k3s_worker_nodes
 }

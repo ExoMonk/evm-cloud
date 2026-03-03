@@ -6,6 +6,10 @@
 #   terraform output -json workload_handoff | ./deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
 #   # or
 #   ./deployers/k3s/deploy.sh handoff.json --config-dir ./config
+#   # Deploy only a specific instance:
+#   ./deployers/k3s/deploy.sh handoff.json --config-dir ./config --instance backfill
+#   # Deploy as a one-shot Job (exits on completion, no restart):
+#   ./deployers/k3s/deploy.sh handoff.json --config-dir ./config --instance backfill --job
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -16,17 +20,23 @@ SHARED_SCRIPTS="${SCRIPT_DIR}/../eks/scripts"
 
 HANDOFF=""
 CONFIG_DIR=""
+INSTANCE_FILTER=""
+JOB_MODE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --config-dir) CONFIG_DIR="$2"; shift 2 ;;
+    --instance) INSTANCE_FILTER="$2"; shift 2 ;;
+    --job) JOB_MODE=true; shift ;;
     *) HANDOFF="$1"; shift ;;
   esac
 done
 
 if [[ -z "$HANDOFF" ]]; then
-  echo "Usage: $0 <handoff.json> --config-dir <path>" >&2
+  echo "Usage: $0 <handoff.json> --config-dir <path> [--instance <name>] [--job]" >&2
   echo "  terraform output -json workload_handoff | $0 /dev/stdin --config-dir ./config" >&2
+  echo "  --instance <name>  Deploy only this indexer instance (e.g. backfill)" >&2
+  echo "  --job              Deploy as a one-shot Job (exits on completion)" >&2
   exit 1
 fi
 
@@ -97,6 +107,15 @@ if ! kubectl cluster-info >/dev/null 2>&1; then
 fi
 echo "[evm-cloud] Cluster reachable."
 
+# --- Cluster readiness gate ---
+
+WORKER_COUNT=$(jq '[.runtime.k3s.worker_nodes // [] | length] | add' "$HANDOFF_FILE")
+EXPECTED_NODES=$((1 + WORKER_COUNT))
+READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c ' Ready' || echo 0)
+if [[ "$READY_NODES" -lt "$EXPECTED_NODES" ]]; then
+  echo "WARNING: Only ${READY_NODES}/${EXPECTED_NODES} nodes Ready. Pods may be Pending." >&2
+fi
+
 # --- Deploy workloads ---
 
 RPC_PROXY_ENABLED=$(jq -r '.services.rpc_proxy != null' "$HANDOFF_FILE")
@@ -105,15 +124,50 @@ INDEXER_ENABLED=$(jq -r '.services.indexer != null' "$HANDOFF_FILE")
 if [[ "$RPC_PROXY_ENABLED" == "true" ]]; then
   echo "[evm-cloud] Deploying eRPC (${PROJECT}-erpc)..."
   helm upgrade --install "${PROJECT}-erpc" "${CHARTS_DIR}/rpc-proxy/" \
-    -f "${VALUES_DIR}/rpc-proxy-values.yaml" --wait --timeout 5m --create-namespace
+    -f "${VALUES_DIR}/rpc-proxy-values.yaml" --rollback-on-failure --timeout 300s --create-namespace
   echo "[evm-cloud] eRPC deployed."
 fi
 
 if [[ "$INDEXER_ENABLED" == "true" ]]; then
-  echo "[evm-cloud] Deploying rindexer (${PROJECT}-indexer)..."
-  helm upgrade --install "${PROJECT}-indexer" "${CHARTS_DIR}/indexer/" \
-    -f "${VALUES_DIR}/indexer-values.yaml" --wait --timeout 5m --create-namespace
-  echo "[evm-cloud] rindexer deployed."
+  # Multi-instance support: loop over instances[] if present, fallback to single release
+  INSTANCES=$(jq -c '.services.indexer.instances // [{"name":"indexer","config_key":"default"}]' "$HANDOFF_FILE")
+  DEPLOY_FAILED=0
+
+  for INSTANCE in $(echo "$INSTANCES" | jq -c '.[]'); do
+    NAME=$(echo "$INSTANCE" | jq -r '.name')
+
+    # --instance filter: skip instances that don't match
+    if [[ -n "$INSTANCE_FILTER" && "$NAME" != "$INSTANCE_FILTER" ]]; then
+      echo "[evm-cloud] Skipping ${PROJECT}-${NAME} (filtered by --instance ${INSTANCE_FILTER})"
+      continue
+    fi
+
+    VALUES_FILE="${VALUES_DIR}/${NAME}-values.yaml"
+
+    # Fallback: if per-instance values file doesn't exist, use the default indexer-values.yaml
+    if [[ ! -f "$VALUES_FILE" ]]; then
+      VALUES_FILE="${VALUES_DIR}/indexer-values.yaml"
+    fi
+
+    HELM_EXTRA_ARGS=""
+    if [[ "$JOB_MODE" == "true" ]]; then
+      HELM_EXTRA_ARGS="--set workloadType=job"
+    fi
+
+    echo "[evm-cloud] Deploying rindexer instance (${PROJECT}-${NAME})..."
+    if ! helm upgrade --install "${PROJECT}-${NAME}" "${CHARTS_DIR}/indexer/" \
+      -f "$VALUES_FILE" $HELM_EXTRA_ARGS --rollback-on-failure --timeout 300s --create-namespace; then
+      echo "ERROR: Failed to deploy ${PROJECT}-${NAME}" >&2
+      DEPLOY_FAILED=1
+    else
+      echo "[evm-cloud] ${PROJECT}-${NAME} deployed."
+    fi
+  done
+
+  if [[ "$DEPLOY_FAILED" -ne 0 ]]; then
+    echo "ERROR: One or more indexer instances failed to deploy." >&2
+    exit 1
+  fi
 fi
 
 echo "[evm-cloud] All workloads deployed successfully."

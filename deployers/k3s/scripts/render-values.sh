@@ -51,8 +51,26 @@ config:
     projects: []
 EOF
 
-cat > "$OUT_DIR/indexer-values.yaml" <<EOF
-fullnameOverride: ${PROJECT}-indexer
+# Multi-node: pin eRPC to server node so it doesn't land on a worker
+WORKER_COUNT=$(jq '[.runtime.k3s.worker_nodes // [] | length] | add' "$HANDOFF")
+if [[ "$WORKER_COUNT" -gt 0 ]]; then
+  cat >> "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
+nodeSelector:
+  evm-cloud/role: "server"
+EOF
+fi
+
+# --- Indexer values ---
+# Multi-instance support: if services.indexer.instances[] exists, generate per-instance values.
+# Otherwise, generate a single indexer-values.yaml (backward compat).
+
+render_indexer_values() {
+  local INSTANCE_NAME="$1"
+  local NODE_ROLE="$2"
+  local OUT_FILE="$3"
+
+  cat > "$OUT_FILE" <<EOF
+fullnameOverride: ${PROJECT}-${INSTANCE_NAME}
 storageBackend: ${BACKEND}
 replicas: 1
 strategy:
@@ -73,5 +91,29 @@ clickhouse:
   password: "${CH_PASSWORD}"
 EOF
 
+  # Inject nodeSelector if instance has a node_role
+  if [[ -n "$NODE_ROLE" && "$NODE_ROLE" != "null" ]]; then
+    cat >> "$OUT_FILE" <<EOF
+nodeSelector:
+  evm-cloud/role: "${NODE_ROLE}"
+EOF
+  fi
+
+  echo "Wrote $OUT_FILE"
+}
+
+INSTANCES=$(jq -c '.services.indexer.instances // null' "$HANDOFF")
+
+if [[ "$INSTANCES" != "null" && "$INSTANCES" != "[]" ]]; then
+  # Multi-instance: generate a values file per instance
+  for INSTANCE in $(echo "$INSTANCES" | jq -c '.[]'); do
+    NAME=$(echo "$INSTANCE" | jq -r '.name')
+    NODE_ROLE=$(echo "$INSTANCE" | jq -r '.node_role // empty')
+    render_indexer_values "$NAME" "$NODE_ROLE" "$OUT_DIR/${NAME}-values.yaml"
+  done
+else
+  # Single instance (backward compat)
+  render_indexer_values "indexer" "" "$OUT_DIR/indexer-values.yaml"
+fi
+
 echo "Wrote $OUT_DIR/rpc-proxy-values.yaml"
-echo "Wrote $OUT_DIR/indexer-values.yaml"

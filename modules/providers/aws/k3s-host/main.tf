@@ -2,8 +2,12 @@
 # Separate from ec2/ module: different SG rules (6443 vs compose), no Docker Compose coupling.
 
 locals {
-  # Default to VPC CIDR if no explicit CIDRs provided
-  api_allowed_cidrs = length(var.k3s_api_allowed_cidrs) > 0 ? var.k3s_api_allowed_cidrs : [var.vpc_cidr]
+  # Always include VPC CIDR (worker nodes need 6443 + SSH to server).
+  # User-provided CIDRs are merged in for external access (kubectl, SSH from home IP).
+  api_allowed_cidrs = distinct(concat(
+    var.k3s_api_allowed_cidrs,
+    [var.vpc_cidr]
+  ))
 }
 
 # --- AMI: Ubuntu 22.04 LTS (k3s prefers Ubuntu/Debian) ---
@@ -59,6 +63,24 @@ resource "aws_security_group" "k3s" {
     cidr_blocks = local.api_allowed_cidrs
   }
 
+  # Flannel VXLAN — cross-node pod networking (required for multi-node clusters)
+  ingress {
+    description = "Flannel VXLAN"
+    from_port   = 8472
+    to_port     = 8472
+    protocol    = "udp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  # Kubelet metrics — required for kubectl logs/exec and metrics-server
+  ingress {
+    description = "Kubelet metrics"
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
   # NodePort range — restricted to VPC CIDR
   ingress {
     description = "NodePort services"
@@ -79,13 +101,15 @@ resource "aws_security_group" "k3s" {
   }
 }
 
-# --- EC2 Instance ---
+# --- EC2 Instance (on-demand) ---
 
 resource "aws_instance" "k3s" {
   #checkov:skip=CKV_AWS_88:Public IP needed for k3s API access and SSH
   #checkov:skip=CKV_AWS_126:Detailed monitoring not needed for dev/staging k3s host
   #checkov:skip=CKV_AWS_135:EBS optimization automatic for t3+ instances
   #checkov:skip=CKV2_AWS_41:IAM instance profile not required for k3s host
+  count = var.use_spot ? 0 : 1
+
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = var.subnet_id
@@ -109,4 +133,49 @@ resource "aws_instance" "k3s" {
   tags = merge(var.tags, {
     Name = "${var.project_name}-k3s"
   })
+}
+
+# --- EC2 Spot Instance (for interruptible workloads like backfill) ---
+
+resource "aws_spot_instance_request" "k3s" {
+  #checkov:skip=CKV_AWS_88:Public IP needed for k3s API access and SSH
+  #checkov:skip=CKV_AWS_126:Detailed monitoring not needed for dev/staging k3s host
+  #checkov:skip=CKV_AWS_135:EBS optimization automatic for t3+ instances
+  #checkov:skip=CKV2_AWS_41:IAM instance profile not required for k3s host
+  count = var.use_spot ? 1 : 0
+
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = var.instance_type
+  subnet_id              = var.subnet_id
+  vpc_security_group_ids = [aws_security_group.k3s.id]
+  key_name               = aws_key_pair.k3s.key_name
+
+  associate_public_ip_address = true
+  wait_for_fulfillment        = true
+  spot_type                   = "one-time"
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
+
+  root_block_device {
+    volume_size           = 30
+    volume_type           = "gp3"
+    encrypted             = true
+    delete_on_termination = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-k3s-spot"
+  })
+}
+
+# Spot request tags don't propagate to the actual EC2 instance.
+# Use aws_ec2_tag to apply Name tag to the fulfilled spot instance.
+resource "aws_ec2_tag" "spot_name" {
+  count       = var.use_spot ? 1 : 0
+  resource_id = aws_spot_instance_request.k3s[0].spot_instance_id
+  key         = "Name"
+  value       = "${var.project_name}-k3s"
 }

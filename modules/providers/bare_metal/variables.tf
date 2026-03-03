@@ -113,6 +113,16 @@ variable "rindexer_abis" {
   default     = {}
 }
 
+variable "indexer_instances" {
+  description = "Multiple indexer instances with independent configs. Empty = single instance (backward compat)."
+  type = list(object({
+    name       = string
+    config_key = optional(string)
+    node_role  = optional(string)
+  }))
+  default = []
+}
+
 # --- ClickHouse BYODB ---
 
 variable "indexer_clickhouse_url" {
@@ -147,4 +157,19 @@ variable "k3s_version" {
   description = "k3s version to install."
   type        = string
   default     = "v1.30.4+k3s1"
+}
+
+variable "k3s_worker_nodes" {
+  description = "Worker nodes to join the k3s cluster. Each node must have a host address and be SSH-reachable from the Terraform runner."
+  type = list(object({
+    name                 = string
+    host                 = optional(string)
+    ssh_user             = optional(string)
+    ssh_private_key_path = optional(string)
+    ssh_port             = optional(number, 22)
+    role                 = optional(string, "general")
+    instance_type        = optional(string)
+    use_spot             = optional(bool, false)
+  }))
+  default = []
 }

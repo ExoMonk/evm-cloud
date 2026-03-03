@@ -36,6 +36,7 @@ resource "null_resource" "k3s_install" {
     user        = self.triggers.ssh_user
     private_key = file(self.triggers.ssh_private_key)
     port        = self.triggers.ssh_port
+    timeout     = "2m"
   }
 
   # Install k3s with security hardening
@@ -65,6 +66,8 @@ resource "null_resource" "k3s_install" {
       "sudo tee /etc/rancher/k3s/config.yaml > /dev/null <<CONF",
       "cluster-cidr: \"${var.cluster_cidr}\"",
       "service-cidr: \"${var.service_cidr}\"",
+      "node-label:",
+      "  - evm-cloud/role=server",
       "CONF",
       "if [ -f /run/systemd/resolve/resolv.conf ]; then echo 'resolv-conf: \"/run/systemd/resolve/resolv.conf\"' | sudo tee -a /etc/rancher/k3s/config.yaml > /dev/null; fi",
 
@@ -90,7 +93,8 @@ resource "null_resource" "k3s_install" {
   # This must happen before EC2 termination — otherwise flannel/CNI-created ENIs
   # orphan in the VPC and block IGW/subnet/VPC deletion for 10+ minutes.
   provisioner "remote-exec" {
-    when = destroy
+    when       = destroy
+    on_failure = continue
     inline = [
       "echo '[evm-cloud] Draining k3s node and cleaning up...'",
 
@@ -121,17 +125,46 @@ resource "null_resource" "k3s_install" {
   }
 }
 
-# Fetch the kubeconfig after k3s is installed
-data "external" "kubeconfig" {
-  depends_on = [null_resource.k3s_install]
+# --- Extract secrets via local-exec provisioners ---
+# Writes to local files after install. No SSH during plan or destroy.
+# Outputs use fileexists() guard so first plan (before any apply) returns "".
 
-  program = ["bash", "-c", <<-EOF
-    RAW=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-      -p ${var.ssh_port} -i ${var.ssh_private_key_path} \
-      ${var.ssh_user}@${var.host_address} \
-      'cat $HOME/.kube/k3s-kubeconfig.yaml 2>/dev/null')
-    KUBECONFIG_B64=$(echo "$RAW" | base64 -w0 2>/dev/null || echo "$RAW" | base64 | tr -d '\n')
-    echo "{\"kubeconfig_base64\": \"$KUBECONFIG_B64\"}"
-  EOF
-  ]
+locals {
+  secrets_dir     = "${path.module}/.secrets"
+  token_file      = "${local.secrets_dir}/${var.project_name}.node-token"
+  kubeconfig_file = "${local.secrets_dir}/${var.project_name}.kubeconfig.b64"
+}
+
+resource "terraform_data" "fetch_secrets" {
+  depends_on       = [null_resource.k3s_install]
+  triggers_replace = [null_resource.k3s_install.id]
+
+  # Fetch node token (clear stale files first — server may have been recreated)
+  provisioner "local-exec" {
+    command = <<-EOF
+      rm -rf ${local.secrets_dir}
+      mkdir -p ${local.secrets_dir}
+      for i in $(seq 1 10); do
+        TOKEN=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+          -i ${var.ssh_private_key_path} -p ${var.ssh_port} \
+          ${var.ssh_user}@${var.host_address} \
+          "sudo cat /var/lib/rancher/k3s/server/node-token 2>/dev/null") && [ -n "$TOKEN" ] && break
+        sleep 3
+      done
+      if [ -z "$TOKEN" ]; then echo "ERROR: Failed to retrieve k3s node token"; exit 1; fi
+      printf '%s' "$TOKEN" > ${local.token_file}
+    EOF
+  }
+
+  # Fetch kubeconfig
+  provisioner "local-exec" {
+    command = <<-EOF
+      RAW=$(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -p ${var.ssh_port} -i ${var.ssh_private_key_path} \
+        ${var.ssh_user}@${var.host_address} \
+        'cat $HOME/.kube/k3s-kubeconfig.yaml')
+      KUBECONFIG_B64=$(echo "$RAW" | base64 -w0 2>/dev/null || echo "$RAW" | base64 | tr -d '\n')
+      printf '%s' "$KUBECONFIG_B64" > ${local.kubeconfig_file}
+    EOF
+  }
 }

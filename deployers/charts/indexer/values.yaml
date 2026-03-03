@@ -19,9 +19,16 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# "deployment" (default) for long-running indexers, "job" for one-shot backfill
+workloadType: deployment
+
 replicas: 1
 strategy:
   type: Recreate
+
+job:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
 
 storageBackend: postgres
 
