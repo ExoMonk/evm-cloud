@@ -41,8 +41,14 @@ export KUBECONFIG="$KUBECONFIG_PATH"
 
 echo "[evm-cloud] Tearing down workloads..."
 
-# Uninstall known releases (ignore errors if not found)
+# Uninstall eRPC
 helm uninstall "${PROJECT}-erpc" --wait 2>/dev/null && echo "  Removed ${PROJECT}-erpc" || true
-helm uninstall "${PROJECT}-indexer" --wait 2>/dev/null && echo "  Removed ${PROJECT}-indexer" || true
+
+# Uninstall indexer instances (multi-instance aware)
+INSTANCES=$(jq -c '.services.indexer.instances // [{"name":"indexer"}]' "$HANDOFF_FILE")
+for INSTANCE in $(echo "$INSTANCES" | jq -c '.[]'); do
+  NAME=$(echo "$INSTANCE" | jq -r '.name')
+  helm uninstall "${PROJECT}-${NAME}" --wait 2>/dev/null && echo "  Removed ${PROJECT}-${NAME}" || true
+done
 
 echo "[evm-cloud] Teardown complete. Safe to run 'terraform destroy'."

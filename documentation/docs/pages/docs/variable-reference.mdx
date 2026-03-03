@@ -160,8 +160,34 @@ eRPC aggregates multiple upstream RPC endpoints with automatic failover, caching
 | `indexer_storage_backend` | `string` | `"postgres"` | Storage: `postgres` (managed RDS) or `clickhouse` (BYODB). |
 | `rindexer_config_yaml` | `string` | `""` | Full rindexer.yaml content. Use `${RPC_URL}` and `${DATABASE_URL}` for runtime interpolation. |
 | `rindexer_abis` | `map(string)` | `{}` | ABI files: `{ "ERC20.json" = file("abis/ERC20.json") }`. |
+| `indexer_instances` | `list(object)` | `[]` | Multiple indexer instances with independent configs. Each becomes a separate Helm release. See below. |
 
 > **Tip:** When both `rpc_proxy_enabled` and `indexer_enabled` are true, the indexer's RPC URL automatically points to the eRPC internal service — no manual wiring needed.
+
+### Multi-Instance Indexer
+
+Deploy multiple rindexer instances (e.g., live + backfill) with independent configs and node scheduling:
+
+```hcl
+indexer_instances = [
+  { name = "indexer", node_role = "server" },
+  { name = "backfill", config_key = "backfill", node_role = "indexer" },
+]
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `string` | (required) | Instance name. Becomes Helm release `<project>-<name>`. |
+| `config_key` | `string` | (none) | Subdirectory in config bundle for this instance's `rindexer.yaml`. If unset, uses the root config. |
+| `node_role` | `string` | (none) | Pin to nodes with `evm-cloud/role=<value>` label via `nodeSelector`. |
+
+When `indexer_instances = []` (default), a single indexer release is deployed — backward compatible.
+
+For one-shot backfill indexers that should exit on completion (not restart), use the `--job` flag at deploy time:
+
+```bash
+deploy.sh handoff.json --config-dir ./config --instance backfill --job
+```
 
 ---
 
