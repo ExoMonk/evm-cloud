@@ -161,5 +161,6 @@ Here's what Terraform created and how data flows:
 | Managed PostgreSQL (no external DB) | [`minimal_aws_rds`](./examples/ec2-docker-compose-rds.mdx) |
 | Kubernetes (EKS) | [`aws_eks_BYO_clickhouse`](./examples/eks-clickhouse.mdx) |
 | Lightweight Kubernetes (k3s, no EKS fee) | [`minimal_aws_k3s_byo_clickhouse`](./examples/k3s-clickhouse.mdx) |
-| Any VPS, no AWS | [`bare_metal_byo_clickhouse`](./examples/bare-metal-clickhouse.mdx) |
-| Infra only (deploy workloads yourself) | [`minimal_aws_external_ec2_byo`](./examples/external-ec2.mdx) or [`external_eks`](./examples/external-eks.mdx) |
+| Any VPS, no AWS | [`baremetal_byo_clickhouse`](./examples/bare-metal-clickhouse.mdx) |
+| Infra only (deploy workloads yourself) | [`minimal_aws_external_ec2_byo`](./examples/external-ec2.mdx) |
+| Any VPS + k3s + external secrets | [`baremetal_k3s_byo_db`](./examples/bare-metal-k3s.mdx) |

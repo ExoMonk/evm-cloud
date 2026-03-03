@@ -78,6 +78,7 @@ Required when `compute_engine = "ec2"`.
 | Variable | Type | Default | Sensitive | Description |
 |----------|------|---------|-----------|-------------|
 | `ssh_public_key` | `string` | `""` | Yes | SSH public key content for the EC2 key pair. Required for EC2 and k3s. |
+| `ec2_ssh_private_key_path` | `string` | `""` | No | Path to SSH private key for config updates. Required when `workload_mode = "terraform"`. |
 | `ec2_instance_type` | `string` | `"t3.medium"` | No | EC2 instance type. See [sizing guide](#instance-sizing) below. |
 | `ec2_rpc_proxy_mem_limit` | `string` | `"1g"` | No | Docker memory limit for eRPC container. |
 | `ec2_indexer_mem_limit` | `string` | `"2g"` | No | Docker memory limit for rindexer container. |
@@ -204,6 +205,27 @@ For one-shot backfill indexers that should exit on completion (not restart), use
 ```bash
 deploy.sh handoff.json --config-dir ./config --instance backfill --job
 ```
+
+---
+
+## Secrets Management
+
+Control how credentials reach workloads. See the [Secrets Management guide](./guides/secrets-management.mdx) for architecture details.
+
+| Variable | Type | Default | Sensitive | Description |
+|----------|------|---------|-----------|-------------|
+| `secrets_mode` | `string` | `"inline"` | No | How secrets reach workloads: `inline`, `provider` (AWS SM + ESO), or `external` (user-managed store). |
+| `secrets_manager_secret_arn` | `string` | `""` | Yes | ARN of a pre-existing Secrets Manager secret. When set with `secrets_mode = "provider"`, skips secret creation (BYOA). |
+| `secrets_manager_kms_key_id` | `string` | `""` | No | KMS key ID or alias for Secrets Manager encryption. Omit for AWS default key. |
+| `external_secret_store_name` | `string` | `""` | No | Name of a user-managed `ClusterSecretStore`. Required when `secrets_mode = "external"`. |
+| `external_secret_key` | `string` | `""` | No | Secret key/name in the external store that holds workload env vars. Required when `secrets_mode = "external"`. |
+| `eso_chart_version` | `string` | `"0.9.13"` | No | Pinned External Secrets Operator Helm chart version. |
+
+### Constraints
+
+- `secrets_mode = "provider"` requires `infrastructure_provider = "aws"` (uses AWS Secrets Manager + IAM instance profile)
+- `secrets_mode = "external"` requires both `external_secret_store_name` and `external_secret_key` to be set
+- `bare_metal_secrets_encryption = "sops_age"` is not yet implemented (T2 deferred)
 
 ---
 

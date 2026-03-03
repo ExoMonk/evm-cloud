@@ -40,10 +40,10 @@ See [Getting Started](https://evm-cloud.xyz/docs/getting-started) for the full w
 | [`minimal_aws_byo_clickhouse`](examples/minimal_aws_byo_clickhouse/) | EC2 + Docker | ClickHouse (BYODB) | ~$35/mo |
 | [`aws_eks_BYO_clickhouse`](examples/aws_eks_BYO_clickhouse/) | EKS (Kubernetes) | ClickHouse (BYODB) | ~$110/mo |
 | [`minimal_aws_k3s_byo_clickhouse`](examples/minimal_aws_k3s_byo_clickhouse/) | k3s (lightweight K8s) | ClickHouse (BYODB) | ~$35/mo |
-| [`aws_k3s_multi_byo_clickhouse`](examples/aws_k3s_multi_byo_clickhouse/) | k3s multi-node (server + spot worker) | ClickHouse (BYODB) | ~$40/mo |
-| [`bare_metal_byo_clickhouse`](examples/bare_metal_byo_clickhouse/) | Docker Compose (any VPS) | ClickHouse (BYODB) | ~$5-20/mo |
+| [`prod_aws_k3s_multi_byo_clickhouse`](examples/prod_aws_k3s_multi_byo_clickhouse/) | k3s multi-node (server + spot worker) + SM + ESO | ClickHouse (BYODB) | ~$40/mo |
+| [`baremetal_byo_clickhouse`](examples/baremetal_byo_clickhouse/) | Docker Compose (any VPS) | ClickHouse (BYODB) | ~$5-20/mo |
 | [`minimal_aws_external_ec2_byo`](examples/minimal_aws_external_ec2_byo/) | EC2 (infra only) | ClickHouse (BYODB) | ~$35/mo |
-| [`minimal_aws_external_eks_byo`](examples/minimal_aws_external_eks_byo/) | EKS (infra only) | ClickHouse (BYODB) | ~$110/mo |
+| [`baremetal_k3s_byo_db`](examples/baremetal_k3s_byo_db/) | Bare metal k3s (any VPS) | PostgreSQL (BYODB) | Your VPS |
 
 See [Choosing an Example](https://evm-cloud.xyz/docs/examples) for help picking the right one.
 

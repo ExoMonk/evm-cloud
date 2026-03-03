@@ -10,18 +10,18 @@
 | [minimal_aws_byo_clickhouse](./ec2-docker-compose-clickhouse.mdx) | AWS | EC2 + Docker | ClickHouse (BYODB) | terraform | ~$15-35 | Analytics, low cost |
 | [aws_eks_BYO_clickhouse](./eks-clickhouse.mdx) | AWS | EKS | ClickHouse (BYODB) | terraform | ~$110+ | Production K8s |
 | [minimal_aws_k3s_byo_clickhouse](./k3s-clickhouse.mdx) | AWS | k3s on EC2 | ClickHouse (BYODB) | external | ~$35-50 | K8s without EKS cost |
-| [aws_k3s_multi_byo_clickhouse](./k3s-multi-clickhouse.mdx) | AWS | k3s multi-node (spot) | ClickHouse (BYODB) | external | ~$40 | Live + backfill separation |
-| [bare_metal_byo_clickhouse](./bare-metal-clickhouse.mdx) | Bare Metal | Docker Compose | ClickHouse (BYODB) | terraform | ~$5-20 | Any VPS, no AWS |
+| [prod_aws_k3s_multi_byo_clickhouse](./k3s-multi-clickhouse.mdx) | AWS | k3s multi-node (spot) + SM + ESO | ClickHouse (BYODB) | external | ~$40 | Production: secrets via SM |
+| [baremetal_byo_clickhouse](./bare-metal-clickhouse.mdx) | Bare Metal | Docker Compose | ClickHouse (BYODB) | terraform | ~$5-20 | Any VPS, no AWS |
 | [minimal_aws_external_ec2_byo](./external-ec2.mdx) | AWS | EC2 | ClickHouse (BYODB) | external | ~$15-35 | CI/CD owns workloads |
-| [minimal_aws_external_eks_byo](./external-eks.mdx) | AWS | EKS | ClickHouse (BYODB) | external | ~$110+ | GitOps / ArgoCD |
+| [baremetal_k3s_byo_db](./bare-metal-k3s.mdx) | Bare Metal | k3s | PostgreSQL (BYODB) | external | Your VPS | k3s on any VPS |
 
 ## How to Choose
 
 - **Need managed database?** Use [minimal_aws_rds](./ec2-docker-compose-rds.mdx) -- RDS PostgreSQL with zero external dependencies.
 - **Want cheapest AWS?** Use [minimal_aws_byo_clickhouse](./ec2-docker-compose-clickhouse.mdx) -- single EC2 instance with your own ClickHouse.
 - **Want Kubernetes?** Use [EKS](./eks-clickhouse.mdx) for production, [k3s](./k3s-clickhouse.mdx) for budget single-node K8s, or [k3s multi-node](./k3s-multi-clickhouse.mdx) for live+backfill separation with spot workers.
-- **No AWS account?** Use [bare_metal_byo_clickhouse](./bare-metal-clickhouse.mdx) -- works on any VPS (Hetzner, OVH, DigitalOcean).
-- **Separate infra from app deploy?** Use [external_ec2](./external-ec2.mdx) or [external_eks](./external-eks.mdx) -- Terraform provisions infrastructure, your CI/CD deploys workloads.
+- **No AWS account?** Use [baremetal_byo_clickhouse](./bare-metal-clickhouse.mdx) (Docker Compose) or [bare_metal_k3s](./bare-metal-k3s.mdx) (k3s + ESO) -- works on any VPS (Hetzner, OVH, DigitalOcean).
+- **Separate infra from app deploy?** Use [external_ec2](./external-ec2.mdx) -- Terraform provisions infrastructure, your CI/CD deploys workloads.
 
 ## Common Prerequisites
 

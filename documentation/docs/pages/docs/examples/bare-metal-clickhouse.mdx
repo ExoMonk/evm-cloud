@@ -40,7 +40,7 @@ Terraform connects via SSH (no AWS provider used)
 
 ```bash
 git clone https://github.com/ExoMonk/evm-cloud.git
-cd evm-cloud/examples/bare_metal_byo_clickhouse
+cd evm-cloud/examples/baremetal_byo_clickhouse
 
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars:
@@ -83,4 +83,4 @@ ssh root@203.0.113.10 'docker compose -f /opt/evm-cloud/docker-compose.yml ps'
 - You want Kubernetes -- use [EKS](./eks-clickhouse.mdx) or [k3s](./k3s-clickhouse.mdx)
 - You need managed PostgreSQL -- use [minimal_aws_rds](./ec2-docker-compose-rds.mdx)
 
-See [examples/bare_metal_byo_clickhouse](https://github.com/ExoMonk/evm-cloud/tree/main/examples/bare_metal_byo_clickhouse) for complete details.
+See [examples/baremetal_byo_clickhouse](https://github.com/ExoMonk/evm-cloud/tree/main/examples/baremetal_byo_clickhouse) for complete details.

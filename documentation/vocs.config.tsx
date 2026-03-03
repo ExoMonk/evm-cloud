@@ -66,7 +66,7 @@ export default defineConfig({
           link: "/docs/examples/bare-metal-clickhouse",
         },
         { text: "External EC2", link: "/docs/examples/external-ec2" },
-        { text: "External EKS", link: "/docs/examples/external-eks" },
+        { text: "Bare Metal k3s + Postgres", link: "/docs/examples/bare-metal-k3s" },
       ],
     },
     {

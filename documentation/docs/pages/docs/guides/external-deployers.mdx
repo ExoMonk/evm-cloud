@@ -138,25 +138,35 @@ DB_PORT=$(terraform output -json workload_handoff | jq -r '.data.port')
 
 evm-cloud ships with deployer scripts for each compute engine. All deployers live in the `deployers/` directory and use shared Helm charts from `deployers/charts/`.
 
-### EC2 SSH Deployer (`deployers/ec2/`)
+### Compose SSH Deployer (`deployers/compose/`)
 
-For `compute_engine = "ec2"` with `workload_mode = "external"`.
+For any Docker Compose host (EC2, VPS, bare metal) with `workload_mode = "external"`.
 
 **What it does:**
-1. Reads SSH connection details from the handoff (`runtime.ec2.ssh_command`)
-2. Copies config files to the instance at `/opt/evm-cloud/config/`
-3. Updates the `.env` file with current credentials
-4. Restarts Docker Compose services
+1. Reads SSH connection details from the handoff (`runtime.ec2.public_ip`) or `--host` override
+2. Ensures remote directories exist (`/opt/evm-cloud/config/abis/`)
+3. Uploads `docker-compose.yml` to `/opt/evm-cloud/` and config files to `/opt/evm-cloud/config/` via SCP
+4. Runs `pull-secrets.sh` on the remote (if present) to generate `.env` from AWS Secrets Manager
+5. Force-recreates Docker Compose containers to pick up new configs
 
 ```bash
-terraform output -json workload_handoff | ./deployers/ec2/deploy.sh /dev/stdin --config-dir ./config
+terraform output -json workload_handoff | ./deployers/compose/deploy.sh /dev/stdin \
+  --config-dir ./config --ssh-key ~/.ssh/id_ed25519
+```
+
+**For non-AWS hosts** (bare metal VPS):
+```bash
+./deployers/compose/deploy.sh handoff.json \
+  --config-dir ./config --ssh-key ~/.ssh/id_ed25519 \
+  --host 10.0.1.50 --user ubuntu
 ```
 
 **Update workflow:**
 ```bash
-# Edit config locally, then redeploy
+# Edit config locally, then redeploy (idempotent)
 vim config/rindexer.yaml
-terraform output -json workload_handoff | ./deployers/ec2/deploy.sh /dev/stdin --config-dir ./config
+terraform output -json workload_handoff | ./deployers/compose/deploy.sh /dev/stdin \
+  --config-dir ./config --ssh-key ~/.ssh/id_ed25519
 ```
 
 The deployer uses `scp` to copy files and `ssh` to restart services. No Helm or Kubernetes involved.

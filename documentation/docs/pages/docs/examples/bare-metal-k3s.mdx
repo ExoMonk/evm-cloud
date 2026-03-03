@@ -1,0 +1,139 @@
+# Bare Metal k3s + PostgreSQL BYODB
+
+Single-node k3s on an existing VPS with an external PostgreSQL database. The simplest bare-metal Kubernetes setup — ideal for small projects on Hetzner, Latitude.sh, OVH, DigitalOcean, etc.
+
+## Architecture
+
+```
+┌── Your VPS ──────────────────────────────────────┐
+│                                                    │
+│  k3s single-node cluster                          │
+│  ├── eRPC proxy (K8s pod)                         │
+│  └── rindexer indexer (K8s pod)                   │
+│                                                    │
+└───────────────────────┬───────────────────────────┘
+                        │
+        ┌───────────────┤
+        ▼               ▼
+   RPC upstream    PostgreSQL
+   (llamarpc)      (BYODB)
+```
+
+## What Gets Deployed
+
+**Phase 1 (Terraform):**
+- k3s installed on your VPS via SSH
+
+**Phase 2 (deploy.sh):**
+- eRPC proxy + rindexer via Helm
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- An existing VPS with SSH access (Ubuntu recommended)
+- A PostgreSQL database reachable from the VPS
+- `jq`, `helm`, `kubectl`, `base64`, `python3` on your local machine
+
+## Network Prerequisites
+
+Unlike AWS examples where Terraform creates security groups, **you manage firewall rules** on your VPS. Ensure these ports are accessible:
+
+| Port | Protocol | Source | Purpose |
+|------|----------|--------|---------|
+| 22 | TCP | Your IP | SSH (Terraform provisioner + maintenance) |
+| 6443 | TCP | Your IP | k3s API (kubectl, deploy.sh) |
+| 30000-32767 | TCP | As needed | NodePort services (optional) |
+
+**Database connectivity:** Your PostgreSQL instance must be reachable from the VPS. If it's on a different host, ensure the VPS IP is allowed in your database's firewall/security rules. This is your responsibility — evm-cloud does not provision or configure the database in bare metal mode.
+
+Example for common VPS providers:
+- **Latitude.sh / Hetzner / OVH**: Configure firewall rules in their control panel or via `ufw` on the instance
+- **DigitalOcean**: Use their Cloud Firewall or `ufw`
+- **Self-hosted**: Configure `iptables` or `ufw` directly
+
+```bash
+# Example: ufw setup on your VPS (run before terraform apply)
+sudo ufw allow 22/tcp      # SSH
+sudo ufw allow 6443/tcp    # k3s API
+sudo ufw enable
+```
+
+## Secrets: What to Use on Bare Metal
+
+`secrets_mode = "provider"` is **not available** on bare metal (it requires AWS IAM instance profiles). Your options:
+
+| Mode | When to Use | How It Works |
+|------|------------|--------------|
+| `inline` (default) | Small projects, dev, no secret backend | DATABASE_URL goes through Terraform state → handoff → Helm values → K8s Secret |
+| `external` | Production, existing secret backend | ESO syncs from your store → K8s Secret. No passwords in Terraform state. |
+
+**For small projects on latitude.sh / Hetzner** without an existing secret backend, `inline` is the pragmatic choice. The trade-off is that `DATABASE_URL` exists in your Terraform state file — use an encrypted remote backend (S3+KMS, Terraform Cloud) to mitigate this.
+
+**For production or if you already use a secret manager**, `external` mode with one of these ESO-supported backends:
+
+| Backend | ClusterSecretStore Setup | Notes |
+|---------|------------------------|-------|
+| **Doppler** | [ESO Doppler provider](https://external-secrets.io/latest/provider/doppler/) | SaaS, free tier, simplest for small teams |
+| **1Password Connect** | [ESO 1Password provider](https://external-secrets.io/latest/provider/1password-automation/) | If you already use 1Password |
+| **HashiCorp Vault** | [ESO Vault provider](https://external-secrets.io/latest/provider/hashicorp-vault/) | Self-hosted or HCP Vault |
+| **AWS SM (static creds)** | [ESO AWS provider](https://external-secrets.io/latest/provider/aws-secrets-manager/) with `accessKeyID`/`secretAccessKey` | If you have an AWS account but bare metal compute |
+
+For `inline` mode, simplify the example:
+
+```hcl
+# bare_metal_k3s.tfvars (inline mode — no ESO)
+secrets_mode = "inline"
+# Remove external_secret_store_name and external_secret_key
+```
+
+And pass the database URL directly in the handoff via `indexer_postgres_url` or through the rindexer config's `${DATABASE_URL}` placeholder.
+
+## Quick Start
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/baremetal_k3s_byo_db
+
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars:
+#   bare_metal_host                 = "203.0.113.42"
+#   bare_metal_ssh_private_key_path = "~/.ssh/id_ed25519"
+#   indexer_postgres_url            = "postgres://user:pass@host:5432/db"
+
+# Phase 1: Install k3s
+terraform init
+terraform apply -var-file=bare_metal_k3s.tfvars
+
+# Phase 2: Deploy workloads
+terraform output -json workload_handoff | \
+  ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+
+# Verify
+export KUBECONFIG=$(terraform output -json workload_handoff | \
+  jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > /tmp/k3s-kubeconfig && echo /tmp/k3s-kubeconfig)
+kubectl get pods -A
+```
+
+## Key Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `bare_metal_host` | string | - | IP or hostname of your VPS |
+| `bare_metal_ssh_private_key_path` | string | - | SSH private key for provisioning (sensitive) |
+| `indexer_postgres_url` | string | - | PostgreSQL connection string (sensitive) |
+| `k3s_version` | string | `v1.30.4+k3s1` | Pinned k3s version |
+
+## When to Use This
+
+**Choose this example when:**
+- You have an existing VPS (Hetzner, OVH, DigitalOcean, etc.) and want Kubernetes
+- You want the simplest bare-metal k3s setup with inline secrets
+- You want PostgreSQL instead of ClickHouse
+- Small projects that don't need a dedicated secret backend
+
+**Consider alternatives when:**
+- You want AWS-managed infrastructure -- use [AWS k3s](./k3s-clickhouse.mdx) or [AWS k3s multi-node](./k3s-multi-clickhouse.mdx)
+- You don't need Kubernetes -- use [bare metal Docker Compose](./bare-metal-clickhouse.mdx)
+- You want hardened secrets (ESO) -- use this example with `secrets_mode = "external"` (see [Secrets Management](../guides/secrets-management.mdx))
+
+See [examples/baremetal_k3s_byo_db](https://github.com/ExoMonk/evm-cloud/tree/main/examples/baremetal_k3s_byo_db) for complete details.

@@ -1,6 +1,6 @@
-# k3s Multi-Node + ClickHouse (BYODB)
+# k3s Multi-Node + ClickHouse (BYODB) — Production
 
-Multi-node k3s cluster on AWS: a server node running the control plane + live indexer + eRPC, and a spot worker node for backfill indexing. Gets you workload isolation and ~70% cheaper backfill compute without EKS fees.
+Production-grade multi-node k3s cluster on AWS with **secrets via AWS Secrets Manager + External Secrets Operator (ESO)**. A server node runs the control plane + live indexer + eRPC, a spot worker handles backfill indexing. ClickHouse passwords never appear in the handoff JSON.
 
 ## Architecture
 
@@ -26,14 +26,17 @@ Multi-node k3s cluster on AWS: a server node running the control plane + live in
 
 **Phase 1 (Terraform):**
 - VPC with public subnets, Internet Gateway, security groups
-- Server EC2 instance with k3s installed via SSH provisioner
+- Server EC2 instance with k3s installed via SSH provisioner + IAM instance profile
 - Worker EC2 spot instance that auto-joins the cluster with role labels
+- AWS Secrets Manager secret with ClickHouse credentials
+- External Secrets Operator (ESO) Helm chart installed in-cluster
 - Security groups: SSH + k3s API + Flannel VXLAN (UDP 8472) + Kubelet (TCP 10250)
 
 **Phase 2 (Helm/kubectl -- you run this):**
+- `deploy.sh` creates a ClusterSecretStore pointing to AWS SM (IMDS auth)
 - eRPC and rindexer (live) deployed on server node
 - rindexer (backfill) deployed on worker node via Kubernetes affinity rules
-- Config and secrets injected via the `workload_handoff` output
+- Helm charts create ExternalSecret CRs — ESO syncs credentials from SM into K8s Secrets
 
 ## What's Different from Single-Node k3s
 
@@ -63,7 +66,7 @@ See the [two-phase deployment guide](../guides/two-phase-workflow) for the full 
 
 ```bash
 git clone https://github.com/ExoMonk/evm-cloud.git
-cd evm-cloud/examples/aws_k3s_multi_byo_clickhouse
+cd evm-cloud/examples/prod_aws_k3s_multi_byo_clickhouse
 
 # Phase 1: Provision infrastructure
 cp secrets.auto.tfvars.example secrets.auto.tfvars
@@ -146,4 +149,4 @@ Setting `use_spot = true` on a worker launches an AWS spot instance instead of o
 - You want a managed Kubernetes control plane -- use [EKS](./eks-clickhouse.mdx)
 - You do not need Kubernetes at all -- [EC2 + Docker Compose](./ec2-docker-compose-clickhouse.mdx) is simpler
 
-See [examples/aws_k3s_multi_byo_clickhouse](https://github.com/ExoMonk/evm-cloud/tree/main/examples/aws_k3s_multi_byo_clickhouse) for complete details.
+See [examples/prod_aws_k3s_multi_byo_clickhouse](https://github.com/ExoMonk/evm-cloud/tree/main/examples/prod_aws_k3s_multi_byo_clickhouse) for complete details.

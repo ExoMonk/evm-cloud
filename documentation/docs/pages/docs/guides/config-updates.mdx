@@ -19,39 +19,37 @@ The update procedure depends on your compute engine and workload mode.
 
 ### terraform mode (default)
 
-SSH into the instance, edit config files, and restart services:
+Update the config variables in your `.tfvars` file (or edit the config files referenced by `file()`) and run `terraform apply`:
 
-```bash
-# Get the instance IP
-terraform output -json workload_handoff | jq -r '.runtime.ec2.instance_ip'
-
-# SSH in
-ssh -i ~/.ssh/evm-cloud ubuntu@<instance-ip>
-
-# Edit configurations
-sudo vim /opt/evm-cloud/config/rindexer.yaml
-sudo vim /opt/evm-cloud/config/erpc.yaml
-
-# Restart affected services
-sudo docker compose -f /opt/evm-cloud/docker-compose.yml restart rindexer
-sudo docker compose -f /opt/evm-cloud/docker-compose.yml restart erpc
+```hcl
+rindexer_config_yaml = file("config/rindexer.yaml")
+erpc_config_yaml     = file("config/erpc.yaml")
 ```
 
-> **Note:** Terraform uses `lifecycle { ignore_changes = [user_data] }` on EC2 instances. This means config changes made directly on the instance will not be overwritten by a subsequent `terraform apply`, and config changes in your Terraform variables will not trigger instance recreation. This is intentional -- it prevents accidental downtime from instance replacement when only config content changes.
+```bash
+terraform apply -var-file=my-ec2.tfvars
+```
+
+Terraform detects the content hash change, uploads new config files via SSH, and force-recreates Docker Compose containers. The EC2 instance is **not** recreated -- only the configs and containers are updated.
+
+> **Requires:** `ec2_ssh_private_key_path` must be set (path to SSH private key matching `ssh_public_key`). Set it in `secrets.auto.tfvars`.
+
+> **Note:** `lifecycle { ignore_changes = [user_data] }` on the EC2 instance prevents instance recreation on config changes. A separate `null_resource` with a config hash trigger handles the update via SSH.
 
 ### external mode
 
-Use the EC2 deployer to push updated configs:
+Use the compose deployer to push updated configs:
 
 ```bash
 # Edit local config files
 vim config/rindexer.yaml
 
 # Redeploy
-terraform output -json workload_handoff | ./deployers/ec2/deploy.sh /dev/stdin --config-dir ./config
+terraform output -json workload_handoff | ./deployers/compose/deploy.sh /dev/stdin \
+  --config-dir ./config --ssh-key ~/.ssh/id_ed25519
 ```
 
-The deployer copies files via SCP and restarts Docker Compose services.
+The deployer copies files via SCP and force-recreates Docker Compose containers.
 
 ---
 
@@ -178,8 +176,8 @@ terraform output -json workload_handoff | ./deployers/k3s/deploy.sh /dev/stdin -
 
 | Engine | Mode | Update Method | Restarts |
 |--------|------|---------------|----------|
-| EC2 | terraform | SSH + edit + `docker compose restart` | Manual |
-| EC2 | external | `deployers/ec2/deploy.sh` | Automatic |
+| EC2 | terraform | Update variables + `terraform apply` | Automatic |
+| EC2 | external | `deployers/compose/deploy.sh` | Automatic |
 | EKS | terraform | Update variables + `terraform apply` | Automatic (rolling) |
 | EKS | external | `deployers/eks/deploy.sh` or ArgoCD sync | Automatic (rolling) |
 | k3s | external | `deployers/k3s/deploy.sh` | Automatic (rolling) |
