@@ -64,6 +64,18 @@ module "compose" {
   rpc_proxy_mem_limit = var.rpc_proxy_mem_limit
   indexer_mem_limit   = var.indexer_mem_limit
 
+  # Ingress / TLS
+  ingress_mode                   = var.ingress_mode
+  ingress_domain                 = var.ingress_domain
+  ingress_tls_email              = var.ingress_tls_email
+  ingress_cloudflare_origin_cert = var.ingress_cloudflare_origin_cert
+  ingress_cloudflare_origin_key  = var.ingress_cloudflare_origin_key
+  ingress_caddy_image            = var.ingress_caddy_image
+  ingress_caddy_mem_limit        = var.ingress_caddy_mem_limit
+  ingress_request_body_max_size  = var.ingress_request_body_max_size
+  ingress_tls_staging            = var.ingress_tls_staging
+  ingress_hsts_preload           = var.ingress_hsts_preload
+
   erpc_config_yaml     = var.erpc_config_yaml
   rindexer_config_yaml = var.rindexer_config_yaml
   rindexer_abis        = var.rindexer_abis

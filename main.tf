@@ -64,8 +64,38 @@ resource "terraform_data" "provider_guardrails" {
     }
 
     precondition {
-      condition     = !(var.infrastructure_provider != "aws" && var.ingress_mode == "managed_lb")
-      error_message = "ingress_mode=managed_lb currently requires infrastructure_provider=aws."
+      condition     = !(var.ingress_mode != "none" && var.ingress_domain == "")
+      error_message = "ingress_domain is required when ingress_mode is not none."
+    }
+
+    precondition {
+      condition     = !(var.ingress_mode == "cloudflare" && var.ingress_cloudflare_origin_cert == "")
+      error_message = "ingress_cloudflare_origin_cert is required when ingress_mode = cloudflare. Generate at Cloudflare dashboard > SSL/TLS > Origin Server."
+    }
+
+    precondition {
+      condition     = !(var.ingress_mode == "cloudflare" && var.ingress_cloudflare_origin_key == "")
+      error_message = "ingress_cloudflare_origin_key is required when ingress_mode = cloudflare."
+    }
+
+    precondition {
+      condition     = !(var.ingress_mode == "caddy" && var.ingress_tls_email == "")
+      error_message = "ingress_tls_email is required when ingress_mode = caddy (needed for Let's Encrypt)."
+    }
+
+    precondition {
+      condition     = !(var.ingress_mode == "ingress_nginx" && var.ingress_tls_email == "")
+      error_message = "ingress_tls_email is required when ingress_mode = ingress_nginx (needed for cert-manager)."
+    }
+
+    precondition {
+      condition     = !(var.ingress_mode == "caddy" && !contains(["ec2", "docker_compose"], var.compute_engine))
+      error_message = "ingress_mode = caddy requires compute_engine = ec2 or docker_compose."
+    }
+
+    precondition {
+      condition     = !(var.ingress_mode == "ingress_nginx" && !contains(["k3s", "eks"], var.compute_engine))
+      error_message = "ingress_mode = ingress_nginx requires compute_engine = k3s or eks."
     }
 
     precondition {
@@ -214,6 +244,20 @@ module "provider_aws" {
   k3s_ssh_private_key_path = var.k3s_ssh_private_key_path
   k3s_worker_nodes         = var.k3s_worker_nodes
 
+  # Ingress / TLS
+  ingress_domain                     = var.ingress_domain
+  ingress_tls_email                  = var.ingress_tls_email
+  ingress_cloudflare_origin_cert     = var.ingress_cloudflare_origin_cert
+  ingress_cloudflare_origin_key      = var.ingress_cloudflare_origin_key
+  ingress_cloudflare_ssl_mode        = var.ingress_cloudflare_ssl_mode
+  ingress_caddy_image                = var.ingress_caddy_image
+  ingress_caddy_mem_limit            = var.ingress_caddy_mem_limit
+  ingress_nginx_chart_version        = var.ingress_nginx_chart_version
+  ingress_cert_manager_chart_version = var.ingress_cert_manager_chart_version
+  ingress_request_body_max_size      = var.ingress_request_body_max_size
+  ingress_tls_staging                = var.ingress_tls_staging
+  ingress_hsts_preload               = var.ingress_hsts_preload
+
   # Secrets
   secrets_mode               = var.secrets_mode
   secrets_manager_secret_arn = var.secrets_manager_secret_arn
@@ -265,6 +309,21 @@ module "provider_bare_metal" {
   # k3s
   k3s_version      = var.k3s_version
   k3s_worker_nodes = var.k3s_worker_nodes
+
+  # Ingress / TLS
+  ingress_mode                       = var.ingress_mode
+  ingress_domain                     = var.ingress_domain
+  ingress_tls_email                  = var.ingress_tls_email
+  ingress_cloudflare_origin_cert     = var.ingress_cloudflare_origin_cert
+  ingress_cloudflare_origin_key      = var.ingress_cloudflare_origin_key
+  ingress_cloudflare_ssl_mode        = var.ingress_cloudflare_ssl_mode
+  ingress_caddy_image                = var.ingress_caddy_image
+  ingress_caddy_mem_limit            = var.ingress_caddy_mem_limit
+  ingress_nginx_chart_version        = var.ingress_nginx_chart_version
+  ingress_cert_manager_chart_version = var.ingress_cert_manager_chart_version
+  ingress_request_body_max_size      = var.ingress_request_body_max_size
+  ingress_tls_staging                = var.ingress_tls_staging
+  ingress_hsts_preload               = var.ingress_hsts_preload
 
   # Secrets
   secrets_mode               = var.secrets_mode

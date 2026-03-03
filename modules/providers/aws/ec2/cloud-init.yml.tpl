@@ -13,7 +13,7 @@ runcmd:
   - curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" -o /usr/local/lib/docker/cli-plugins/docker-compose
   - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
   # Create working directories and set ownership for ec2-user (SCP access)
-  - mkdir -p /opt/evm-cloud/config/abis /opt/evm-cloud/scripts
+  - mkdir -p /opt/evm-cloud/config/abis /opt/evm-cloud/scripts /opt/evm-cloud/certs
   - chown -R ec2-user:ec2-user /opt/evm-cloud
 %{ if workload_mode == "terraform" ~}
   # Pull secrets and start services
@@ -58,4 +58,28 @@ write_files:
     content: |
       ${indent(6, content)}
 %{ endfor ~}
+
+%{ if enable_caddy && caddyfile_content != "" ~}
+  # Caddyfile
+  - path: /opt/evm-cloud/config/Caddyfile
+    permissions: '0644'
+    content: |
+      ${indent(6, caddyfile_content)}
+%{ endif ~}
+
+%{ if cloudflare_origin_cert != "" ~}
+  # Cloudflare origin certificate
+  - path: /opt/evm-cloud/certs/origin.pem
+    permissions: '0600'
+    content: |
+      ${indent(6, cloudflare_origin_cert)}
+%{ endif ~}
+
+%{ if cloudflare_origin_key != "" ~}
+  # Cloudflare origin certificate key
+  - path: /opt/evm-cloud/certs/origin-key.pem
+    permissions: '0600'
+    content: |
+      ${indent(6, cloudflare_origin_key)}
+%{ endif ~}
 %{ endif ~}

@@ -59,14 +59,98 @@ variable "streaming_mode" {
 }
 
 variable "ingress_mode" {
-  description = "Ingress operating mode."
+  description = "Ingress operating mode: none (no TLS), cloudflare (recommended: CF proxy + origin cert), caddy (Let's Encrypt), ingress_nginx (cert-manager)."
   type        = string
-  default     = "managed_lb"
+  default     = "none"
 
   validation {
-    condition     = contains(["managed_lb", "self_hosted"], var.ingress_mode)
-    error_message = "ingress_mode must be one of: managed_lb, self_hosted."
+    condition     = contains(["none", "cloudflare", "caddy", "ingress_nginx"], var.ingress_mode)
+    error_message = "ingress_mode must be one of: none, cloudflare, caddy, ingress_nginx."
   }
+}
+
+variable "ingress_domain" {
+  description = "Domain for TLS certificate and routing (e.g. rpc.example.com). Required when ingress_mode != none."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.ingress_domain == "" || can(regex("^[a-z0-9][a-z0-9.-]*[a-z0-9]$", var.ingress_domain))
+    error_message = "ingress_domain must be a valid hostname (e.g., rpc.example.com), not a URL or IP address."
+  }
+}
+
+variable "ingress_tls_email" {
+  description = "Email for Let's Encrypt certificate registration. Required when ingress_mode = caddy or ingress_nginx."
+  type        = string
+  default     = ""
+}
+
+variable "ingress_cloudflare_origin_cert" {
+  description = "Cloudflare Origin Certificate (PEM). Required when ingress_mode = cloudflare. Generate at Cloudflare dashboard > SSL/TLS > Origin Server."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ingress_cloudflare_origin_key" {
+  description = "Cloudflare Origin Certificate private key (PEM). Required when ingress_mode = cloudflare."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ingress_cloudflare_ssl_mode" {
+  description = "Cloudflare SSL/TLS encryption mode. full_strict requires valid origin cert (recommended). full accepts self-signed."
+  type        = string
+  default     = "full_strict"
+
+  validation {
+    condition     = contains(["full", "full_strict"], var.ingress_cloudflare_ssl_mode)
+    error_message = "ingress_cloudflare_ssl_mode must be full or full_strict."
+  }
+}
+
+variable "ingress_caddy_image" {
+  description = "Container image for Caddy reverse proxy."
+  type        = string
+  default     = "caddy:2.9.1-alpine"
+}
+
+variable "ingress_caddy_mem_limit" {
+  description = "Docker memory limit for Caddy container (e.g. 128m, 256m)."
+  type        = string
+  default     = "128m"
+}
+
+variable "ingress_nginx_chart_version" {
+  description = "ingress-nginx Helm chart version. Pinned for reproducibility."
+  type        = string
+  default     = "4.11.3"
+}
+
+variable "ingress_cert_manager_chart_version" {
+  description = "cert-manager Helm chart version. Pinned for reproducibility."
+  type        = string
+  default     = "1.16.2"
+}
+
+variable "ingress_request_body_max_size" {
+  description = "Maximum request body size for ingress (e.g. 1m, 10m). Applied as Caddy max_size or nginx annotation."
+  type        = string
+  default     = "1m"
+}
+
+variable "ingress_tls_staging" {
+  description = "Use Let's Encrypt staging ACME server. Recommended for testing to avoid rate limits."
+  type        = bool
+  default     = false
+}
+
+variable "ingress_hsts_preload" {
+  description = "Add 'preload' to HSTS header. WARNING: Once submitted to hstspreload.org, this is extremely difficult to reverse. Only enable for production domains."
+  type        = bool
+  default     = false
 }
 
 variable "workload_mode" {

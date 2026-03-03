@@ -287,6 +287,7 @@ resource "aws_security_group_rule" "database_ingress_clickhouse_native_from_inde
 
 resource "aws_security_group" "ec2" {
   #checkov:skip=CKV_AWS_24:SSH from 0.0.0.0/0 needed for dev-tier EC2 access
+  #checkov:skip=CKV_AWS_260:Port 80/443 from 0.0.0.0/0 required for TLS ingress (Caddy/Cloudflare) when ingress_mode != none
   #checkov:skip=CKV_AWS_382:EC2 instance needs broad egress for Docker pulls, upstream RPCs, DB, and AWS APIs
   name        = "${var.project_name}-${var.environment}-ec2-sg"
   description = "EC2 Docker Compose instance security group"
@@ -300,12 +301,37 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "Allow eRPC access"
-    from_port   = 4000
-    to_port     = 4000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  dynamic "ingress" {
+    for_each = var.ingress_mode == "none" ? [1] : []
+    content {
+      description = "Allow eRPC direct access (no ingress)"
+      from_port   = 4000
+      to_port     = 4000
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  dynamic "ingress" {
+    for_each = var.ingress_mode != "none" ? [1] : []
+    content {
+      description = "Allow HTTP (ingress_mode=${var.ingress_mode})"
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  dynamic "ingress" {
+    for_each = var.ingress_mode != "none" ? [1] : []
+    content {
+      description = "Allow HTTPS (ingress_mode=${var.ingress_mode})"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
   }
 
   egress {

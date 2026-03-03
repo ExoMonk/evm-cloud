@@ -109,6 +109,25 @@ output "workload_handoff" {
       } : null
     }
 
+    ingress = {
+      mode                       = var.ingress_mode
+      domain                     = var.ingress_mode != "none" ? var.ingress_domain : null
+      tls_email                  = contains(["caddy", "ingress_nginx"], var.ingress_mode) ? var.ingress_tls_email : null
+      tls_staging                = var.ingress_tls_staging
+      hsts_preload               = var.ingress_hsts_preload
+      request_body_max_size      = var.ingress_request_body_max_size
+      caddy_image                = var.ingress_mode == "caddy" ? var.ingress_caddy_image : null
+      caddy_mem_limit            = var.ingress_mode == "caddy" ? var.ingress_caddy_mem_limit : null
+      nginx_chart_version        = var.ingress_mode == "ingress_nginx" ? var.ingress_nginx_chart_version : null
+      cert_manager_chart_version = var.ingress_mode == "ingress_nginx" ? var.ingress_cert_manager_chart_version : null
+
+      cloudflare = var.ingress_mode == "cloudflare" ? {
+        origin_cert = var.ingress_cloudflare_origin_cert
+        origin_key  = var.ingress_cloudflare_origin_key
+        ssl_mode    = var.ingress_cloudflare_ssl_mode
+      } : null
+    }
+
     secrets = {
       mode              = var.secrets_mode
       eso_chart_version = var.secrets_mode != "inline" ? var.eso_chart_version : null

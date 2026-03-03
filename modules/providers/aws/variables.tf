@@ -28,6 +28,80 @@ variable "ingress_mode" {
   type        = string
 }
 
+variable "ingress_domain" {
+  description = "Domain for TLS certificate and routing."
+  type        = string
+  default     = ""
+}
+
+variable "ingress_tls_email" {
+  description = "Email for Let's Encrypt certificate registration."
+  type        = string
+  default     = ""
+}
+
+variable "ingress_cloudflare_origin_cert" {
+  description = "Cloudflare Origin Certificate (PEM)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ingress_cloudflare_origin_key" {
+  description = "Cloudflare Origin Certificate private key (PEM)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ingress_cloudflare_ssl_mode" {
+  description = "Cloudflare SSL/TLS encryption mode."
+  type        = string
+  default     = "full_strict"
+}
+
+variable "ingress_caddy_image" {
+  description = "Container image for Caddy reverse proxy."
+  type        = string
+  default     = "caddy:2.9.1-alpine"
+}
+
+variable "ingress_caddy_mem_limit" {
+  description = "Docker memory limit for Caddy container."
+  type        = string
+  default     = "128m"
+}
+
+variable "ingress_nginx_chart_version" {
+  description = "ingress-nginx Helm chart version."
+  type        = string
+  default     = "4.11.3"
+}
+
+variable "ingress_cert_manager_chart_version" {
+  description = "cert-manager Helm chart version."
+  type        = string
+  default     = "1.16.2"
+}
+
+variable "ingress_request_body_max_size" {
+  description = "Maximum request body size for ingress."
+  type        = string
+  default     = "1m"
+}
+
+variable "ingress_tls_staging" {
+  description = "Use Let's Encrypt staging ACME server."
+  type        = bool
+  default     = false
+}
+
+variable "ingress_hsts_preload" {
+  description = "Add 'preload' to HSTS header."
+  type        = bool
+  default     = false
+}
+
 variable "aws_region" {
   description = "AWS region used by adapter resources."
   type        = string

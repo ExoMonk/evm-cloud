@@ -202,6 +202,70 @@ variable "ssh_user" {
   default     = "ec2-user"
 }
 
+# --- Ingress / TLS ---
+
+variable "ingress_mode" {
+  description = "Ingress operating mode: none, cloudflare, caddy."
+  type        = string
+  default     = "none"
+}
+
+variable "ingress_domain" {
+  description = "Domain for TLS certificate and routing."
+  type        = string
+  default     = ""
+}
+
+variable "ingress_tls_email" {
+  description = "Email for Let's Encrypt (caddy mode)."
+  type        = string
+  default     = ""
+}
+
+variable "ingress_cloudflare_origin_cert" {
+  description = "Cloudflare Origin Certificate (PEM)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ingress_cloudflare_origin_key" {
+  description = "Cloudflare Origin Certificate private key (PEM)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ingress_caddy_image" {
+  description = "Container image for Caddy reverse proxy."
+  type        = string
+  default     = "caddy:2.9.1-alpine"
+}
+
+variable "ingress_caddy_mem_limit" {
+  description = "Docker memory limit for Caddy container."
+  type        = string
+  default     = "128m"
+}
+
+variable "ingress_request_body_max_size" {
+  description = "Maximum request body size for ingress."
+  type        = string
+  default     = "1m"
+}
+
+variable "ingress_tls_staging" {
+  description = "Use Let's Encrypt staging ACME server."
+  type        = bool
+  default     = false
+}
+
+variable "ingress_hsts_preload" {
+  description = "Add 'preload' to HSTS header."
+  type        = bool
+  default     = false
+}
+
 variable "secret_name_prefix" {
   description = "Prefix for Secrets Manager secret name."
   type        = string

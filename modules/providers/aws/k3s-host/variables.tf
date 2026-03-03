@@ -59,6 +59,12 @@ variable "tags" {
   default     = {}
 }
 
+variable "ingress_mode" {
+  description = "Ingress operating mode. When not none, ports 80/443 are opened for ingress traffic."
+  type        = string
+  default     = "none"
+}
+
 variable "secrets_mode" {
   description = "Secrets delivery mode. When 'provider', creates IAM instance profile for Secrets Manager access."
   type        = string

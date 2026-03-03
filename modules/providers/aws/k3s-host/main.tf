@@ -91,6 +91,29 @@ resource "aws_security_group" "k3s" {
     cidr_blocks = [var.vpc_cidr]
   }
 
+  # HTTP/HTTPS — ingress-nginx NodePort (when ingress is enabled)
+  dynamic "ingress" {
+    for_each = var.ingress_mode != "none" ? [1] : []
+    content {
+      description = "HTTP (ingress_mode=${var.ingress_mode})"
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  dynamic "ingress" {
+    for_each = var.ingress_mode != "none" ? [1] : []
+    content {
+      description = "HTTPS (ingress_mode=${var.ingress_mode})"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
   # Egress: allow all (k3s needs to pull container images, access registries, and reach upstream APIs)
   #checkov:skip=CKV_AWS_382:k3s host needs broad egress for image pulls, upstream RPCs, and k3s updates
   egress {

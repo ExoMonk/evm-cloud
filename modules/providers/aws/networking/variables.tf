@@ -37,3 +37,9 @@ variable "enable_vpc_endpoints" {
   description = "Enable baseline VPC endpoints (S3 + interface endpoints)."
   type        = bool
 }
+
+variable "ingress_mode" {
+  description = "Ingress operating mode. When not none, ports 80/443 are opened on the EC2 security group."
+  type        = string
+  default     = "none"
+}

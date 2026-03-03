@@ -37,6 +37,7 @@ ensure_docker_group() {
 create_dirs() {
   sudo mkdir -p /opt/evm-cloud/config/abis
   sudo mkdir -p /opt/evm-cloud/scripts
+  sudo mkdir -p /opt/evm-cloud/certs
   sudo chown -R "$USER:$USER" /opt/evm-cloud
   echo "[evm-cloud] Directory structure ready at /opt/evm-cloud/"
 }

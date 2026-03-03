@@ -18,14 +18,38 @@ locals {
     } : {},
   )
 
+  # Caddy is enabled for cloudflare and caddy ingress modes on EC2
+  enable_caddy = contains(["cloudflare", "caddy"], var.ingress_mode)
+
+  # Render Caddyfile from shared template (only when caddy is enabled)
+  caddyfile_content = local.enable_caddy ? templatefile("${path.module}/../../../core/templates/Caddyfile.tpl", {
+    ingress_mode          = var.ingress_mode
+    domain                = var.ingress_domain
+    tls_email             = var.ingress_tls_email
+    tls_staging           = var.ingress_tls_staging
+    hsts_preload          = var.ingress_hsts_preload
+    request_body_max_size = var.ingress_request_body_max_size
+    enable_rpc_proxy      = var.enable_rpc_proxy
+  }) : ""
+
+  # Cloudflare mode: mount origin cert files into Caddy container
+  caddy_cert_volumes = var.ingress_mode == "cloudflare" ? join("\n      ", [
+    "- /opt/evm-cloud/certs/origin.pem:/etc/caddy/certs/origin.pem:ro",
+    "- /opt/evm-cloud/certs/origin-key.pem:/etc/caddy/certs/origin-key.pem:ro",
+  ]) : ""
+
   # Render docker-compose.yml from shared template with AWS logging
   docker_compose_content = templatefile("${path.module}/../../../core/docker-compose.yml.tpl", {
     enable_rpc_proxy    = var.enable_rpc_proxy
     enable_indexer      = var.enable_indexer
+    enable_caddy        = local.enable_caddy
     rpc_proxy_image     = var.rpc_proxy_image
     indexer_image       = var.indexer_image
+    caddy_image         = var.ingress_caddy_image
     rpc_proxy_mem_limit = var.rpc_proxy_mem_limit
     indexer_mem_limit   = var.indexer_mem_limit
+    caddy_mem_limit     = var.ingress_caddy_mem_limit
+    caddy_cert_volumes  = local.caddy_cert_volumes
     logging_driver      = "awslogs"
     logging_options = {
       awslogs-region = var.aws_region
@@ -37,6 +61,7 @@ locals {
   # Config content hash for deploy trigger (mirrors bare_metal compose pattern)
   config_hash = sha256(join("", [
     local.docker_compose_content,
+    local.caddyfile_content,
     var.erpc_yaml_content,
     var.rindexer_yaml_content,
     jsonencode(var.abi_files),
@@ -48,6 +73,10 @@ locals {
     docker_compose_content = local.docker_compose_content
     enable_rpc_proxy       = var.enable_rpc_proxy
     enable_indexer         = var.enable_indexer
+    enable_caddy           = local.enable_caddy
+    caddyfile_content      = local.caddyfile_content
+    cloudflare_origin_cert = var.ingress_cloudflare_origin_cert
+    cloudflare_origin_key  = var.ingress_cloudflare_origin_key
     erpc_yaml_content      = var.erpc_yaml_content
     rindexer_yaml_content  = var.rindexer_yaml_content
     abi_files              = var.abi_files
@@ -197,6 +226,31 @@ resource "null_resource" "config_update" {
   provisioner "file" {
     content     = jsonencode(var.abi_files)
     destination = "/opt/evm-cloud/config/abis/_manifest.json"
+  }
+
+  # Upload Caddyfile (if ingress enabled)
+  provisioner "file" {
+    content     = local.caddyfile_content != "" ? local.caddyfile_content : "# caddy not enabled"
+    destination = "/opt/evm-cloud/config/Caddyfile"
+  }
+
+  # Upload Cloudflare origin cert (if cloudflare mode)
+  provisioner "file" {
+    content     = var.ingress_mode == "cloudflare" ? var.ingress_cloudflare_origin_cert : ""
+    destination = "/opt/evm-cloud/certs/origin.pem"
+  }
+
+  # Upload Cloudflare origin key (if cloudflare mode)
+  provisioner "file" {
+    content     = var.ingress_mode == "cloudflare" ? var.ingress_cloudflare_origin_key : ""
+    destination = "/opt/evm-cloud/certs/origin-key.pem"
+  }
+
+  # Harden cert file permissions in cloudflare mode; clean cert artifacts in other modes
+  provisioner "remote-exec" {
+    inline = [
+      "if [ '${var.ingress_mode}' = 'cloudflare' ]; then chmod 0600 /opt/evm-cloud/certs/*.pem; else rm -f /opt/evm-cloud/certs/origin.pem /opt/evm-cloud/certs/origin-key.pem; fi",
+    ]
   }
 
   # Deploy: refresh secrets, extract ABIs, force-recreate containers

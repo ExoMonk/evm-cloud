@@ -8,6 +8,7 @@ module "networking" {
   availability_zones   = var.network_availability_zones
   enable_nat_gateway   = var.network_enable_nat_gateway
   enable_vpc_endpoints = var.network_enable_vpc_endpoints
+  ingress_mode         = var.ingress_mode
 }
 
 locals {
@@ -191,6 +192,18 @@ module "ec2" {
   aws_region                    = var.aws_region
   tags                          = local.common_tags
 
+  # Ingress / TLS
+  ingress_mode                   = var.ingress_mode
+  ingress_domain                 = var.ingress_domain
+  ingress_tls_email              = var.ingress_tls_email
+  ingress_cloudflare_origin_cert = var.ingress_cloudflare_origin_cert
+  ingress_cloudflare_origin_key  = var.ingress_cloudflare_origin_key
+  ingress_caddy_image            = var.ingress_caddy_image
+  ingress_caddy_mem_limit        = var.ingress_caddy_mem_limit
+  ingress_request_body_max_size  = var.ingress_request_body_max_size
+  ingress_tls_staging            = var.ingress_tls_staging
+  ingress_hsts_preload           = var.ingress_hsts_preload
+
   enable_rpc_proxy               = var.rpc_proxy_enabled
   enable_indexer                 = var.indexer_enabled
   rpc_proxy_image                = var.rpc_proxy_image
@@ -253,6 +266,7 @@ module "k3s_host" {
   k3s_api_allowed_cidrs         = var.k3s_api_allowed_cidrs
   additional_security_group_ids = [local.networking.security_group_ids["indexer"]]
   tags                          = local.common_tags
+  ingress_mode                  = var.ingress_mode
   secrets_mode                  = var.secrets_mode
   secrets_manager_prefix        = "evm-cloud/${var.project_name}"
   secrets_manager_secret_arn    = local.workload_secret_arn
@@ -288,6 +302,7 @@ module "k3s_worker_host" {
   k3s_api_allowed_cidrs         = var.k3s_api_allowed_cidrs
   additional_security_group_ids = [local.networking.security_group_ids["indexer"]]
   tags                          = merge(local.common_tags, { "evm-cloud/role" = each.value.role })
+  ingress_mode                  = var.ingress_mode
   secrets_mode                  = var.secrets_mode
   secrets_manager_prefix        = "evm-cloud/${var.project_name}"
   secrets_manager_secret_arn    = local.workload_secret_arn
