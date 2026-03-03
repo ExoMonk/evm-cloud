@@ -236,7 +236,7 @@ Control how traffic reaches your services with automatic TLS termination. See th
 | Variable | Type | Default | Sensitive | Description |
 |----------|------|---------|-----------|-------------|
 | `ingress_mode` | `string` | `"none"` | No | TLS termination mode: `none`, `cloudflare` (recommended), `caddy`, or `ingress_nginx`. |
-| `ingress_domain` | `string` | `""` | No | Domain name for TLS certificates (e.g. `rpc.example.com`). Required when `ingress_mode != "none"`. |
+| `erpc_hostname` | `string` | `""` | No | Public hostname for eRPC TLS certificates (e.g. `rpc.example.com`). Required when `ingress_mode != "none"`. |
 | `ingress_tls_email` | `string` | `""` | No | Email for Let's Encrypt ACME registration. Required for `caddy` and `ingress_nginx` modes. |
 | `ingress_cloudflare_origin_cert` | `string` | `""` | Yes | Cloudflare origin certificate (PEM). Required for `cloudflare` mode. |
 | `ingress_cloudflare_origin_key` | `string` | `""` | Yes | Cloudflare origin certificate private key (PEM). Required for `cloudflare` mode. |
@@ -260,7 +260,7 @@ Control how traffic reaches your services with automatic TLS termination. See th
 
 ### Constraints
 
-- `ingress_domain` is required when `ingress_mode != "none"`
+- `erpc_hostname` is required when `ingress_mode != "none"`
 - `cloudflare` mode requires both `ingress_cloudflare_origin_cert` and `ingress_cloudflare_origin_key`
 - `caddy` mode requires `ingress_tls_email` and is only available on EC2/bare_metal
 - `ingress_nginx` mode requires `ingress_tls_email` and is available on `k3s` and `eks`

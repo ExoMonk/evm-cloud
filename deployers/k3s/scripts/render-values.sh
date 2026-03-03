@@ -39,7 +39,7 @@ mkdir -p "$OUT_DIR"
 
 # Extract ingress config from handoff
 INGRESS_MODE=$(jq -r '.ingress.mode // "none"' "$HANDOFF")
-INGRESS_DOMAIN=$(jq -r '.ingress.domain // empty' "$HANDOFF")
+ERPC_HOSTNAME=$(jq -r '.ingress.erpc_hostname // empty' "$HANDOFF")
 
 cat > "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
 fullnameOverride: ${PROJECT}-erpc
@@ -61,7 +61,7 @@ if [[ "$INGRESS_MODE" == "cloudflare" ]]; then
   cat >> "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
 ingress:
   enabled: true
-  host: "${INGRESS_DOMAIN}"
+  host: "${ERPC_HOSTNAME}"
   tlsProvider: "cloudflare"
   tlsSecretName: "cloudflare-origin-tls"
 EOF
@@ -74,7 +74,7 @@ elif [[ "$INGRESS_MODE" == "ingress_nginx" ]]; then
   cat >> "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
 ingress:
   enabled: true
-  host: "${INGRESS_DOMAIN}"
+  host: "${ERPC_HOSTNAME}"
   tlsProvider: "cert-manager"
   clusterIssuer: "${ISSUER}"
 EOF

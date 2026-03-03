@@ -69,14 +69,14 @@ variable "ingress_mode" {
   }
 }
 
-variable "ingress_domain" {
-  description = "Domain for TLS certificate and routing (e.g. rpc.example.com). Required when ingress_mode != none."
+variable "erpc_hostname" {
+  description = "Public hostname for eRPC TLS certificate and routing (e.g. rpc.example.com). Required when ingress_mode != none."
   type        = string
   default     = ""
 
   validation {
-    condition     = var.ingress_domain == "" || can(regex("^[a-z0-9][a-z0-9.-]*[a-z0-9]$", var.ingress_domain))
-    error_message = "ingress_domain must be a valid hostname (e.g., rpc.example.com), not a URL or IP address."
+    condition     = var.erpc_hostname == "" || can(regex("^[a-z0-9][a-z0-9.-]*[a-z0-9]$", var.erpc_hostname))
+    error_message = "erpc_hostname must be a valid hostname (e.g., rpc.example.com), not a URL or IP address."
   }
 }
 

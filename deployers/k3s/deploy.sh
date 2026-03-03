@@ -199,10 +199,10 @@ fi
 INGRESS_MODE=$(jq -r '.ingress.mode // "none"' "$HANDOFF_FILE")
 
 if [[ "$INGRESS_MODE" != "none" ]]; then
-  INGRESS_DOMAIN=$(jq -r '.ingress.domain // empty' "$HANDOFF_FILE")
+  ERPC_HOSTNAME=$(jq -r '.ingress.erpc_hostname // empty' "$HANDOFF_FILE")
   HSTS_PRELOAD=$(jq -r '.ingress.hsts_preload // false' "$HANDOFF_FILE")
   REQUEST_BODY_MAX=$(jq -r '.ingress.request_body_max_size // "1m"' "$HANDOFF_FILE")
-  echo "[evm-cloud] Ingress mode: ${INGRESS_MODE} (domain: ${INGRESS_DOMAIN})"
+  echo "[evm-cloud] Ingress mode: ${INGRESS_MODE} (erpc_hostname: ${ERPC_HOSTNAME})"
 
   # Ensure namespace exists
   kubectl create namespace "${PROJECT}" --dry-run=client -o yaml | kubectl apply -f -

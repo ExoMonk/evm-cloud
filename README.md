@@ -62,6 +62,25 @@ make verify      # qa + plan all examples
 make test-k8s    # Kubernetes chart tests (kind)
 ```
 
+## Terraform CLI Migration (CLI1.1)
+
+The new Rust CLI wraps the existing Terraform flow while preserving an escape hatch for direct Terraform usage.
+
+| Existing workflow | New wrapper |
+|---|---|
+| `terraform init` | `evm-cloud init` |
+| `terraform apply` | `evm-cloud apply` |
+| `terraform destroy` | `evm-cloud destroy --yes` |
+| `terraform apply -- -parallelism=50` | `evm-cloud apply -- --parallelism=50` |
+
+Safety defaults:
+- `destroy` requires explicit `--yes`.
+- In non-interactive shells, `destroy` requires both `--yes` and `--auto-approve`.
+- In non-interactive shells, `apply` requires `--auto-approve`.
+- Raw Terraform roots require explicit `--allow-raw-terraform`.
+
+Raw Terraform remains supported for advanced workflows and troubleshooting.
+
 ## Documentation
 
 Full documentation lives in [`documentation/`](https://evm-cloud.xyz/docs):

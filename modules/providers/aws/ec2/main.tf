@@ -24,7 +24,7 @@ locals {
   # Render Caddyfile from shared template (only when caddy is enabled)
   caddyfile_content = local.enable_caddy ? templatefile("${path.module}/../../../core/templates/Caddyfile.tpl", {
     ingress_mode          = var.ingress_mode
-    domain                = var.ingress_domain
+    domain                = var.erpc_hostname
     tls_email             = var.ingress_tls_email
     tls_staging           = var.ingress_tls_staging
     hsts_preload          = var.ingress_hsts_preload

@@ -230,7 +230,7 @@ cat > "$TEST_DIR/handoff.json" <<EOF
   },
   "ingress": {
     "mode": "cloudflare",
-    "domain": "e2e.test.example.com",
+    "erpc_hostname": "e2e.test.example.com",
     "nginx_chart_version": "4.11.3",
     "hsts_preload": false,
     "request_body_max_size": "1m",

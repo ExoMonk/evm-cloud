@@ -59,7 +59,7 @@ indexer_clickhouse_url      = "https://your-host:8443"
 indexer_clickhouse_password = "your-password"
 
 # Cloudflare origin certificate
-ingress_domain = "rpc.yourdomain.com"
+erpc_hostname = "rpc.yourdomain.com"
 
 ingress_cloudflare_origin_cert = <<-EOT
 -----BEGIN CERTIFICATE-----

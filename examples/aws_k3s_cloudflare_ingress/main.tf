@@ -14,7 +14,7 @@ module "evm_cloud" {
 
   # Cloudflare ingress — TLS termination via CF origin certificate
   ingress_mode                   = "cloudflare"
-  ingress_domain                 = var.ingress_domain
+  erpc_hostname                  = var.erpc_hostname
   ingress_cloudflare_origin_cert = var.ingress_cloudflare_origin_cert
   ingress_cloudflare_origin_key  = var.ingress_cloudflare_origin_key
 

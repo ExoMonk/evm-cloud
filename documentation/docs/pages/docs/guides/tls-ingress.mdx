@@ -2,12 +2,35 @@
 
 Automatic TLS termination for your evm-cloud deployment. Three modes, one variable to choose.
 
+## What this unlocks
+
+TLS ingress turns a raw cluster/service endpoint into a production-ready HTTPS entrypoint.
+
+- **Public HTTPS RPC endpoint**: serve eRPC behind a stable hostname like `rpc.yourdomain.com`
+- **Safer origin exposure**: terminate TLS at Cloudflare/Caddy/ingress-nginx instead of exposing plain HTTP
+- **Better edge security posture**: use managed TLS plus optional WAF/DDoS protections (Cloudflare mode)
+- **Cleaner operations**: keep one canonical hostname for clients while infrastructure can evolve underneath
+
+In short, this lets you run evm-cloud as an internet-facing RPC service with a standard TLS setup rather than a dev-only open port.
+
+### Traffic flow (at a glance)
+
+```text
+Client (wallet/app)
+	-> https://rpc.yourdomain.com
+		-> TLS edge (Cloudflare / Caddy / ingress-nginx)
+			-> internal service (eRPC)
+				-> upstream RPC providers
+```
+
+Result: users only see a secure HTTPS endpoint, while internal services stay behind your ingress boundary.
+
 ## Quick Start
 
 ```hcl
 # Recommended: Cloudflare (free TLS, DDoS, WAF)
 ingress_mode                    = "cloudflare"
-ingress_domain                  = "rpc.example.com"
+erpc_hostname                   = "rpc.example.com"
 ingress_cloudflare_origin_cert  = file("certs/origin.pem")
 ingress_cloudflare_origin_key   = file("certs/origin-key.pem")
 ```
@@ -35,7 +58,7 @@ Cloudflare terminates public TLS. An origin certificate secures the connection b
 
 ```hcl
 ingress_mode                    = "cloudflare"
-ingress_domain                  = "rpc.example.com"
+erpc_hostname                   = "rpc.example.com"
 ingress_cloudflare_origin_cert  = file("certs/origin.pem")
 ingress_cloudflare_origin_key   = file("certs/origin-key.pem")
 ingress_cloudflare_ssl_mode     = "full_strict"  # default
@@ -53,7 +76,7 @@ Caddy with automatic Let's Encrypt ACME. **EC2 and bare metal only.**
 
 ```hcl
 ingress_mode       = "caddy"
-ingress_domain     = "rpc.example.com"
+erpc_hostname      = "rpc.example.com"
 ingress_tls_email  = "admin@example.com"
 ```
 
@@ -73,7 +96,7 @@ ingress-nginx with cert-manager for Let's Encrypt. **Kubernetes engines (`k3s`, 
 
 ```hcl
 ingress_mode       = "ingress_nginx"
-ingress_domain     = "rpc.example.com"
+erpc_hostname      = "rpc.example.com"
 ingress_tls_email  = "admin@example.com"
 ```
 

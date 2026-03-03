@@ -8,6 +8,13 @@ This runbook describes Layer-2 deployment when Terraform is configured with:
 
 Run Terraform apply for your chosen example or root module config.
 
+CLI wrapper mapping (CLI1.1):
+
+- `terraform init` → `evm-cloud init`
+- `terraform apply` → `evm-cloud apply`
+- `terraform destroy` → `evm-cloud destroy --yes`
+- Keep raw Terraform as an escape hatch when needed.
+
 Validate output:
 
 ```bash

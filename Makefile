@@ -5,7 +5,7 @@ LOCALSTACK_ENDPOINT ?= http://localhost:4566
 
 LOCAL_ENV = AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(LOCALSTACK_ENDPOINT)
 
-.PHONY: fmt-check validate lint security qa plan verify up down test-k8s test-e2e-k8s docs docs-dev
+.PHONY: fmt-check validate lint security qa plan verify up down test-k8s test-e2e-k8s docs docs-dev cli-build cli-check evm-cloud
 
 # --- QA ---
 
@@ -79,3 +79,21 @@ docs:
 
 docs-dev:
 	cd documentation && npm run dev
+
+# --- CLI ---
+
+cli-build:
+	cd cli && cargo build
+
+cli-check:
+	cd cli && cargo check --locked && cargo clippy --locked -- -D warnings
+
+evm-cloud:
+	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
+		./cli/target/debug/evm-cloud --help; \
+	else \
+		./cli/target/debug/evm-cloud $(filter-out $@,$(MAKECMDGOALS)); \
+	fi
+
+%:
+	@:

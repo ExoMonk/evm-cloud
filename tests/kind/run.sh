@@ -470,7 +470,7 @@ cat > "$TEST_DIR/ingress-cf-handoff.json" <<'INGCF'
   "data": { "backend": "clickhouse", "clickhouse": { "url": "http://localhost:8123", "user": "default", "password": "test", "db": "default" } },
   "ingress": {
     "mode": "cloudflare",
-    "domain": "rpc.test.example.com",
+    "erpc_hostname": "rpc.test.example.com",
     "nginx_chart_version": "4.11.3",
     "cloudflare": { "origin_cert": "FAKE_CERT_PEM", "origin_key": "FAKE_KEY_PEM" }
   }
@@ -513,7 +513,7 @@ cat > "$TEST_DIR/ingress-nginx-handoff.json" <<'INGNX'
   "data": { "backend": "clickhouse", "clickhouse": { "url": "http://localhost:8123", "user": "default", "password": "test", "db": "default" } },
   "ingress": {
     "mode": "ingress_nginx",
-    "domain": "rpc.test.example.com",
+    "erpc_hostname": "rpc.test.example.com",
     "tls_email": "test@example.com",
     "tls_staging": true,
     "cert_manager_chart_version": "1.16.2"

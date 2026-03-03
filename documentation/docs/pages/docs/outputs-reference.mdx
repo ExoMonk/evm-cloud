@@ -116,7 +116,7 @@ Ingress/TLS metadata consumed by deployers and runtime scripts.
 | Field | Type | Description |
 |-------|------|-------------|
 | `ingress.mode` | `string` | `none`, `cloudflare`, `caddy`, or `ingress_nginx` |
-| `ingress.domain` | `string \| null` | Public host/domain when TLS is enabled |
+| `ingress.erpc_hostname` | `string \| null` | Public eRPC hostname when TLS is enabled |
 | `ingress.tls_email` | `string \| null` | ACME email for `caddy`/`ingress_nginx` |
 | `ingress.tls_staging` | `bool` | Use Let's Encrypt staging CA |
 | `ingress.hsts_preload` | `bool` | HSTS preload toggle |

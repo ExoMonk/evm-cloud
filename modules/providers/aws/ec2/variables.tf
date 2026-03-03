@@ -210,8 +210,8 @@ variable "ingress_mode" {
   default     = "none"
 }
 
-variable "ingress_domain" {
-  description = "Domain for TLS certificate and routing."
+variable "erpc_hostname" {
+  description = "Public hostname for eRPC TLS certificate and routing."
   type        = string
   default     = ""
 }

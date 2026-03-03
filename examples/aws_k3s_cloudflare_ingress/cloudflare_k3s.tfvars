@@ -17,11 +17,3 @@ indexer_enabled   = true
 # ClickHouse BYODB
 indexer_clickhouse_user = "default"
 indexer_clickhouse_db   = "rindexer"
-
-# Ingress — Cloudflare domain (cert/key go in secrets.auto.tfvars)
-ingress_domain = "rpc.example.com"
-
-# Sensitive values go in secrets.auto.tfvars:
-#   ssh_public_key, k3s_ssh_private_key_path, k3s_api_allowed_cidrs,
-#   ingress_cloudflare_origin_cert, ingress_cloudflare_origin_key,
-#   indexer_clickhouse_password, indexer_clickhouse_url

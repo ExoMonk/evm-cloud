@@ -43,7 +43,7 @@ variable "k3s_api_allowed_cidrs" {
 
 variable "k3s_instance_type" {
   type    = string
-  default = "t3.medium"
+  default = "t3.small"
 }
 
 variable "k3s_version" {
@@ -53,8 +53,8 @@ variable "k3s_version" {
 
 # --- Ingress (Cloudflare) ---
 
-variable "ingress_domain" {
-  description = "Domain for Cloudflare TLS (e.g. rpc.example.com)"
+variable "erpc_hostname" {
+  description = "Public eRPC hostname for Cloudflare TLS (e.g. rpc.example.com)"
   type        = string
 }
 

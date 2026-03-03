@@ -66,7 +66,7 @@ module "compose" {
 
   # Ingress / TLS
   ingress_mode                   = var.ingress_mode
-  ingress_domain                 = var.ingress_domain
+  erpc_hostname                  = var.erpc_hostname
   ingress_tls_email              = var.ingress_tls_email
   ingress_cloudflare_origin_cert = var.ingress_cloudflare_origin_cert
   ingress_cloudflare_origin_key  = var.ingress_cloudflare_origin_key

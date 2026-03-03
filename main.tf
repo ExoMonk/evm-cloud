@@ -64,8 +64,8 @@ resource "terraform_data" "provider_guardrails" {
     }
 
     precondition {
-      condition     = !(var.ingress_mode != "none" && var.ingress_domain == "")
-      error_message = "ingress_domain is required when ingress_mode is not none."
+      condition     = !(var.ingress_mode != "none" && var.erpc_hostname == "")
+      error_message = "erpc_hostname is required when ingress_mode is not none."
     }
 
     precondition {
@@ -245,7 +245,7 @@ module "provider_aws" {
   k3s_worker_nodes         = var.k3s_worker_nodes
 
   # Ingress / TLS
-  ingress_domain                     = var.ingress_domain
+  erpc_hostname                      = var.erpc_hostname
   ingress_tls_email                  = var.ingress_tls_email
   ingress_cloudflare_origin_cert     = var.ingress_cloudflare_origin_cert
   ingress_cloudflare_origin_key      = var.ingress_cloudflare_origin_key
@@ -312,7 +312,7 @@ module "provider_bare_metal" {
 
   # Ingress / TLS
   ingress_mode                       = var.ingress_mode
-  ingress_domain                     = var.ingress_domain
+  erpc_hostname                      = var.erpc_hostname
   ingress_tls_email                  = var.ingress_tls_email
   ingress_cloudflare_origin_cert     = var.ingress_cloudflare_origin_cert
   ingress_cloudflare_origin_key      = var.ingress_cloudflare_origin_key

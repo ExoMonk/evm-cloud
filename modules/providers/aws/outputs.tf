@@ -111,7 +111,7 @@ output "workload_handoff" {
 
     ingress = {
       mode                       = var.ingress_mode
-      domain                     = var.ingress_mode != "none" ? var.ingress_domain : null
+      erpc_hostname              = var.ingress_mode != "none" ? var.erpc_hostname : null
       tls_email                  = contains(["caddy", "ingress_nginx"], var.ingress_mode) ? var.ingress_tls_email : null
       tls_staging                = var.ingress_tls_staging
       hsts_preload               = var.ingress_hsts_preload
