@@ -3,7 +3,7 @@ project_type: no-code
 networks:
   - name: ethereum
     chain_id: 1
-    rpc: ${RPC_URL}
+    rpc: ${RPC_URL}/main/evm/1
 storage:
   postgres:
     enabled: true

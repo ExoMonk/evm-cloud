@@ -55,6 +55,20 @@ These are the variables that most affect your deployment's cost, performance, an
 | `aws_region` | `string` | `"us-east-1"` | AWS region. |
 | `aws_skip_credentials_validation` | `bool` | `false` | Skip credential checks (for LocalStack testing). |
 
+### Security Groups
+
+The networking module creates role-based security groups. Each compute instance gets its primary SG plus the `indexer` identity SG for database access.
+
+| Security Group | Purpose | Attached To |
+|---------------|---------|-------------|
+| `ec2-sg` | SSH, eRPC port, full egress | EC2 instances (`compute_engine = "ec2"`) |
+| `k3s-sg` | SSH, k3s API (6443), Flannel (8472), Kubelet (10250), NodePort range | k3s server and worker instances |
+| `indexer-sg` | Database access: Postgres (5432), ClickHouse HTTP (8123), ClickHouse native (9000) | All compute instances (EC2, k3s server, k3s workers) |
+| `database-sg` | Accepts ingress from `indexer-sg` only | RDS PostgreSQL instances |
+| `erpc-sg` | Accepts ingress from ALB and `indexer-sg` | EKS eRPC pods |
+
+The `indexer-sg` acts as a portable identity — the `database-sg` ingress rules reference it, so any instance with `indexer-sg` attached can reach the database regardless of compute engine.
+
 ---
 
 ## EC2 Compute
@@ -122,6 +136,8 @@ Enable with `postgres_enabled = true` and `indexer_storage_backend = "postgres"`
 | `postgres_db_name` | `string` | `"rindexer"` | Database name. |
 | `postgres_db_username` | `string` | `"rindexer"` | Master username. |
 | `postgres_backup_retention` | `number` | `7` | Backup retention in days. |
+| `postgres_manage_master_user_password` | `bool` | `true` | Let AWS manage the master password via Secrets Manager. Set to `false` with `postgres_master_password` for explicit control. See [Secrets Management guide](./guides/secrets-management.mdx#rds-password-management). |
+| `postgres_master_password` | `string` | `null` | Explicit master password for RDS. Required when `postgres_manage_master_user_password = false`. |
 
 ---
 

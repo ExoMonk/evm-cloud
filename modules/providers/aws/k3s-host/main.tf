@@ -40,6 +40,7 @@ resource "aws_key_pair" "k3s" {
 #checkov:skip=CKV2_AWS_5:Security group is attached to k3s EC2 instance
 resource "aws_security_group" "k3s" {
   #checkov:skip=CKV_AWS_260:SSH access scoped to VPC CIDR by default
+  #checkov:skip=CKV_AWS_24:SSH CIDRs are user-controlled via k3s_api_allowed_cidrs (default: VPC CIDR only)
   name_prefix = "${var.project_name}-k3s-"
   description = "Security group for k3s host"
   vpc_id      = var.vpc_id
@@ -113,7 +114,7 @@ resource "aws_instance" "k3s" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = var.subnet_id
-  vpc_security_group_ids = [aws_security_group.k3s.id]
+  vpc_security_group_ids = concat([aws_security_group.k3s.id], var.additional_security_group_ids)
   key_name               = aws_key_pair.k3s.key_name
 
   associate_public_ip_address = true
@@ -147,7 +148,7 @@ resource "aws_spot_instance_request" "k3s" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = var.subnet_id
-  vpc_security_group_ids = [aws_security_group.k3s.id]
+  vpc_security_group_ids = concat([aws_security_group.k3s.id], var.additional_security_group_ids)
   key_name               = aws_key_pair.k3s.key_name
 
   associate_public_ip_address = true

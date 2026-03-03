@@ -154,6 +154,19 @@ variable "postgres_backup_retention" {
   default     = 7
 }
 
+variable "postgres_manage_master_user_password" {
+  description = "Let AWS manage the RDS master password via Secrets Manager. Set to false and provide postgres_master_password for explicit control."
+  type        = bool
+  default     = true
+}
+
+variable "postgres_master_password" {
+  description = "Explicit master password for RDS. Required when postgres_manage_master_user_password = false."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
 # --- RPC Proxy (eRPC) ---
 
 variable "rpc_proxy_enabled" {

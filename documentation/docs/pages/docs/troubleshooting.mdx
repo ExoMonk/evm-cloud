@@ -100,9 +100,10 @@ psql -h <rds-endpoint> -U rindexer -d rindexer -c "SELECT 1"
 ```
 
 **Common causes:**
-- Security group doesn't allow outbound to database port (8443 for ClickHouse, 5432 for Postgres)
 - ClickHouse URL is wrong (must include protocol and port: `https://host:8443`)
 - RDS is in a private subnet but EC2 is in a different VPC
+
+**Security group architecture:** evm-cloud uses an `indexer-sg` identity group for database access. The `database-sg` allows ingress on ports 5432 (Postgres), 8123 (ClickHouse HTTP), and 9000 (ClickHouse native) only from `indexer-sg`. This SG is automatically attached to EC2 and k3s instances alongside their primary SG. If you see "connection refused" to RDS, verify the EC2 instance has both `ec2-sg` and `indexer-sg` (or `k3s-sg` and `indexer-sg`) attached in the AWS console.
 
 ---
 

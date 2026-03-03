@@ -71,3 +71,16 @@ variable "multi_az" {
   type        = bool
   default     = false
 }
+
+variable "manage_master_user_password" {
+  description = "Let AWS manage the master password via Secrets Manager (automatic rotation). Set to false and provide master_password for explicit control."
+  type        = bool
+  default     = true
+}
+
+variable "master_password" {
+  description = "Explicit master password for RDS. Required when manage_master_user_password = false."
+  type        = string
+  default     = null
+  sensitive   = true
+}

@@ -10,18 +10,19 @@ LOCAL_ENV = AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=
 # --- QA ---
 
 fmt-check:
-	$(TF) fmt -check -recursive
+	@echo "=== fmt ===" && $(TF) fmt -check -recursive && echo "PASS" || (echo "FAIL: run 'terraform fmt -recursive'" && exit 1)
 
 validate:
-	$(TF) init -backend=false && $(TF) validate
+	@echo "=== validate ===" && $(TF) init -backend=false -no-color > /dev/null 2>&1 && $(TF) validate -no-color && echo "PASS"
 
 lint:
-	tflint --recursive
+	@echo "=== tflint ===" && tflint --recursive --no-color 2>&1 && echo "PASS"
 
 security:
-	checkov -d . --framework terraform
+	@echo "=== checkov ===" && checkov -d . --framework terraform --compact --quiet 2>/dev/null && echo "PASS"
 
 qa: fmt-check validate lint security
+	@echo "\n=== QA PASSED ==="
 
 # --- LocalStack lifecycle ---
 

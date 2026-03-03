@@ -156,18 +156,20 @@ module "postgres" {
   subnet_ids        = local.networking.private_subnet_ids
   security_group_id = local.networking.security_group_ids["database"]
 
-  engine_version          = var.postgres_engine_version
-  instance_class          = var.postgres_instance_class
-  db_name                 = var.postgres_db_name
-  db_username             = var.postgres_db_username
-  backup_retention_period = var.postgres_backup_retention
+  engine_version              = var.postgres_engine_version
+  instance_class              = var.postgres_instance_class
+  db_name                     = var.postgres_db_name
+  db_username                 = var.postgres_db_username
+  backup_retention_period     = var.postgres_backup_retention
+  manage_master_user_password = var.postgres_manage_master_user_password
+  master_password             = var.postgres_master_password
 }
 
 # --- EC2+Docker Compose ---
 
-# Resolve Postgres credentials for EC2 secret payload
+# Resolve Postgres credentials for EC2 secret payload (only when AWS manages the secret)
 data "aws_secretsmanager_secret_version" "postgres_master_ec2" {
-  count     = (var.indexer_enabled && var.compute_engine == "ec2" && var.indexer_storage_backend == "postgres" && var.postgres_enabled) ? 1 : 0
+  count     = (var.indexer_enabled && var.compute_engine == "ec2" && var.indexer_storage_backend == "postgres" && var.postgres_enabled && var.postgres_manage_master_user_password) ? 1 : 0
   secret_id = module.postgres[0].master_secret_arn
 }
 
@@ -175,16 +177,17 @@ module "ec2" {
   source = "./ec2"
   count  = local.any_ec2_compute ? 1 : 0
 
-  project_name          = var.project_name
-  workload_mode         = var.workload_mode
-  environment           = var.network_environment
-  subnet_id             = local.networking.public_subnet_ids[0]
-  security_group_id     = local.networking.security_group_ids["ec2"]
-  instance_profile_name = aws_iam_instance_profile.ec2[0].name
-  ssh_public_key        = var.ssh_public_key
-  instance_type         = var.ec2_instance_type
-  aws_region            = var.aws_region
-  tags                  = local.common_tags
+  project_name                  = var.project_name
+  workload_mode                 = var.workload_mode
+  environment                   = var.network_environment
+  subnet_id                     = local.networking.public_subnet_ids[0]
+  security_group_id             = local.networking.security_group_ids["ec2"]
+  additional_security_group_ids = [local.networking.security_group_ids["indexer"]]
+  instance_profile_name         = aws_iam_instance_profile.ec2[0].name
+  ssh_public_key                = var.ssh_public_key
+  instance_type                 = var.ec2_instance_type
+  aws_region                    = var.aws_region
+  tags                          = local.common_tags
 
   enable_rpc_proxy               = var.rpc_proxy_enabled
   enable_indexer                 = var.indexer_enabled
@@ -202,11 +205,15 @@ module "ec2" {
   storage_backend = var.indexer_storage_backend
 
   # Postgres: compose DATABASE_URL from RDS secret
-  db_host     = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? module.postgres[0].endpoint : ""
-  db_port     = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? module.postgres[0].port : 5432
-  db_name     = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? module.postgres[0].db_name : ""
-  db_username = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? try(jsondecode(data.aws_secretsmanager_secret_version.postgres_master_ec2[0].secret_string)["username"], "") : ""
-  db_password = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? try(jsondecode(data.aws_secretsmanager_secret_version.postgres_master_ec2[0].secret_string)["password"], "") : ""
+  db_host = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? module.postgres[0].endpoint : ""
+  db_port = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? module.postgres[0].port : 5432
+  db_name = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? module.postgres[0].db_name : ""
+  db_username = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? (
+    !var.postgres_manage_master_user_password ? module.postgres[0].master_username : try(jsondecode(data.aws_secretsmanager_secret_version.postgres_master_ec2[0].secret_string)["username"], "")
+  ) : ""
+  db_password = var.indexer_storage_backend == "postgres" && var.postgres_enabled ? (
+    !var.postgres_manage_master_user_password ? var.postgres_master_password : try(jsondecode(data.aws_secretsmanager_secret_version.postgres_master_ec2[0].secret_string)["password"], "")
+  ) : ""
 
   # ClickHouse BYODB
   clickhouse_url      = var.indexer_clickhouse_url
@@ -234,15 +241,16 @@ module "k3s_host" {
   source = "./k3s-host"
   count  = local.any_k3s_compute ? 1 : 0
 
-  project_name          = var.project_name
-  environment           = var.network_environment
-  instance_type         = var.k3s_instance_type
-  subnet_id             = local.networking.public_subnet_ids[0]
-  vpc_id                = local.networking.vpc_id
-  vpc_cidr              = var.network_vpc_cidr
-  ssh_public_key        = var.ssh_public_key
-  k3s_api_allowed_cidrs = var.k3s_api_allowed_cidrs
-  tags                  = local.common_tags
+  project_name                  = var.project_name
+  environment                   = var.network_environment
+  instance_type                 = var.k3s_instance_type
+  subnet_id                     = local.networking.public_subnet_ids[0]
+  vpc_id                        = local.networking.vpc_id
+  vpc_cidr                      = var.network_vpc_cidr
+  ssh_public_key                = var.ssh_public_key
+  k3s_api_allowed_cidrs         = var.k3s_api_allowed_cidrs
+  additional_security_group_ids = [local.networking.security_group_ids["indexer"]]
+  tags                          = local.common_tags
 }
 
 module "k3s_bootstrap" {
@@ -264,16 +272,17 @@ module "k3s_worker_host" {
   source   = "./k3s-host"
   for_each = { for node in var.k3s_worker_nodes : node.name => node if local.any_k3s_compute }
 
-  project_name          = "${var.project_name}-worker-${each.key}"
-  environment           = var.network_environment
-  instance_type         = each.value.instance_type
-  use_spot              = each.value.use_spot
-  subnet_id             = local.networking.public_subnet_ids[0]
-  vpc_id                = local.networking.vpc_id
-  vpc_cidr              = var.network_vpc_cidr
-  ssh_public_key        = var.ssh_public_key
-  k3s_api_allowed_cidrs = var.k3s_api_allowed_cidrs
-  tags                  = merge(local.common_tags, { "evm-cloud/role" = each.value.role })
+  project_name                  = "${var.project_name}-worker-${each.key}"
+  environment                   = var.network_environment
+  instance_type                 = each.value.instance_type
+  use_spot                      = each.value.use_spot
+  subnet_id                     = local.networking.public_subnet_ids[0]
+  vpc_id                        = local.networking.vpc_id
+  vpc_cidr                      = var.network_vpc_cidr
+  ssh_public_key                = var.ssh_public_key
+  k3s_api_allowed_cidrs         = var.k3s_api_allowed_cidrs
+  additional_security_group_ids = [local.networking.security_group_ids["indexer"]]
+  tags                          = merge(local.common_tags, { "evm-cloud/role" = each.value.role })
 }
 
 module "k3s_agent" {
@@ -300,13 +309,20 @@ module "k3s_agent" {
 # --- EKS: Postgres secret resolution ---
 
 data "aws_secretsmanager_secret_version" "rds_master" {
-  count     = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads) ? 1 : 0
+  count     = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads && var.postgres_manage_master_user_password) ? 1 : 0
   secret_id = module.postgres[0].master_secret_arn
 }
 
 locals {
-  eks_database_url = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads) ? (
-    "postgresql://${jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["username"]}:${jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["password"]}@${module.postgres[0].endpoint}:${module.postgres[0].port}/${module.postgres[0].db_name}"
+  _eks_pg_enabled = var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads
+  _eks_pg_user = local._eks_pg_enabled ? (
+    !var.postgres_manage_master_user_password ? module.postgres[0].master_username : try(jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["username"], "")
+  ) : ""
+  _eks_pg_pass = local._eks_pg_enabled ? (
+    !var.postgres_manage_master_user_password ? var.postgres_master_password : try(jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["password"], "")
+  ) : ""
+  eks_database_url = local._eks_pg_enabled ? (
+    "postgresql://${local._eks_pg_user}:${urlencode(local._eks_pg_pass)}@${module.postgres[0].endpoint}:${module.postgres[0].port}/${module.postgres[0].db_name}"
   ) : ""
 }
 

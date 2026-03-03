@@ -10,7 +10,7 @@
 │  │                                                                │  │
 │  │  ┌─ Public Subnets ───────────────────────────────────────┐   │  │
 │  │  │                                                         │   │  │
-│  │  │  ┌─ EC2 Instance (t3.medium) ────────────────────────┐  │   │  │
+│  │  │  ┌─ EC2 Instance (t3.small ) ────────────────────────┐  │   │  │
 │  │  │  │                                                    │  │   │  │
 │  │  │  │  Docker Compose (bridge network: evm-cloud)        │  │   │  │
 │  │  │  │                                                    │  │   │  │
@@ -170,9 +170,9 @@ RDS is in a private subnet — query it via SSH tunnel through the EC2 instance.
 ```bash
 # 1) Get connection details from Terraform outputs + Secrets Manager
 RDS_ENDPOINT=$(terraform output -json postgres | jq -r '.endpoint')
-RDS_SECRET_ARN=$(terraform output -json postgres | jq -r '.master_secret_arn')
+SECRET_NAME="${PROJECT_NAME}-rds-master"  # matches aws_secretsmanager_secret name in main.tf
 RDS_PASSWORD=$(aws secretsmanager get-secret-value \
-  --secret-id "$RDS_SECRET_ARN" \
+  --secret-id "$SECRET_NAME" \
   --query 'SecretString' --output text | jq -r '.password')
 EC2_IP=$(terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip')
 
@@ -201,7 +201,7 @@ psql "postgresql://rindexer:<password>@<rds-endpoint>:5432/rindexer"
 - **Config changes** (erpc.yaml, rindexer.yaml, ABIs, mem limits): `lifecycle { ignore_changes = [user_data] }` prevents EC2 instance recreation. Update via SSH.
 - **Secret changes** (passwords, RPC URLs): `aws_secretsmanager_secret_version` updates in-place. SSH into instance and re-run `pull-secrets.sh`, then restart services.
 - **Instance type changes**: Triggers EC2 stop + start (expected).
-- **Destroy**: Clean teardown in dev — `ec2_secret_recovery_window_in_days = 0` (immediate secret deletion), `deletion_protection = false`, `skip_final_snapshot = true`, `backup_retention = 0`.
+- **Destroy**: Clean teardown in dev — `ec2_secret_recovery_window_in_days = 0` (immediate EC2 secret deletion), `postgres_manage_master_user_password = false` with own `recovery_window_in_days = 0` secret (immediate RDS secret deletion), `deletion_protection = false`, `skip_final_snapshot = true`, `backup_retention = 0`.
 
 ## Workload ownership mode
 

@@ -8,7 +8,7 @@ locals {
   secret_payload = merge(
     var.rpc_url != "" ? { RPC_URL = var.rpc_url } : {},
     var.storage_backend == "postgres" ? {
-      DATABASE_URL = "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_name}"
+      DATABASE_URL = "postgresql://${var.db_username}:${urlencode(var.db_password)}@${var.db_host}:${var.db_port}/${var.db_name}"
     } : {},
     var.storage_backend == "clickhouse" ? {
       CLICKHOUSE_URL      = var.clickhouse_url
@@ -110,7 +110,7 @@ resource "aws_instance" "this" {
   ami                    = data.aws_ami.al2023.id
   instance_type          = var.instance_type
   subnet_id              = var.subnet_id
-  vpc_security_group_ids = [var.security_group_id]
+  vpc_security_group_ids = concat([var.security_group_id], var.additional_security_group_ids)
   iam_instance_profile   = var.instance_profile_name
   key_name               = aws_key_pair.deploy.key_name
 

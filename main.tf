@@ -149,12 +149,14 @@ module "provider_aws" {
   network_enable_vpc_endpoints = var.network_enable_vpc_endpoints
 
   # Postgres
-  postgres_enabled          = var.postgres_enabled
-  postgres_instance_class   = var.postgres_instance_class
-  postgres_engine_version   = var.postgres_engine_version
-  postgres_db_name          = var.postgres_db_name
-  postgres_db_username      = var.postgres_db_username
-  postgres_backup_retention = var.postgres_backup_retention
+  postgres_enabled                     = var.postgres_enabled
+  postgres_instance_class              = var.postgres_instance_class
+  postgres_engine_version              = var.postgres_engine_version
+  postgres_db_name                     = var.postgres_db_name
+  postgres_db_username                 = var.postgres_db_username
+  postgres_backup_retention            = var.postgres_backup_retention
+  postgres_manage_master_user_password = var.postgres_manage_master_user_password
+  postgres_master_password             = var.postgres_master_password
 
   # RPC Proxy
   rpc_proxy_enabled = var.rpc_proxy_enabled

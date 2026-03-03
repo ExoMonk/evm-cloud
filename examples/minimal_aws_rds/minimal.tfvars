@@ -17,7 +17,7 @@ network_availability_zones   = ["us-east-1a", "us-east-1b"]
 network_enable_nat_gateway   = false
 network_enable_vpc_endpoints = false
 
-# Postgres
+# Postgres backup retention is set to 0 not recommended for production use.
 postgres_enabled          = true
 postgres_instance_class   = "db.t4g.micro"
 postgres_engine_version   = "16.4"

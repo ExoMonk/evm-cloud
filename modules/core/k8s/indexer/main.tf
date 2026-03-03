@@ -96,9 +96,10 @@ resource "kubernetes_deployment" "indexer" {
 
       spec {
         container {
-          name  = "indexer"
-          image = var.image
-          args  = ["start", "--path", "/config", "all"]
+          name              = "indexer"
+          image             = var.image
+          image_pull_policy = "Always"
+          args              = ["start", "--path", "/config", "all"]
 
           # Plain env vars
           dynamic "env" {

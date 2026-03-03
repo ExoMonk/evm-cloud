@@ -11,7 +11,7 @@ variable "environment" {
 variable "instance_type" {
   description = "EC2 instance type for k3s host."
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "subnet_id" {
@@ -45,6 +45,12 @@ variable "use_spot" {
   description = "Use a spot instance instead of on-demand. Only recommended for interruptible workloads (e.g. backfill workers)."
   type        = bool
   default     = false
+}
+
+variable "additional_security_group_ids" {
+  description = "Additional security group IDs to attach (e.g. indexer SG for DB access)."
+  type        = list(string)
+  default     = []
 }
 
 variable "tags" {

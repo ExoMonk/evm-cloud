@@ -5,6 +5,8 @@ locals {
     ManagedBy   = "terraform"
     Module      = "database/postgres"
   }
+
+  use_explicit_password = !var.manage_master_user_password
 }
 
 resource "aws_db_subnet_group" "this" {
@@ -34,7 +36,10 @@ module "rds" {
   username = var.db_username
   port     = 5432
 
-  manage_master_user_password = true
+  # Explicit password: user manages the secret externally.
+  # Default: AWS manages the password via Secrets Manager (automatic rotation).
+  manage_master_user_password = !local.use_explicit_password
+  password                    = var.master_password
 
   multi_az               = var.multi_az
   db_subnet_group_name   = aws_db_subnet_group.this.name
@@ -55,7 +60,8 @@ module "rds" {
 
   parameters = [
     { name = "log_connections", value = "1" },
-    { name = "log_disconnections", value = "1" }
+    { name = "log_disconnections", value = "1" },
+    { name = "rds.force_ssl", value = "0" }
   ]
 
   tags = local.common_tags

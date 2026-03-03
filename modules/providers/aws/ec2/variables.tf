@@ -14,8 +14,14 @@ variable "subnet_id" {
 }
 
 variable "security_group_id" {
-  description = "Security group ID for the EC2 instance."
+  description = "Primary security group ID for the EC2 instance."
   type        = string
+}
+
+variable "additional_security_group_ids" {
+  description = "Additional security group IDs to attach (e.g. indexer SG for DB access)."
+  type        = list(string)
+  default     = []
 }
 
 variable "instance_profile_name" {
@@ -32,7 +38,7 @@ variable "ssh_public_key" {
 variable "instance_type" {
   description = "EC2 instance type."
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "root_volume_size" {

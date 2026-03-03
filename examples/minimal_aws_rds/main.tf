@@ -1,5 +1,49 @@
 terraform {
   required_version = ">= 1.14.6"
+
+  required_providers {
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.0"
+    }
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region                      = var.aws_region
+  skip_credentials_validation = var.aws_skip_credentials_validation
+  skip_metadata_api_check     = var.aws_skip_credentials_validation
+  skip_requesting_account_id  = var.aws_skip_credentials_validation
+}
+
+# Dev: Terraform-managed password with own Secrets Manager secret (recovery_window = 0).
+# This avoids the 7-day recovery window of AWS-managed RDS secrets which blocks
+# destroy+re-apply cycles. For production, omit postgres_master_password to use
+# AWS-managed credentials (automatic rotation, 7-day recovery).
+resource "random_password" "rds_master" {
+  count            = var.postgres_enabled ? 1 : 0
+  length  = 32
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "rds_master" {
+  #checkov:skip=CKV2_AWS_57:Dev example — rotation not required
+  count                   = var.postgres_enabled ? 1 : 0
+  name                    = "${var.project_name}-rds-master"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "rds_master" {
+  count     = var.postgres_enabled ? 1 : 0
+  secret_id = aws_secretsmanager_secret.rds_master[0].id
+  secret_string = jsonencode({
+    username = var.postgres_db_username
+    password = random_password.rds_master[0].result
+  })
 }
 
 module "evm_cloud" {
@@ -28,12 +72,14 @@ module "evm_cloud" {
   network_enable_vpc_endpoints    = var.network_enable_vpc_endpoints
 
   # Postgres
-  postgres_enabled          = var.postgres_enabled
-  postgres_instance_class   = var.postgres_instance_class
-  postgres_engine_version   = var.postgres_engine_version
-  postgres_db_name          = var.postgres_db_name
-  postgres_db_username      = var.postgres_db_username
-  postgres_backup_retention = var.postgres_backup_retention
+  postgres_enabled                     = var.postgres_enabled
+  postgres_instance_class              = var.postgres_instance_class
+  postgres_engine_version              = var.postgres_engine_version
+  postgres_db_name                     = var.postgres_db_name
+  postgres_db_username                 = var.postgres_db_username
+  postgres_backup_retention            = var.postgres_backup_retention
+  postgres_manage_master_user_password = false # Dev: use explicit password for clean destroy
+  postgres_master_password             = var.postgres_enabled ? random_password.rds_master[0].result : null
 
   # RPC Proxy
   rpc_proxy_enabled = var.rpc_proxy_enabled
@@ -74,5 +120,6 @@ output "indexer" {
 }
 
 output "workload_handoff" {
-  value = module.evm_cloud.workload_handoff
+  value     = module.evm_cloud.workload_handoff
+  sensitive = true
 }

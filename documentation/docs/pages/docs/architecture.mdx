@@ -82,6 +82,7 @@ output "workload_handoff" {
 |--------|------|---------|
 | **core/capabilities** | `modules/core/capabilities/` | Provider-neutral capability contracts. Defines the interface every provider adapter must implement. |
 | **core/k8s/k3s-bootstrap** | `modules/core/k8s/k3s-bootstrap/` | Installs k3s on any host via SSH. Used by both `aws/k3s-host` and `bare_metal` providers. |
+| **core/k8s/k3s-agent** | `modules/core/k8s/k3s-agent/` | Joins worker nodes to a k3s cluster via SSH. Applies `evm-cloud/role` labels and waits for node readiness. |
 | **aws/networking** | `modules/providers/aws/networking/` | VPC, subnets, security groups, NAT gateway, VPC endpoints. |
 | **aws/ec2** | `modules/providers/aws/ec2/` | EC2 instance with Docker Compose workloads. Cloud-init for setup, bind mounts for config. |
 | **aws/eks_cluster** | `modules/providers/aws/eks/` | EKS cluster, managed node groups, OIDC provider, CoreDNS/kube-proxy addons. |
@@ -100,8 +101,9 @@ root module (main.tf)
   │   ├── networking/                     # VPC, subnets, SGs
   │   ├── ec2/                            # EC2 + Docker Compose
   │   ├── eks/                            # EKS cluster
-  │   ├── k3s-host/                       # EC2 + k3s
+  │   ├── k3s-host/                       # EC2 + k3s (server + workers)
   │   │   └── modules/core/k8s/k3s-bootstrap/
+  │   │   └── modules/core/k8s/k3s-agent/   # Worker node join
   │   └── postgres/                       # RDS PostgreSQL
   │
   └── modules/providers/bare_metal/       # Bare metal adapter
