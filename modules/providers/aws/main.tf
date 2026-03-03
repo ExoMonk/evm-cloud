@@ -163,6 +163,7 @@ module "postgres" {
   backup_retention_period     = var.postgres_backup_retention
   manage_master_user_password = var.postgres_manage_master_user_password
   master_password             = var.postgres_master_password
+  force_ssl                   = var.postgres_force_ssl
 }
 
 # --- EC2+Docker Compose ---
@@ -185,6 +186,7 @@ module "ec2" {
   additional_security_group_ids = [local.networking.security_group_ids["indexer"]]
   instance_profile_name         = aws_iam_instance_profile.ec2[0].name
   ssh_public_key                = var.ssh_public_key
+  ssh_private_key_path          = var.ec2_ssh_private_key_path
   instance_type                 = var.ec2_instance_type
   aws_region                    = var.aws_region
   tags                          = local.common_tags
@@ -251,6 +253,9 @@ module "k3s_host" {
   k3s_api_allowed_cidrs         = var.k3s_api_allowed_cidrs
   additional_security_group_ids = [local.networking.security_group_ids["indexer"]]
   tags                          = local.common_tags
+  secrets_mode                  = var.secrets_mode
+  secrets_manager_prefix        = "evm-cloud/${var.project_name}"
+  secrets_manager_secret_arn    = local.workload_secret_arn
 }
 
 module "k3s_bootstrap" {
@@ -283,6 +288,9 @@ module "k3s_worker_host" {
   k3s_api_allowed_cidrs         = var.k3s_api_allowed_cidrs
   additional_security_group_ids = [local.networking.security_group_ids["indexer"]]
   tags                          = merge(local.common_tags, { "evm-cloud/role" = each.value.role })
+  secrets_mode                  = var.secrets_mode
+  secrets_manager_prefix        = "evm-cloud/${var.project_name}"
+  secrets_manager_secret_arn    = local.workload_secret_arn
 }
 
 module "k3s_agent" {
@@ -304,6 +312,51 @@ module "k3s_agent" {
   node_token                  = module.k3s_bootstrap[0].node_token
   k3s_version                 = var.k3s_version
   project_name                = var.project_name
+}
+
+# --- Secrets Management: SM secret for k3s/EKS provider mode ---
+
+locals {
+  # Should Terraform create the SM workload secret?
+  create_workload_secret = (
+    var.secrets_mode == "provider" &&
+    var.secrets_manager_secret_arn == "" &&
+    (local.any_k3s_compute || local.any_eks_compute)
+  )
+
+  # Resolved ARN: BYOA or Terraform-created
+  workload_secret_arn = (
+    var.secrets_manager_secret_arn != "" ? var.secrets_manager_secret_arn
+    : local.create_workload_secret ? aws_secretsmanager_secret.workload[0].arn
+    : ""
+  )
+}
+
+resource "aws_secretsmanager_secret" "workload" {
+  #checkov:skip=CKV2_AWS_57:Rotation configured externally by user
+  count = local.create_workload_secret ? 1 : 0
+
+  name                    = "evm-cloud/${var.project_name}/env"
+  description             = "Workload secrets for evm-cloud project ${var.project_name}"
+  kms_key_id              = var.secrets_manager_kms_key_id != "" ? var.secrets_manager_kms_key_id : null
+  recovery_window_in_days = var.ec2_secret_recovery_window_in_days
+}
+
+resource "aws_secretsmanager_secret_version" "workload" {
+  count = local.create_workload_secret ? 1 : 0
+
+  secret_id = aws_secretsmanager_secret.workload[0].id
+  secret_string = jsonencode(merge(
+    var.indexer_storage_backend == "clickhouse" ? {
+      CLICKHOUSE_URL      = var.indexer_clickhouse_url
+      CLICKHOUSE_USER     = var.indexer_clickhouse_user
+      CLICKHOUSE_PASSWORD = var.indexer_clickhouse_password
+      CLICKHOUSE_DB       = var.indexer_clickhouse_db
+    } : {},
+    var.indexer_storage_backend == "postgres" && var.postgres_enabled ? {
+      DATABASE_URL = local.eks_database_url
+    } : {},
+  ))
 }
 
 # --- EKS: Postgres secret resolution ---
@@ -337,7 +390,9 @@ module "k8s_addons" {
     helm       = helm
   }
 
-  project_name = var.project_name
+  project_name      = var.project_name
+  eso_enabled       = var.secrets_mode != "inline"
+  eso_chart_version = var.eso_chart_version
 }
 
 # --- RPC Proxy: eRPC (EKS) ---

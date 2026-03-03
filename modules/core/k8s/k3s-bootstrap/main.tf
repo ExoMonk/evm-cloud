@@ -127,7 +127,9 @@ resource "null_resource" "k3s_install" {
 
 # --- Extract secrets via local-exec provisioners ---
 # Writes to local files after install. No SSH during plan or destroy.
-# Outputs use fileexists() guard so first plan (before any apply) returns "".
+# Uses external data sources (not file()) to read values — external with
+# depends_on defers execution to apply time, so values are available in
+# state after a single `terraform apply` (no refresh needed).
 
 locals {
   secrets_dir     = "${path.module}/.secrets"
@@ -167,4 +169,34 @@ resource "terraform_data" "fetch_secrets" {
       printf '%s' "$KUBECONFIG_B64" > ${local.kubeconfig_file}
     EOF
   }
+}
+
+# --- Read secrets from local files (deferred to apply time) ---
+# external data sources with depends_on are evaluated during apply, not plan.
+# This ensures values are in state after a single `terraform apply`.
+
+data "external" "kubeconfig" {
+  depends_on = [terraform_data.fetch_secrets]
+  program = ["bash", "-c", <<-PROG
+    FILE='${local.kubeconfig_file}'
+    if [ -f "$FILE" ]; then
+      jq -n --arg v "$(cat "$FILE")" '{"value":$v}'
+    else
+      echo '{"value":""}'
+    fi
+  PROG
+  ]
+}
+
+data "external" "node_token" {
+  depends_on = [terraform_data.fetch_secrets]
+  program = ["bash", "-c", <<-PROG
+    FILE='${local.token_file}'
+    if [ -f "$FILE" ]; then
+      jq -n --arg v "$(cat "$FILE")" '{"value":$v}'
+    else
+      echo '{"value":""}'
+    fi
+  PROG
+  ]
 }

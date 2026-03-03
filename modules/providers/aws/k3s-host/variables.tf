@@ -58,3 +58,22 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "secrets_mode" {
+  description = "Secrets delivery mode. When 'provider', creates IAM instance profile for Secrets Manager access."
+  type        = string
+  default     = "inline"
+}
+
+variable "secrets_manager_prefix" {
+  description = "SM secret name prefix for IAM policy (e.g. evm-cloud/myproject). Used as wildcard fallback when secret_arn is not set."
+  type        = string
+  default     = ""
+}
+
+variable "secrets_manager_secret_arn" {
+  description = "Exact ARN of the SM secret (BYOA or Terraform-created). When set, IAM policy targets this ARN directly instead of prefix wildcard."
+  type        = string
+  default     = ""
+}
+

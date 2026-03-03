@@ -103,6 +103,11 @@ resource "null_resource" "deploy" {
     destination = "/opt/evm-cloud/config/abis/_manifest.json"
   }
 
+  # Harden .env file permissions (secrets at rest)
+  provisioner "remote-exec" {
+    inline = ["chmod 0600 /opt/evm-cloud/.env"]
+  }
+
   # Deploy: extract ABIs from manifest + docker compose up
   provisioner "remote-exec" {
     inline = [templatefile("${path.module}/deploy.sh.tpl", {

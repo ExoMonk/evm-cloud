@@ -109,6 +109,23 @@ output "workload_handoff" {
       } : null
     }
 
+    secrets = {
+      mode              = var.secrets_mode
+      eso_chart_version = var.secrets_mode != "inline" ? var.eso_chart_version : null
+
+      provider = var.secrets_mode == "provider" ? {
+        type       = "aws_sm"
+        secret_arn = local.workload_secret_arn
+        region     = var.aws_region
+      } : null
+
+      external = var.secrets_mode == "external" ? {
+        store_name = var.external_secret_store_name
+        store_kind = "ClusterSecretStore"
+        secret_key = var.external_secret_key
+      } : null
+    }
+
     services = {
       rpc_proxy = var.rpc_proxy_enabled ? {
         service_name = var.compute_engine == "ec2" ? "erpc" : "${var.project_name}-erpc"
@@ -136,10 +153,11 @@ output "workload_handoff" {
       } : null
 
       clickhouse = (var.indexer_enabled && var.indexer_storage_backend == "clickhouse") ? {
-        url      = var.indexer_clickhouse_url
-        user     = var.indexer_clickhouse_user
-        db       = var.indexer_clickhouse_db
-        password = var.compute_engine == "k3s" ? var.indexer_clickhouse_password : null
+        url  = var.indexer_clickhouse_url
+        user = var.indexer_clickhouse_user
+        db   = var.indexer_clickhouse_db
+        # Password only included in handoff when secrets_mode=inline (backward compat)
+        password = (var.compute_engine == "k3s" && var.secrets_mode == "inline") ? var.indexer_clickhouse_password : null
       } : null
     }
 

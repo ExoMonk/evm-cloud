@@ -61,7 +61,7 @@ module "rds" {
   parameters = [
     { name = "log_connections", value = "1" },
     { name = "log_disconnections", value = "1" },
-    { name = "rds.force_ssl", value = "0" }
+    { name = "rds.force_ssl", value = var.force_ssl ? "1" : "0" }
   ]
 
   tags = local.common_tags

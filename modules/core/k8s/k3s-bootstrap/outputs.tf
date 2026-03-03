@@ -1,8 +1,7 @@
 output "kubeconfig_base64" {
   description = "Base64-encoded kubeconfig for the k3s cluster. Contains static admin credentials — use encrypted state backends."
-  value       = fileexists(local.kubeconfig_file) ? trimspace(file(local.kubeconfig_file)) : ""
+  value       = data.external.kubeconfig.result.value
   sensitive   = true
-  depends_on  = [terraform_data.fetch_secrets]
 }
 
 output "cluster_endpoint" {
@@ -17,7 +16,6 @@ output "node_name" {
 
 output "node_token" {
   description = "k3s server node token for worker nodes to join the cluster. Sensitive — only stored in Terraform state."
-  value       = fileexists(local.token_file) ? trimspace(file(local.token_file)) : ""
+  value       = data.external.node_token.result.value
   sensitive   = true
-  depends_on  = [terraform_data.fetch_secrets]
 }

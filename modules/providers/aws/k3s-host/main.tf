@@ -102,13 +102,55 @@ resource "aws_security_group" "k3s" {
   }
 }
 
+# --- IAM Instance Profile (conditional: secrets_mode=provider) ---
+# When secrets_mode=provider, pods access AWS Secrets Manager via IMDS.
+# Security note: single-tenant only — any pod on the node inherits this role.
+
+resource "aws_iam_role" "k3s" {
+  count = var.secrets_mode == "provider" ? 1 : 0
+  name  = "${var.project_name}-k3s-node"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "k3s_secrets_manager" {
+  count = var.secrets_mode == "provider" ? 1 : 0
+  name  = "${var.project_name}-k3s-sm-read"
+  role  = aws_iam_role.k3s[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = var.secrets_manager_secret_arn != "" ? var.secrets_manager_secret_arn : "arn:aws:secretsmanager:*:*:secret:${var.secrets_manager_prefix}/*"
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "k3s" {
+  count = var.secrets_mode == "provider" ? 1 : 0
+  name  = "${var.project_name}-k3s-node"
+  role  = aws_iam_role.k3s[0].name
+  tags  = var.tags
+}
+
 # --- EC2 Instance (on-demand) ---
 
 resource "aws_instance" "k3s" {
   #checkov:skip=CKV_AWS_88:Public IP needed for k3s API access and SSH
   #checkov:skip=CKV_AWS_126:Detailed monitoring not needed for dev/staging k3s host
   #checkov:skip=CKV_AWS_135:EBS optimization automatic for t3+ instances
-  #checkov:skip=CKV2_AWS_41:IAM instance profile not required for k3s host
+  #checkov:skip=CKV2_AWS_41:IAM instance profile only attached when secrets_mode=provider
   count = var.use_spot ? 0 : 1
 
   ami                    = data.aws_ami.ubuntu.id
@@ -116,6 +158,7 @@ resource "aws_instance" "k3s" {
   subnet_id              = var.subnet_id
   vpc_security_group_ids = concat([aws_security_group.k3s.id], var.additional_security_group_ids)
   key_name               = aws_key_pair.k3s.key_name
+  iam_instance_profile   = var.secrets_mode == "provider" ? aws_iam_instance_profile.k3s[0].name : null
 
   associate_public_ip_address = true
 
@@ -142,7 +185,7 @@ resource "aws_spot_instance_request" "k3s" {
   #checkov:skip=CKV_AWS_88:Public IP needed for k3s API access and SSH
   #checkov:skip=CKV_AWS_126:Detailed monitoring not needed for dev/staging k3s host
   #checkov:skip=CKV_AWS_135:EBS optimization automatic for t3+ instances
-  #checkov:skip=CKV2_AWS_41:IAM instance profile not required for k3s host
+  #checkov:skip=CKV2_AWS_41:IAM instance profile only attached when secrets_mode=provider
   count = var.use_spot ? 1 : 0
 
   ami                    = data.aws_ami.ubuntu.id
@@ -150,6 +193,7 @@ resource "aws_spot_instance_request" "k3s" {
   subnet_id              = var.subnet_id
   vpc_security_group_ids = concat([aws_security_group.k3s.id], var.additional_security_group_ids)
   key_name               = aws_key_pair.k3s.key_name
+  iam_instance_profile   = var.secrets_mode == "provider" ? aws_iam_instance_profile.k3s[0].name : null
 
   associate_public_ip_address = true
   wait_for_fulfillment        = true

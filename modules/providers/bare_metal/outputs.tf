@@ -67,11 +67,26 @@ output "workload_handoff" {
       } : null
     }
 
+    secrets = {
+      mode              = var.secrets_mode
+      eso_chart_version = var.secrets_mode != "inline" ? var.eso_chart_version : null
+
+      provider = null # provider mode not supported on bare_metal
+
+      external = var.secrets_mode == "external" ? {
+        store_name = var.external_secret_store_name
+        store_kind = "ClusterSecretStore"
+        secret_key = var.external_secret_key
+      } : null
+    }
+
     services = {
       rpc_proxy = var.rpc_proxy_enabled ? {
         service_name = "erpc"
         port         = 4000
-        internal_url = "http://erpc:4000"
+        # k3s: Helm chart creates a Service named <project>-erpc
+        # docker_compose: containers communicate via container name
+        internal_url = var.compute_engine == "k3s" ? "http://${var.project_name}-erpc:4000" : "http://erpc:4000"
       } : null
 
       indexer = var.indexer_enabled ? merge({
@@ -86,7 +101,9 @@ output "workload_handoff" {
     data = {
       backend = var.indexer_enabled ? var.indexer_storage_backend : null
 
-      postgres = null
+      postgres = (var.indexer_enabled && var.indexer_storage_backend == "postgres" && var.indexer_postgres_url != "") ? {
+        url = var.indexer_postgres_url
+      } : null
 
       clickhouse = (var.indexer_enabled && var.indexer_storage_backend == "clickhouse") ? {
         url  = var.indexer_clickhouse_url

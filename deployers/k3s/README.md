@@ -43,12 +43,31 @@ The deploy script runs three steps:
 2. **populate-values-from-config-bundle.sh** (shared with EKS deployer) — injects real `erpc.yaml`, `rindexer.yaml`, and ABIs into the skeleton values
 3. **helm upgrade --install** — deploys the populated charts to the k3s cluster
 
+## Secrets Mode
+
+The deployer supports three secrets modes, controlled by the `secrets_mode` Terraform variable:
+
+| Mode | Handoff Contains | What deploy.sh Does |
+|------|-----------------|---------------------|
+| `inline` (default) | Database passwords | Injects passwords into Helm values → K8s Secret |
+| `provider` | SM ARN + region (no passwords) | Waits for ESO, creates ClusterSecretStore → ExternalSecret (references SM secret by ARN) |
+| `external` | Store name + secret key (no passwords) | Waits for ESO, verifies your ClusterSecretStore exists → ExternalSecret (references your secret key) |
+
+When `secrets_mode != "inline"`, the deploy script:
+1. Waits for ESO CRDs to be registered (120s timeout)
+2. Waits for the ESO deployment to be ready
+3. Creates or verifies the ClusterSecretStore
+4. Deploys charts with `secretsMode` set — the chart creates an `ExternalSecret` instead of a `Secret`
+
+See the [Secrets Management guide](https://evm-cloud.xyz/docs/guides/secrets-management) for full details.
+
 ## Security
 
 - **kubeconfig contains static cluster admin credentials** (~1 year validity). This is different from EKS which uses ephemeral STS tokens.
-- `handoff.json` should be written with `0600` permissions or piped directly.
+- `handoff.json` is automatically `chmod 0600` by `deploy.sh`. When writing manually, set permissions accordingly.
 - **Use an encrypted Terraform state backend** (S3+KMS, Terraform Cloud, etc.). The state contains the kubeconfig.
 - The `workload_handoff` output is marked `sensitive = true` in Terraform.
+- With `secrets_mode = "provider"` or `"external"`, database passwords are removed from the handoff entirely.
 
 ## Charts
 

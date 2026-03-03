@@ -104,6 +104,11 @@ resource "terraform_data" "provider_guardrails" {
     }
 
     precondition {
+      condition     = !(var.compute_engine == "ec2" && var.workload_mode == "terraform" && var.ec2_ssh_private_key_path == "")
+      error_message = "ec2_ssh_private_key_path is required when compute_engine=ec2 and workload_mode=terraform (needed for config updates via SSH)."
+    }
+
+    precondition {
       condition     = !(var.infrastructure_provider == "bare_metal" && var.bare_metal_host == "")
       error_message = "bare_metal_host is required when infrastructure_provider=bare_metal."
     }
@@ -111,6 +116,26 @@ resource "terraform_data" "provider_guardrails" {
     precondition {
       condition     = !(var.infrastructure_provider == "bare_metal" && var.bare_metal_ssh_private_key_path == "")
       error_message = "bare_metal_ssh_private_key_path is required when infrastructure_provider=bare_metal."
+    }
+
+    precondition {
+      condition     = !(var.secrets_mode == "provider" && var.infrastructure_provider != "aws")
+      error_message = "secrets_mode=provider requires infrastructure_provider=aws (uses AWS Secrets Manager)."
+    }
+
+    precondition {
+      condition     = !(var.secrets_mode == "external" && var.external_secret_store_name == "")
+      error_message = "external_secret_store_name is required when secrets_mode=external."
+    }
+
+    precondition {
+      condition     = !(var.secrets_mode == "external" && var.external_secret_key == "")
+      error_message = "external_secret_key is required when secrets_mode=external."
+    }
+
+    precondition {
+      condition     = !(var.bare_metal_secrets_encryption == "sops_age")
+      error_message = "bare_metal_secrets_encryption=sops_age is not yet implemented. Use secrets_mode=external with ESO for bare_metal k3s secret management."
     }
 
   }
@@ -138,6 +163,7 @@ module "provider_aws" {
   ec2_instance_type                  = var.ec2_instance_type
   ec2_rpc_proxy_mem_limit            = var.ec2_rpc_proxy_mem_limit
   ec2_indexer_mem_limit              = var.ec2_indexer_mem_limit
+  ec2_ssh_private_key_path           = var.ec2_ssh_private_key_path
   ec2_secret_recovery_window_in_days = var.ec2_secret_recovery_window_in_days
 
   aws_region                   = var.aws_region
@@ -157,6 +183,7 @@ module "provider_aws" {
   postgres_backup_retention            = var.postgres_backup_retention
   postgres_manage_master_user_password = var.postgres_manage_master_user_password
   postgres_master_password             = var.postgres_master_password
+  postgres_force_ssl                   = var.postgres_force_ssl
 
   # RPC Proxy
   rpc_proxy_enabled = var.rpc_proxy_enabled
@@ -186,6 +213,14 @@ module "provider_aws" {
   k3s_api_allowed_cidrs    = var.k3s_api_allowed_cidrs
   k3s_ssh_private_key_path = var.k3s_ssh_private_key_path
   k3s_worker_nodes         = var.k3s_worker_nodes
+
+  # Secrets
+  secrets_mode               = var.secrets_mode
+  secrets_manager_secret_arn = var.secrets_manager_secret_arn
+  secrets_manager_kms_key_id = var.secrets_manager_kms_key_id
+  external_secret_store_name = var.external_secret_store_name
+  external_secret_key        = var.external_secret_key
+  eso_chart_version          = var.eso_chart_version
 }
 
 module "provider_bare_metal" {
@@ -224,7 +259,16 @@ module "provider_bare_metal" {
   indexer_clickhouse_password = var.indexer_clickhouse_password
   indexer_clickhouse_db       = var.indexer_clickhouse_db
 
+  # PostgreSQL BYODB
+  indexer_postgres_url = var.indexer_postgres_url
+
   # k3s
   k3s_version      = var.k3s_version
   k3s_worker_nodes = var.k3s_worker_nodes
+
+  # Secrets
+  secrets_mode               = var.secrets_mode
+  external_secret_store_name = var.external_secret_store_name
+  external_secret_key        = var.external_secret_key
+  eso_chart_version          = var.eso_chart_version
 }

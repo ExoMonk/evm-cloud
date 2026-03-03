@@ -30,7 +30,7 @@ deployers/eks/scripts/render-values-from-handoff.sh /tmp/workload_handoff.json d
 ```bash
 deployers/eks/scripts/populate-values-from-config-bundle.sh \
 	--values-dir deployers/eks/values/dev \
-	--config-dir examples/minimal_external_eks_byo/config
+	--config-dir examples/aws_eks_BYO_clickhouse/config
 ```
 
 4. Review rendered values and set remaining runtime fields (URLs/secrets references).

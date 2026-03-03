@@ -48,13 +48,8 @@ resource "null_resource" "k3s_agent_config" {
       "sudo mkdir -p /etc/rancher/k3s",
       "TOKEN=$(cat /tmp/k3s-token)",
       "rm -f /tmp/k3s-token",
-      "sudo tee /etc/rancher/k3s/config.yaml > /dev/null <<CONF",
-      "server: https://${self.triggers.server_host}:6443",
-      "token: $TOKEN",
-      "node-name: ${self.triggers.node_name}",
-      "node-label:",
-      "  - evm-cloud/role=${self.triggers.role}",
-      "CONF",
+      "printf 'server: https://${self.triggers.server_host}:6443\\ntoken: %s\\nnode-name: ${self.triggers.node_name}\\nnode-label:\\n  - evm-cloud/role=${self.triggers.role}\\n' \"$TOKEN\" | sudo tee /etc/rancher/k3s/config.yaml > /dev/null",
+      "sudo chmod 0600 /etc/rancher/k3s/config.yaml",
       "echo '[evm-cloud] Agent config written to /etc/rancher/k3s/config.yaml'",
     ]
   }
@@ -97,6 +92,8 @@ resource "null_resource" "k3s_agent" {
     inline = [
       "set -eu",
       "echo '[evm-cloud] Installing k3s agent on ${self.triggers.node_name}...'",
+      "if ! sudo test -f /etc/rancher/k3s/config.yaml || ! sudo grep -q 'token:' /etc/rancher/k3s/config.yaml; then echo '[evm-cloud] ERROR: /etc/rancher/k3s/config.yaml missing or has no token. Stage 1 (k3s_agent_config) may not have run.'; exit 1; fi",
+      "echo '[evm-cloud] Config verified: /etc/rancher/k3s/config.yaml exists with token.'",
       "curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${self.triggers.k3s_version}' sh -s - agent || { echo '[evm-cloud] k3s agent service failed — dumping journal:'; sudo journalctl -u k3s-agent --no-pager -n 30; exit 1; }",
       "echo '[evm-cloud] k3s agent installed.'",
     ]

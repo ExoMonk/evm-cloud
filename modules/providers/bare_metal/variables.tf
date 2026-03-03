@@ -123,6 +123,15 @@ variable "indexer_instances" {
   default = []
 }
 
+# --- PostgreSQL BYODB ---
+
+variable "indexer_postgres_url" {
+  description = "PostgreSQL connection string (e.g. postgres://user:pass@host:5432/db)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # --- ClickHouse BYODB ---
 
 variable "indexer_clickhouse_url" {
@@ -173,3 +182,30 @@ variable "k3s_worker_nodes" {
   }))
   default = []
 }
+
+# --- Secrets Management ---
+
+variable "secrets_mode" {
+  description = "How secrets are delivered to workloads: inline, provider (AWS-only), or external (user-managed store)."
+  type        = string
+  default     = "inline"
+}
+
+variable "external_secret_store_name" {
+  description = "Name of a user-managed ClusterSecretStore for secrets_mode=external."
+  type        = string
+  default     = ""
+}
+
+variable "external_secret_key" {
+  description = "Secret key/name in the external store that holds workload env vars."
+  type        = string
+  default     = ""
+}
+
+variable "eso_chart_version" {
+  description = "External Secrets Operator Helm chart version."
+  type        = string
+  default     = "0.9.13"
+}
+

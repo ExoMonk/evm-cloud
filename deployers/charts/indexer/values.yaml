@@ -34,6 +34,13 @@ storageBackend: postgres
 
 rpcUrl: ""
 
+# Secrets delivery mode: inline (default, K8s Secret from values), provider/external (ExternalSecret CR via ESO)
+secretsMode: inline
+secrets:
+  storeName: ""
+  storeKind: ClusterSecretStore
+  secretKey: ""
+
 postgres:
   databaseUrl: ""
 

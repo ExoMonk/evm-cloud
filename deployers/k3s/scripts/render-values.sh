@@ -12,6 +12,7 @@ OUT_DIR="${2:?Usage: render-values.sh <handoff.json> <out-dir>}"
 PROJECT=$(jq -r '.project_name' "$HANDOFF")
 RPC_PORT=$(jq -r '.services.rpc_proxy.port // 4000' "$HANDOFF")
 BACKEND=$(jq -r '.data.backend // "postgres"' "$HANDOFF")
+SECRETS_MODE=$(jq -r '.secrets.mode // "inline"' "$HANDOFF")
 
 # Extract RPC URL: if rpc_proxy is enabled, use its internal service URL
 RPC_INTERNAL_URL=$(jq -r '.services.rpc_proxy.internal_url // empty' "$HANDOFF")
@@ -76,12 +77,18 @@ replicas: 1
 strategy:
   type: Recreate
 rpcUrl: "${RPC_URL}"
+secretsMode: "${SECRETS_MODE}"
 config:
   rindexerYaml: |
     # paste rindexer.yaml content here
     name: ${PROJECT}
     project_type: no-code
   abis: {}
+EOF
+
+  # Secrets: inline mode includes credentials in values, provider/external uses ESO
+  if [[ "$SECRETS_MODE" == "inline" ]]; then
+    cat >> "$OUT_FILE" <<EOF
 postgres:
   databaseUrl: "${PG_URL}"
 clickhouse:
@@ -90,6 +97,30 @@ clickhouse:
   db: "${CH_DB}"
   password: "${CH_PASSWORD}"
 EOF
+  else
+    # ESO mode: no passwords in values, add secret store reference
+    if [[ "$SECRETS_MODE" == "provider" ]]; then
+      SECRET_ARN=$(jq -r '.secrets.provider.secret_arn // empty' "$HANDOFF")
+      STORE_NAME="${PROJECT}-aws-sm"
+      # Use ARN as the key — ESO resolves it for both TF-created and BYOA secrets
+      SECRET_KEY="$SECRET_ARN"
+    else
+      STORE_NAME=$(jq -r '.secrets.external.store_name // empty' "$HANDOFF")
+      SECRET_KEY=$(jq -r '.secrets.external.secret_key // empty' "$HANDOFF")
+    fi
+    STORE_KIND=$(jq -r '.secrets.external.store_kind // "ClusterSecretStore"' "$HANDOFF")
+
+    cat >> "$OUT_FILE" <<EOF
+secrets:
+  storeName: "${STORE_NAME}"
+  storeKind: "${STORE_KIND}"
+  secretKey: "${SECRET_KEY}"
+clickhouse:
+  url: "${CH_URL}"
+  user: "${CH_USER}"
+  db: "${CH_DB}"
+EOF
+  fi
 
   # Inject nodeSelector if instance has a node_role
   if [[ -n "$NODE_ROLE" && "$NODE_ROLE" != "null" ]]; then

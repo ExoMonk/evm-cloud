@@ -60,6 +60,7 @@ VALUES_DIR=$(mktemp -d /tmp/k3s-values.XXXXXX)
 trap "rm -rf '$HANDOFF_FILE' '$KUBECONFIG_PATH' '$VALUES_DIR'" EXIT
 
 cat "$HANDOFF" > "$HANDOFF_FILE"
+chmod 0600 "$HANDOFF_FILE"
 
 # --- Parse handoff ---
 
@@ -116,6 +117,83 @@ if [[ "$READY_NODES" -lt "$EXPECTED_NODES" ]]; then
   echo "WARNING: Only ${READY_NODES}/${EXPECTED_NODES} nodes Ready. Pods may be Pending." >&2
 fi
 
+# --- ESO readiness gate (when secrets_mode != inline) ---
+
+SECRETS_MODE=$(jq -r '.secrets.mode // "inline"' "$HANDOFF_FILE")
+
+if [[ "$SECRETS_MODE" != "inline" ]]; then
+  echo "[evm-cloud] Secrets mode: ${SECRETS_MODE} — checking ESO readiness..."
+
+  # Install ESO if not already present
+  ESO_CHART_VERSION=$(jq -r '.secrets.eso_chart_version // "0.9.13"' "$HANDOFF_FILE")
+
+  if ! kubectl get crd externalsecrets.external-secrets.io >/dev/null 2>&1; then
+    echo "[evm-cloud] ESO not found — installing via Helm (v${ESO_CHART_VERSION})..."
+    helm repo add external-secrets https://charts.external-secrets.io 2>/dev/null || true
+    helm repo update external-secrets
+    helm upgrade --install external-secrets external-secrets/external-secrets \
+      --namespace external-secrets --create-namespace \
+      --version "$ESO_CHART_VERSION" \
+      --set installCRDs=true \
+      --atomic --timeout 300s
+    echo "[evm-cloud] ESO installed."
+  else
+    echo "[evm-cloud] ESO CRDs already present."
+  fi
+
+  # Wait for ESO CRDs to be registered
+  ESO_READY=false
+  for i in $(seq 1 24); do
+    if kubectl get crd externalsecrets.external-secrets.io >/dev/null 2>&1; then
+      ESO_READY=true
+      break
+    fi
+    echo "[evm-cloud] Waiting for ESO CRDs... (${i}/24)"
+    sleep 5
+  done
+
+  if [[ "$ESO_READY" != "true" ]]; then
+    echo "ERROR: External Secrets Operator CRDs not found after 120s." >&2
+    exit 1
+  fi
+
+  # Wait for ESO deployment to be ready
+  kubectl -n external-secrets rollout status deployment/external-secrets --timeout=120s || {
+    echo "ERROR: ESO deployment not ready after 120s." >&2
+    exit 1
+  }
+
+  echo "[evm-cloud] ESO is ready."
+
+  # Create or verify ClusterSecretStore
+  if [[ "$SECRETS_MODE" == "provider" ]]; then
+    SM_REGION=$(jq -r '.secrets.provider.region // "us-east-1"' "$HANDOFF_FILE")
+    PROJECT_NAME=$(jq -r '.project_name' "$HANDOFF_FILE")
+    STORE_NAME="${PROJECT_NAME}-aws-sm"
+
+    echo "[evm-cloud] Creating ClusterSecretStore: ${STORE_NAME}..."
+    kubectl apply -f - <<CSSEOF
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: ${STORE_NAME}
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: ${SM_REGION}
+CSSEOF
+    echo "[evm-cloud] ClusterSecretStore ${STORE_NAME} applied."
+  elif [[ "$SECRETS_MODE" == "external" ]]; then
+    EXT_STORE=$(jq -r '.secrets.external.store_name // empty' "$HANDOFF_FILE")
+    if ! kubectl get clustersecretstore "$EXT_STORE" >/dev/null 2>&1; then
+      echo "ERROR: ClusterSecretStore '${EXT_STORE}' not found. Create it before deploying workloads." >&2
+      exit 1
+    fi
+    echo "[evm-cloud] ClusterSecretStore ${EXT_STORE} verified."
+  fi
+fi
+
 # --- Deploy workloads ---
 
 RPC_PROXY_ENABLED=$(jq -r '.services.rpc_proxy != null' "$HANDOFF_FILE")
@@ -167,6 +245,30 @@ if [[ "$INDEXER_ENABLED" == "true" ]]; then
   if [[ "$DEPLOY_FAILED" -ne 0 ]]; then
     echo "ERROR: One or more indexer instances failed to deploy." >&2
     exit 1
+  fi
+fi
+
+# --- Post-deploy: verify ExternalSecret sync (non-inline modes) ---
+if [[ "$SECRETS_MODE" != "inline" ]]; then
+  echo "[evm-cloud] Verifying ExternalSecret sync status..."
+  SYNC_TIMEOUT=60
+  SYNC_ELAPSED=0
+  ALL_SYNCED=false
+  while [[ $SYNC_ELAPSED -lt $SYNC_TIMEOUT ]]; do
+    NOT_SYNCED=$(kubectl get externalsecret -A -o jsonpath='{range .items[*]}{.metadata.name}={.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null | grep -v "=True" | grep -v "^$" || true)
+    if [[ -z "$NOT_SYNCED" ]]; then
+      ALL_SYNCED=true
+      break
+    fi
+    sleep 5
+    SYNC_ELAPSED=$((SYNC_ELAPSED + 5))
+  done
+  if [[ "$ALL_SYNCED" == "true" ]]; then
+    echo "[evm-cloud] All ExternalSecrets synced successfully."
+  else
+    echo "WARNING: Some ExternalSecrets not synced after ${SYNC_TIMEOUT}s. Pods may fail to start." >&2
+    echo "  Check: kubectl get externalsecret -A" >&2
+    echo "  Force sync: kubectl annotate es <name> force-sync=\$(date +%s)" >&2
   fi
 fi
 

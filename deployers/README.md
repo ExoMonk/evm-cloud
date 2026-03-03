@@ -4,8 +4,9 @@ Reference Layer-2 deployment assets for `workload_mode = "external"`.
 
 ## Structure
 
+- `compose/` SSH-based Docker Compose deployment (EC2, VPS, bare metal)
 - `eks/` Helm + ArgoCD GitOps references
-- `ec2/` SSH-based Docker Compose deployment scripts
+- `k3s/` Helm-based deployment for k3s clusters
 
 ## Contract source
 

@@ -190,6 +190,18 @@ variable "workload_mode" {
   default     = "terraform"
 }
 
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key for config updates via null_resource."
+  type        = string
+  default     = ""
+}
+
+variable "ssh_user" {
+  description = "SSH user for the EC2 instance."
+  type        = string
+  default     = "ec2-user"
+}
+
 variable "secret_name_prefix" {
   description = "Prefix for Secrets Manager secret name."
   type        = string

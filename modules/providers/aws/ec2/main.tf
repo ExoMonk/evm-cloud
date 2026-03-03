@@ -34,6 +34,14 @@ locals {
     }
   })
 
+  # Config content hash for deploy trigger (mirrors bare_metal compose pattern)
+  config_hash = sha256(join("", [
+    local.docker_compose_content,
+    var.erpc_yaml_content,
+    var.rindexer_yaml_content,
+    jsonencode(var.abi_files),
+  ]))
+
   # Render cloud-init from template
   cloud_init_content = templatefile("${path.module}/cloud-init.yml.tpl", {
     workload_mode          = var.workload_mode
@@ -142,4 +150,59 @@ resource "aws_instance" "this" {
   tags = merge(var.tags, {
     Name = "${var.project_name}-${var.environment}"
   })
+}
+
+# --- Config Update (terraform mode only) ---
+# Mirrors bare_metal compose pattern: triggers on config hash change,
+# re-uploads configs via SSH, force-recreates containers.
+
+resource "null_resource" "config_update" {
+  count      = var.workload_mode == "terraform" && var.ssh_private_key_path != "" ? 1 : 0
+  depends_on = [aws_instance.this]
+
+  triggers = {
+    config_hash     = local.config_hash
+    instance_ip     = aws_instance.this.public_ip
+    ssh_user        = var.ssh_user
+    ssh_private_key = var.ssh_private_key_path
+  }
+
+  connection {
+    type        = "ssh"
+    host        = self.triggers.instance_ip
+    user        = self.triggers.ssh_user
+    private_key = file(pathexpand(self.triggers.ssh_private_key))
+    port        = 22
+  }
+
+  # Upload docker-compose.yml
+  provisioner "file" {
+    content     = local.docker_compose_content
+    destination = "/opt/evm-cloud/docker-compose.yml"
+  }
+
+  # Upload erpc.yaml (if enabled)
+  provisioner "file" {
+    content     = var.erpc_yaml_content != "" ? var.erpc_yaml_content : "# erpc not enabled"
+    destination = "/opt/evm-cloud/config/erpc.yaml"
+  }
+
+  # Upload rindexer.yaml (if enabled)
+  provisioner "file" {
+    content     = var.rindexer_yaml_content != "" ? var.rindexer_yaml_content : "# rindexer not enabled"
+    destination = "/opt/evm-cloud/config/rindexer.yaml"
+  }
+
+  # Upload ABI manifest
+  provisioner "file" {
+    content     = jsonencode(var.abi_files)
+    destination = "/opt/evm-cloud/config/abis/_manifest.json"
+  }
+
+  # Deploy: refresh secrets, extract ABIs, force-recreate containers
+  provisioner "remote-exec" {
+    inline = [templatefile("${path.module}/deploy.sh.tpl", {
+      project_name = var.project_name
+    })]
+  }
 }

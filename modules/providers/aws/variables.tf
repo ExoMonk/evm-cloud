@@ -69,6 +69,12 @@ variable "ec2_indexer_mem_limit" {
   default     = "2g"
 }
 
+variable "ec2_ssh_private_key_path" {
+  description = "Path to SSH private key for EC2 config updates."
+  type        = string
+  default     = ""
+}
+
 variable "ec2_secret_recovery_window_in_days" {
   description = "Recovery window for Secrets Manager secret deletion (0 = immediate for dev, 7-30 for production)."
   type        = number
@@ -165,6 +171,12 @@ variable "postgres_master_password" {
   type        = string
   default     = null
   sensitive   = true
+}
+
+variable "postgres_force_ssl" {
+  description = "Require SSL for all RDS connections. Set to false for clients with broken TLS (e.g. rindexer < 0.37 using native-tls)."
+  type        = bool
+  default     = false
 }
 
 # --- RPC Proxy (eRPC) ---
@@ -302,4 +314,43 @@ variable "k3s_worker_nodes" {
     host          = optional(string)
   }))
   default = []
+}
+
+# --- Secrets Management ---
+
+variable "secrets_mode" {
+  description = "How secrets are delivered to workloads: inline, provider (AWS SM + ESO), or external (user-managed store)."
+  type        = string
+  default     = "inline"
+}
+
+variable "secrets_manager_secret_arn" {
+  description = "ARN of a pre-existing AWS Secrets Manager secret (BYOA path). When set, skips SM secret creation."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "secrets_manager_kms_key_id" {
+  description = "KMS key ID or ARN for encrypting the Secrets Manager secret. Empty uses the AWS-managed key."
+  type        = string
+  default     = ""
+}
+
+variable "external_secret_store_name" {
+  description = "Name of a user-managed ClusterSecretStore for secrets_mode=external."
+  type        = string
+  default     = ""
+}
+
+variable "external_secret_key" {
+  description = "Secret key/name in the external store that holds workload env vars."
+  type        = string
+  default     = ""
+}
+
+variable "eso_chart_version" {
+  description = "External Secrets Operator Helm chart version."
+  type        = string
+  default     = "0.9.13"
 }

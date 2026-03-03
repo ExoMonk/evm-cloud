@@ -84,3 +84,9 @@ variable "master_password" {
   default     = null
   sensitive   = true
 }
+
+variable "force_ssl" {
+  description = "Require SSL for all database connections. Set to false for clients with broken TLS (e.g. rindexer < 0.37 using native-tls + OpenSSL 3.0)."
+  type        = bool
+  default     = false
+}

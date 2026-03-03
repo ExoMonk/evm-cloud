@@ -116,6 +116,12 @@ variable "ec2_indexer_mem_limit" {
   default     = "2g"
 }
 
+variable "ec2_ssh_private_key_path" {
+  description = "Path to SSH private key for EC2 config updates. Required when compute_engine=ec2 and workload_mode=terraform."
+  type        = string
+  default     = ""
+}
+
 variable "ec2_secret_recovery_window_in_days" {
   description = "Recovery window for Secrets Manager secret deletion (0 = immediate for dev, 7-30 for production)."
   type        = number
@@ -226,6 +232,12 @@ variable "postgres_master_password" {
   sensitive   = true
 }
 
+variable "postgres_force_ssl" {
+  description = "Require SSL for all RDS connections. Set to false for clients with broken TLS (e.g. rindexer < 0.37 using native-tls)."
+  type        = bool
+  default     = false
+}
+
 # --- RPC Proxy (eRPC) ---
 
 variable "rpc_proxy_enabled" {
@@ -272,6 +284,13 @@ variable "indexer_storage_backend" {
 }
 
 # --- ClickHouse BYODB ---
+
+variable "indexer_postgres_url" {
+  description = "PostgreSQL connection string (e.g. postgres://user:pass@host:5432/db). Used for bare_metal + postgres deployments."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
 
 variable "indexer_clickhouse_url" {
   description = "ClickHouse HTTP endpoint (e.g. http://clickhouse.example.com:8123). Required when indexer_storage_backend=clickhouse."
@@ -404,5 +423,60 @@ variable "k3s_worker_nodes" {
     host          = optional(string)
   }))
   default = []
+}
+
+# --- Secrets Management ---
+
+variable "secrets_mode" {
+  description = "How secrets are delivered to workloads: inline (default, current behavior), provider (AWS Secrets Manager + ESO), or external (user-managed secret store)."
+  type        = string
+  default     = "inline"
+
+  validation {
+    condition     = contains(["inline", "provider", "external"], var.secrets_mode)
+    error_message = "secrets_mode must be one of: inline, provider, external."
+  }
+}
+
+variable "secrets_manager_secret_arn" {
+  description = "ARN of a pre-existing AWS Secrets Manager secret. When set, Terraform skips creating the secret (avoids secret values in TF state). Required format: arn:aws:secretsmanager:REGION:ACCOUNT:secret:NAME."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "secrets_manager_kms_key_id" {
+  description = "KMS key ID or ARN for encrypting the Secrets Manager secret. Empty uses the AWS-managed key."
+  type        = string
+  default     = ""
+}
+
+variable "external_secret_store_name" {
+  description = "Name of a user-managed ClusterSecretStore for secrets_mode=external. The store must exist in the cluster before deploying workloads."
+  type        = string
+  default     = ""
+}
+
+variable "external_secret_key" {
+  description = "Secret key/name in the external store that holds workload env vars. Required when secrets_mode=external."
+  type        = string
+  default     = ""
+}
+
+variable "eso_chart_version" {
+  description = "External Secrets Operator Helm chart version. Pinned for reproducibility."
+  type        = string
+  default     = "0.9.13"
+}
+
+variable "bare_metal_secrets_encryption" {
+  description = "Encryption method for bare metal .env secrets: none (default) or sops_age (SOPS + age encryption at rest)."
+  type        = string
+  default     = "none"
+
+  validation {
+    condition     = contains(["none", "sops_age"], var.bare_metal_secrets_encryption)
+    error_message = "bare_metal_secrets_encryption must be one of: none, sops_age."
+  }
 }
 
