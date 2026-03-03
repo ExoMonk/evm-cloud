@@ -1,9 +1,5 @@
 import React from "react";
 
-// ─── Data ────────────────────────────────────────────────────────
-// Left: what the user provides. Middle: what Terraform creates.
-// Right: what's running after apply.
-
 type Item = {
   label: string;
   sub?: string;
@@ -17,41 +13,39 @@ type Column = {
 
 const columns: Column[] = [
   {
-    title: "You Provide",
+    title: "Step 1 · Configure",
     color: "#8b5cf6",
     items: [
-      { label: "rindexer.yaml", sub: "Indexer config" },
-      { label: "erpc.yaml", sub: "RPC proxy config" },
-      { label: "Contract ABIs", sub: "Event definitions" },
-      { label: "terraform.tfvars", sub: "Infra settings" },
-      { label: "RPC endpoints", sub: "Or BYO node" },
+      { label: "minimal_clickhouse.tfvars", sub: "EC2 + BYO ClickHouse" },
+      { label: "ssh_public_key", sub: "EC2 access" },
+      { label: "ClickHouse URL + Password", sub: "Stored in secrets.auto.tfvars" },
+      { label: "rindexer.yaml + ABIs", sub: "Indexer behavior" },
+      { label: "Command: terraform init", sub: "Initialize providers" },
     ],
   },
   {
-    title: "Terraform Creates",
+    title: "Step 2 · Deploy",
     color: "#0ea5e9",
     items: [
-      { label: "VPC + Networking", sub: "Subnets, SGs, bastion" },
-      { label: "Compute", sub: "EC2 / EKS / k3s / bare metal" },
-      { label: "Ingress / TLS", sub: "Cloudflare / Caddy / ingress-nginx" },
-      { label: "Database", sub: "PostgreSQL (RDS) or BYODB ClickHouse" },
-      { label: "Secrets", sub: "AWS Secrets Manager / K8s secrets" },
-      { label: "Config Injection", sub: "YAML + ABIs delivered to containers" },
+      { label: "VPC + Security Groups", sub: "Network and host access" },
+      { label: "EC2 t3.micro", sub: "Docker host" },
+      { label: "IAM Role + Secrets Manager", sub: "Runtime secret delivery" },
+      { label: "Docker Compose Stack", sub: "Rendered on /opt/evm-cloud" },
+      { label: "Command: terraform apply", sub: "Creates infra + starts containers" },
     ],
   },
   {
-    title: "You Get",
+    title: "Step 3 · Verify",
     color: "#10b981",
     items: [
-      { label: "eRPC Proxy", sub: "Multi-upstream failover + caching" },
-      { label: "rindexer", sub: "Indexing EVM events to your DB" },
-      { label: "Queryable Data", sub: "Events, txs, logs in SQL" },
-      { label: "SSH / kubectl", sub: "Full access to your infra" },
+      { label: "eRPC", sub: "RPC proxy on container network" },
+      { label: "rindexer", sub: "Indexes events into ClickHouse" },
+      { label: "workload_handoff", sub: "public_ip, ssh_command, paths" },
+      { label: "Queryable Data", sub: "Events available in BYO ClickHouse" },
+      { label: "Command: docker compose ps", sub: "Confirm services are running" },
     ],
   },
 ];
-
-// ─── Styles ──────────────────────────────────────────────────────
 
 const s = {
   container: {
@@ -107,7 +101,6 @@ const s = {
     fontSize: "10px",
     marginTop: "1px",
   },
-  // Arrow column between sections
   arrow: {
     display: "flex",
     alignItems: "center",
@@ -121,18 +114,18 @@ const s = {
   },
 };
 
-// ─── Component ───────────────────────────────────────────────────
-
-export function DeployDiagram() {
+export function GettingStartedEc2Diagram() {
   return (
     <div style={s.container}>
       {columns.map((col, i) => (
         <React.Fragment key={col.title}>
           {i > 0 && <div style={s.arrow}>→</div>}
-          <div style={{
-            ...s.column,
-            ...(i === columns.length - 1 ? s.columnLast : {}),
-          }}>
+          <div
+            style={{
+              ...s.column,
+              ...(i === columns.length - 1 ? s.columnLast : {}),
+            }}
+          >
             <div style={s.columnHeader(col.color)}>{col.title}</div>
             <div style={s.columnBody}>
               {col.items.map((item) => (

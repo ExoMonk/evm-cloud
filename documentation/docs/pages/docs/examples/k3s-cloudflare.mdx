@@ -1,0 +1,176 @@
+# k3s + Cloudflare Ingress
+
+Lightweight Kubernetes on a single EC2 instance with Cloudflare TLS termination. Combines k3s cost efficiency (~$17/mo) with production-grade TLS, DDoS protection, and WAF -- all via Cloudflare's free tier.
+
+## Architecture
+
+```
+Client
+  → Cloudflare edge (free TLS, DDoS, WAF)
+    → Origin cert (encrypted)
+      ┌────────────────── AWS VPC ──────────────────┐
+      │                                              │
+      │  EC2 Instance (k3s single-node cluster)      │
+      │  ├── ingress-nginx (ports 80/443 hostPort)   │
+      │  ├── eRPC pod (RPC proxy, ClusterIP)         │
+      │  └── rindexer pod (indexer)                  │
+      │       └── writes to ───────────────────────────→ ClickHouse (external)
+      │                                              │
+      │  Port 4000 NOT exposed externally            │
+      └──────────────────────────────────────────────┘
+```
+
+## What Gets Deployed
+
+**Phase 1 (Terraform):**
+- VPC with public subnets, Internet Gateway, security groups
+- EC2 instance with k3s installed via SSH provisioner
+- Security group: ports 80/443 open for Cloudflare, port 6443 for k3s API, port 4000 blocked
+
+**Phase 2 (deploy.sh):**
+- ingress-nginx controller with Cloudflare-optimized config (CF-Connecting-IP forwarding, security headers)
+- Cloudflare origin TLS secret (kubernetes.io/tls)
+- Ingress resource routing `your-domain.com` → eRPC service
+- eRPC and rindexer deployed as Kubernetes pods via Helm charts
+
+## Why Cloudflare?
+
+| Benefit | Detail |
+|---------|--------|
+| Free TLS | No cert management -- origin certs last 15 years |
+| DDoS protection | Absorbs volumetric attacks at the edge (RPC endpoints are prime targets) |
+| WAF | Free managed ruleset blocks common exploits |
+| Domain routing | `rpc.yourdomain.com` instead of raw IP:port |
+| Port lockdown | eRPC port 4000 never exposed -- all traffic through ingress |
+| Security headers | HSTS, X-Frame-Options, CSP, X-Content-Type-Options applied by ingress-nginx |
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- AWS CLI v2 with configured credentials (EC2, VPC, IAM)
+- SSH key pair
+- `kubectl`, `helm`, `jq` (for Phase 2)
+- A domain managed by Cloudflare
+- A ClickHouse instance ([ClickHouse Cloud](https://clickhouse.cloud/) or self-hosted)
+
+## Quick Start
+
+### 1. Create Cloudflare Origin Certificate
+
+1. [Cloudflare dashboard](https://dash.cloudflare.com/) → select your domain
+2. **SSL/TLS → Origin Server → Create Certificate**
+   - RSA 2048, hostnames: `*.yourdomain.com, yourdomain.com`, 15 years
+3. Copy the certificate and private key (key shown only once)
+4. **SSL/TLS → Overview** → set mode to **Full (strict)**
+
+### 2. Configure
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/aws_k3s_cloudflare_ingress
+
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit secrets.auto.tfvars with your values:
+#   ssh_public_key, k3s_ssh_private_key_path, k3s_api_allowed_cidrs,
+#   ingress_domain, ingress_cloudflare_origin_cert, ingress_cloudflare_origin_key,
+#   indexer_clickhouse_url, indexer_clickhouse_password
+```
+
+### 3. Deploy
+
+```bash
+# Phase 1: Provision EC2 + k3s
+terraform init
+terraform plan -var-file=cloudflare_k3s.tfvars -out=plan.tfplan
+terraform apply plan.tfplan
+
+# Extract handoff
+terraform output -json workload_handoff > handoff.json
+
+# Phase 2: Deploy workloads + ingress
+../../deployers/k3s/deploy.sh handoff.json --config-dir ./config
+```
+
+### 4. Point DNS
+
+Get the EC2 IP and create a Cloudflare DNS record:
+
+```bash
+terraform output -json workload_handoff | jq -r '.runtime.k3s.host_ip'
+```
+
+In Cloudflare DNS, add an **A record**:
+
+| Type | Name | Content | Proxy status |
+|------|------|---------|-------------|
+| A | `rpc` (or your subdomain) | EC2 public IP | Proxied (orange cloud) |
+
+### 5. Verify
+
+```bash
+# Should return eRPC response via Cloudflare TLS
+curl https://rpc.yourdomain.com/
+
+# Port 4000 should NOT be reachable directly
+curl --connect-timeout 5 http://<EC2_IP>:4000  # timeout expected
+```
+
+## Key Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ingress_mode` | string | `"cloudflare"` | TLS mode (set in main.tf) |
+| `ingress_domain` | string | - | Domain for TLS (e.g. `rpc.yourdomain.com`) |
+| `ingress_cloudflare_origin_cert` | string | - | CF origin certificate PEM (sensitive) |
+| `ingress_cloudflare_origin_key` | string | - | CF origin private key PEM (sensitive) |
+| `k3s_instance_type` | string | `"t3.medium"` | EC2 instance size |
+| `k3s_ssh_private_key_path` | string | - | Path to SSH private key |
+| `k3s_api_allowed_cidrs` | list(string) | - | CIDRs for SSH + k3s API access |
+| `indexer_clickhouse_url` | string | - | ClickHouse HTTP endpoint (sensitive) |
+| `indexer_clickhouse_password` | string | - | ClickHouse password (sensitive) |
+
+See [Variable Reference](/docs/variable-reference) for the full list including ingress tuning options (HSTS preload, body size limits, staging ACME, chart versions).
+
+## Customization
+
+**Skip the indexer** (RPC proxy only):
+```hcl
+# In cloudflare_k3s.tfvars
+indexer_enabled = false
+```
+
+**Private RPC upstream** -- edit `config/erpc.yaml`:
+```yaml
+upstreams:
+  - id: primary
+    endpoint: https://your-private-rpc.com/v1/YOUR_KEY
+    type: evm
+```
+
+**Larger instance** for multi-chain indexing:
+```hcl
+k3s_instance_type = "t3.medium"  # 2 vCPU, 4GB (~$30/mo)
+```
+
+## When to Use This
+
+**Choose this example when:**
+- You want production TLS + DDoS protection with zero cert management overhead
+- You have a domain managed by Cloudflare (free plan works)
+- You want Kubernetes features without EKS cost
+
+**Consider alternatives when:**
+- You do not use Cloudflare -- use [k3s + ClickHouse](./k3s-clickhouse.mdx) with `ingress_mode = "ingress_nginx"` for Let's Encrypt
+- You do not need Kubernetes -- use [EC2 + Docker Compose](./ec2-docker-compose-clickhouse.mdx) with `ingress_mode = "caddy"` for Caddy + Let's Encrypt
+- You want managed Kubernetes -- use [EKS](./eks-clickhouse.mdx)
+
+## Teardown
+
+```bash
+../../deployers/k3s/teardown.sh handoff.json
+terraform destroy -var-file=cloudflare_k3s.tfvars
+```
+
+Remove the DNS A record in Cloudflare after destroying.
+
+See [examples/aws_k3s_cloudflare_ingress](https://github.com/ExoMonk/evm-cloud/tree/main/examples/aws_k3s_cloudflare_ingress) for complete source and README.

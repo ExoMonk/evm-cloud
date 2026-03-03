@@ -1,4 +1,4 @@
-import { DeployDiagram } from '../../components/DeployDiagram'
+import { GettingStartedEc2Diagram } from '../../components/GettingStartedEc2Diagram'
 import { WhatJustHappened } from '../../components/WhatJustHappened'
 
 # Getting Started
@@ -19,7 +19,12 @@ Deploy an EVM blockchain indexer on AWS in under 10 minutes. This guide uses the
 
 ### What You're About to Build
 
-<DeployDiagram />
+<GettingStartedEc2Diagram />
+
+**Fast path:**
+- Configure variables and secrets (`secrets.auto.tfvars` + `minimal_clickhouse.tfvars`)
+- Deploy with `terraform apply -var-file=minimal_clickhouse.tfvars`
+- Verify with `terraform output -json workload_handoff` + `docker compose ps` on the EC2 host
 
 ## Prerequisites
 

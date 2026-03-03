@@ -1,6 +1,6 @@
 # Examples
 
-8 ready-to-use deployment examples. Each is a complete Terraform configuration you can `terraform apply`.
+9 ready-to-use deployment examples. Each is a complete Terraform configuration you can `terraform apply`.
 
 ## Which Example Should I Use?
 
@@ -13,13 +13,14 @@
 | [prod_aws_k3s_multi_byo_clickhouse](./k3s-multi-clickhouse.mdx) | AWS | k3s multi-node (spot) + SM + ESO | ClickHouse (BYODB) | external | ~$40 | Production: secrets via SM |
 | [baremetal_byo_clickhouse](./bare-metal-clickhouse.mdx) | Bare Metal | Docker Compose | ClickHouse (BYODB) | terraform | ~$5-20 | Any VPS, no AWS |
 | [minimal_aws_external_ec2_byo](./external-ec2.mdx) | AWS | EC2 | ClickHouse (BYODB) | external | ~$15-35 | CI/CD owns workloads |
+| [aws_k3s_cloudflare_ingress](./k3s-cloudflare.mdx) | AWS | k3s on EC2 | ClickHouse (BYODB) | external | ~$17 | k3s + Cloudflare TLS |
 | [baremetal_k3s_byo_db](./bare-metal-k3s.mdx) | Bare Metal | k3s | PostgreSQL (BYODB) | external | Your VPS | k3s on any VPS |
 
 ## How to Choose
 
 - **Need managed database?** Use [minimal_aws_rds](./ec2-docker-compose-rds.mdx) -- RDS PostgreSQL with zero external dependencies.
 - **Want cheapest AWS?** Use [minimal_aws_byo_clickhouse](./ec2-docker-compose-clickhouse.mdx) -- single EC2 instance with your own ClickHouse.
-- **Want Kubernetes?** Use [EKS](./eks-clickhouse.mdx) for production, [k3s](./k3s-clickhouse.mdx) for budget single-node K8s, or [k3s multi-node](./k3s-multi-clickhouse.mdx) for live+backfill separation with spot workers.
+- **Want Kubernetes?** Use [EKS](./eks-clickhouse.mdx) for production, [k3s](./k3s-clickhouse.mdx) for budget single-node K8s, [k3s + Cloudflare](./k3s-cloudflare.mdx) for k3s with production TLS, or [k3s multi-node](./k3s-multi-clickhouse.mdx) for live+backfill separation with spot workers.
 - **No AWS account?** Use [baremetal_byo_clickhouse](./bare-metal-clickhouse.mdx) (Docker Compose) or [bare_metal_k3s](./bare-metal-k3s.mdx) (k3s + ESO) -- works on any VPS (Hetzner, OVH, DigitalOcean).
 - **Separate infra from app deploy?** Use [external_ec2](./external-ec2.mdx) -- Terraform provisions infrastructure, your CI/CD deploys workloads.
 

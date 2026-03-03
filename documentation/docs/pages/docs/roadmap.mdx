@@ -41,7 +41,7 @@ terraform apply
 | External Mode | ✅ Shipped | Separate infra and workload lifecycles |
 | Managed ClickHouse | 🔨 Building | Self-hosted ClickHouse with auto-provisioning |
 | Monitoring | 🔨 Building | Grafana + Prometheus dashboards and alerting |
-| Ingress / TLS | 🔨 Building | Caddy or ALB with automatic TLS |
+| Ingress / TLS | ✅ Shipped | Cloudflare, Caddy (Let's Encrypt), or ingress-nginx + cert-manager |
 | K8s Test Suite | 🔨 Building | kind-based chart validation and connectivity tests |
 | GCP Provider | 📋 Planned | GCE, GKE, Cloud SQL — same interface as AWS |
 | EVM Cloud CLI | 📋 Planned | `init`, `deploy`, `status`, `logs`, `scale` |
@@ -72,22 +72,22 @@ terraform apply
 - Alerting rules: stalled indexer, RPC errors, disk pressure
 - Deployed as part of the stack — one variable to enable
 
-### Ingress & TLS
+### Ingress & TLS ✅
+
+Three TLS termination modes — pick the one that fits your setup:
 
 ```
-Internet
-   │
-   ▼
-┌──────────────────────────┐
-│  Caddy / ALB             │
-│  *.your-domain.com       │
-│  Auto-renewing TLS       │
-├──────────────────────────┤
-│  /graphql  → rindexer    │
-│  /grafana  → monitoring  │
-│  /rpc      → eRPC proxy  │
-└──────────────────────────┘
+Internet → Cloudflare (recommended)  → Origin cert → Caddy/ingress-nginx → eRPC
+Internet → Let's Encrypt (caddy)     → ACME auto   → Caddy               → eRPC
+Internet → Let's Encrypt (cert-mgr)  → ACME auto   → ingress-nginx       → eRPC
 ```
+
+- **Cloudflare** — Free TLS, DDoS protection, WAF, 15-year origin certs. Works on all compute paths.
+- **Caddy** — Let's Encrypt ACME with zero config. EC2 and bare metal.
+- **ingress-nginx + cert-manager** — Kubernetes-native TLS with Let's Encrypt. k3s (automated) and EKS (supported via EKS workflow).
+- Security headers (HSTS, X-Frame-Options, CSP) applied automatically.
+
+See the [TLS & Ingress guide](https://evm-cloud.xyz/docs/guides/tls-ingress) for setup instructions.
 
 ### K8s Test Suite
 

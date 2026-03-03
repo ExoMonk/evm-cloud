@@ -43,6 +43,7 @@ The `workload_handoff` is the primary integration point for external deployers. 
 | `compute_engine` | `string` | `"ec2"`, `"eks"`, or `"k3s"` |
 | `project_name` | `string` | Project identifier |
 | `aws_region` | `string` | AWS region (when provider=aws) |
+| `ingress` | `object` | Ingress/TLS contract for deployers (`mode`, domain/TLS settings, provider-specific fields) |
 
 ### identity
 
@@ -107,6 +108,24 @@ Workload service metadata.
 |-------|-------------|----------|
 | `services.rpc_proxy` | `rpc_proxy_enabled` | `{ service_name, port, internal_url }` |
 | `services.indexer` | `indexer_enabled` | `{ service_name, single_writer_required, storage_backend }` |
+
+### ingress
+
+Ingress/TLS metadata consumed by deployers and runtime scripts.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ingress.mode` | `string` | `none`, `cloudflare`, `caddy`, or `ingress_nginx` |
+| `ingress.domain` | `string \| null` | Public host/domain when TLS is enabled |
+| `ingress.tls_email` | `string \| null` | ACME email for `caddy`/`ingress_nginx` |
+| `ingress.tls_staging` | `bool` | Use Let's Encrypt staging CA |
+| `ingress.hsts_preload` | `bool` | HSTS preload toggle |
+| `ingress.request_body_max_size` | `string` | Request size limit passed to ingress layer |
+| `ingress.caddy_image` | `string \| null` | Caddy image (when mode=`caddy`) |
+| `ingress.caddy_mem_limit` | `string \| null` | Caddy memory limit (when mode=`caddy`) |
+| `ingress.nginx_chart_version` | `string \| null` | ingress-nginx chart version (when mode=`ingress_nginx`) |
+| `ingress.cert_manager_chart_version` | `string \| null` | cert-manager chart version (when mode=`ingress_nginx`) |
+| `ingress.cloudflare` | `object \| null` | Cloudflare origin TLS material (`origin_cert`, `origin_key`, `ssl_mode`) when mode=`cloudflare` |
 
 ### data
 

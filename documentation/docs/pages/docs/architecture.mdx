@@ -9,6 +9,14 @@ How evm-cloud's Terraform modules fit together to deploy a complete EVM indexing
 
 <ArchitectureDiagram />
 
+### Ingress / TLS and DNS Notes
+
+- **TLS is implemented** via `ingress_mode`:
+  - `cloudflare` (recommended)
+  - `caddy` (EC2 / docker_compose)
+  - `ingress_nginx` (k3s; EKS supported by guardrails with engine-specific workflow)
+- **DNS is external by design** in current implementation (for example Cloudflare DNS or your provider DNS). evm-cloud does not currently provision DNS records in the root module.
+
 ## Data Flow at Runtime
 
 <DataFlowDiagram />

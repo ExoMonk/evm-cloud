@@ -66,6 +66,7 @@ export default defineConfig({
           link: "/docs/examples/bare-metal-clickhouse",
         },
         { text: "External EC2", link: "/docs/examples/external-ec2" },
+        { text: "k3s + Cloudflare Ingress", link: "/docs/examples/k3s-cloudflare" },
         { text: "Bare Metal k3s + Postgres", link: "/docs/examples/bare-metal-k3s" },
       ],
     },
@@ -80,6 +81,10 @@ export default defineConfig({
     {
       text: "Guides",
       items: [
+        {
+          text: "TLS & Ingress",
+          link: "/docs/guides/tls-ingress",
+        },
         {
           text: "Secrets Management",
           link: "/docs/guides/secrets-management",

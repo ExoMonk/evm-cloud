@@ -29,7 +29,7 @@ These are the variables that most affect your deployment's cost, performance, an
 | `runtime_arch` | `string` | `"multi"` | Architecture intent: `amd64`, `arm64`, or `multi`. |
 | `database_mode` | `string` | `"managed"` | Database mode: `managed` or `self_hosted`. |
 | `streaming_mode` | `string` | `"disabled"` | Streaming: `managed`, `self_hosted`, or `disabled`. |
-| `ingress_mode` | `string` | `"managed_lb"` | Ingress: `managed_lb` or `self_hosted`. |
+| `ingress_mode` | `string` | `"none"` | Ingress/TLS: `none`, `cloudflare`, `caddy`, or `ingress_nginx`. See [TLS & Ingress guide](./guides/tls-ingress.mdx). |
 
 ### Valid Compute Engine Combinations
 
@@ -65,7 +65,7 @@ The networking module creates role-based security groups. Each compute instance 
 | `k3s-sg` | SSH, k3s API (6443), Flannel (8472), Kubelet (10250), NodePort range | k3s server and worker instances |
 | `indexer-sg` | Database access: Postgres (5432), ClickHouse HTTP (8123), ClickHouse native (9000) | All compute instances (EC2, k3s server, k3s workers) |
 | `database-sg` | Accepts ingress from `indexer-sg` only | RDS PostgreSQL instances |
-| `erpc-sg` | Accepts ingress from ALB and `indexer-sg` | EKS eRPC pods |
+| `erpc-sg` | Accepts ingress from cluster ingress/controller path and `indexer-sg` | EKS eRPC pods |
 
 The `indexer-sg` acts as a portable identity — the `database-sg` ingress rules reference it, so any instance with `indexer-sg` attached can reach the database regardless of compute engine.
 
@@ -226,6 +226,44 @@ Control how credentials reach workloads. See the [Secrets Management guide](./gu
 - `secrets_mode = "provider"` requires `infrastructure_provider = "aws"` (uses AWS Secrets Manager + IAM instance profile)
 - `secrets_mode = "external"` requires both `external_secret_store_name` and `external_secret_key` to be set
 - `bare_metal_secrets_encryption = "sops_age"` is not yet implemented (T2 deferred)
+
+---
+
+## Ingress & TLS
+
+Control how traffic reaches your services with automatic TLS termination. See the [TLS & Ingress guide](./guides/tls-ingress.mdx) for setup instructions.
+
+| Variable | Type | Default | Sensitive | Description |
+|----------|------|---------|-----------|-------------|
+| `ingress_mode` | `string` | `"none"` | No | TLS termination mode: `none`, `cloudflare` (recommended), `caddy`, or `ingress_nginx`. |
+| `ingress_domain` | `string` | `""` | No | Domain name for TLS certificates (e.g. `rpc.example.com`). Required when `ingress_mode != "none"`. |
+| `ingress_tls_email` | `string` | `""` | No | Email for Let's Encrypt ACME registration. Required for `caddy` and `ingress_nginx` modes. |
+| `ingress_cloudflare_origin_cert` | `string` | `""` | Yes | Cloudflare origin certificate (PEM). Required for `cloudflare` mode. |
+| `ingress_cloudflare_origin_key` | `string` | `""` | Yes | Cloudflare origin certificate private key (PEM). Required for `cloudflare` mode. |
+| `ingress_cloudflare_ssl_mode` | `string` | `"full_strict"` | No | Cloudflare SSL/TLS mode: `full` or `full_strict`. |
+| `ingress_tls_staging` | `bool` | `false` | No | Use Let's Encrypt staging CA (for testing — avoids rate limits). |
+| `ingress_hsts_preload` | `bool` | `false` | No | Add `preload` directive to HSTS header. Only enable after confirming HSTS preload eligibility. |
+| `ingress_request_body_max_size` | `string` | `"1m"` | No | Maximum request body size. |
+| `ingress_caddy_image` | `string` | `"caddy:2.9.1-alpine"` | No | Caddy Docker image (EC2/bare_metal only). |
+| `ingress_caddy_mem_limit` | `string` | `"128m"` | No | Caddy container memory limit. |
+| `ingress_nginx_chart_version` | `string` | `"4.11.3"` | No | ingress-nginx Helm chart version for `ingress_nginx` mode (automated in k3s deployer). |
+| `ingress_cert_manager_chart_version` | `string` | `"1.16.2"` | No | cert-manager Helm chart version for `ingress_nginx` mode (automated in k3s deployer). |
+
+### Ingress Mode by Compute Engine
+
+| Mode | EC2 / Bare Metal | k3s | EKS |
+|------|-----------------|-----|-----|
+| `none` | No TLS | No TLS | No TLS |
+| `cloudflare` | Caddy + CF origin cert | ingress-nginx + CF TLS secret | Supported by guardrails; deployer automation may be engine-specific |
+| `caddy` | Caddy + Let's Encrypt ACME | Not supported (use `ingress_nginx`) | Not supported (use `ingress_nginx`) |
+| `ingress_nginx` | Not supported (use `caddy`) | ingress-nginx + cert-manager | Supported by guardrails; install ingress/cert-manager via your EKS workflow |
+
+### Constraints
+
+- `ingress_domain` is required when `ingress_mode != "none"`
+- `cloudflare` mode requires both `ingress_cloudflare_origin_cert` and `ingress_cloudflare_origin_key`
+- `caddy` mode requires `ingress_tls_email` and is only available on EC2/bare_metal
+- `ingress_nginx` mode requires `ingress_tls_email` and is available on `k3s` and `eks`
 
 ---
 

@@ -1,0 +1,114 @@
+# TLS & Ingress
+
+Automatic TLS termination for your evm-cloud deployment. Three modes, one variable to choose.
+
+## Quick Start
+
+```hcl
+# Recommended: Cloudflare (free TLS, DDoS, WAF)
+ingress_mode                    = "cloudflare"
+ingress_domain                  = "rpc.example.com"
+ingress_cloudflare_origin_cert  = file("certs/origin.pem")
+ingress_cloudflare_origin_key   = file("certs/origin-key.pem")
+```
+
+## Modes
+
+### `none` (default)
+
+No TLS termination. Services are accessible on their raw ports.
+
+### `cloudflare` (recommended)
+
+Cloudflare terminates public TLS. An origin certificate secures the connection between Cloudflare and your server.
+
+**How it works:**
+- **EC2 / bare metal:** Caddy reverse proxy with the Cloudflare origin cert
+- **k3s:** ingress-nginx with a Kubernetes TLS secret containing the origin cert
+
+**Setup:**
+1. Add your domain to Cloudflare
+2. In Cloudflare dashboard: **SSL/TLS > Origin Server > Create Certificate**
+3. Download the origin certificate and private key
+4. Set Cloudflare SSL/TLS mode to **Full (strict)**
+5. Point a DNS record to your server IP (proxied, orange cloud)
+
+```hcl
+ingress_mode                    = "cloudflare"
+ingress_domain                  = "rpc.example.com"
+ingress_cloudflare_origin_cert  = file("certs/origin.pem")
+ingress_cloudflare_origin_key   = file("certs/origin-key.pem")
+ingress_cloudflare_ssl_mode     = "full_strict"  # default
+```
+
+> **Tip:** Store cert/key in `secrets.auto.tfvars` (gitignored) or reference from a secrets manager.
+
+### `caddy`
+
+Caddy with automatic Let's Encrypt ACME. **EC2 and bare metal only.**
+
+**Setup:**
+1. Point a DNS A record to your server's public IP (no proxy)
+2. Ensure ports 80 and 443 are reachable from the internet
+
+```hcl
+ingress_mode       = "caddy"
+ingress_domain     = "rpc.example.com"
+ingress_tls_email  = "admin@example.com"
+```
+
+For testing, use the staging CA to avoid Let's Encrypt rate limits:
+
+```hcl
+ingress_tls_staging = true
+```
+
+### `ingress_nginx`
+
+ingress-nginx with cert-manager for Let's Encrypt. **Kubernetes engines (`k3s`, `eks`)**.
+
+**Setup:**
+1. Point a DNS A record to the k3s server's public IP (no proxy)
+2. Ensure ports 80 and 443 are reachable
+
+```hcl
+ingress_mode       = "ingress_nginx"
+ingress_domain     = "rpc.example.com"
+ingress_tls_email  = "admin@example.com"
+```
+
+For `k3s`, the deployer automatically:
+- Installs ingress-nginx as a Helm release
+- Installs cert-manager with CRDs
+- Creates a `ClusterIssuer` for Let's Encrypt (staging or prod)
+- Annotates Ingress resources for automatic certificate provisioning
+
+For `eks`, guardrails allow this mode, but ingress/cert-manager installation is currently handled by your EKS workflow.
+
+## Mode by Compute Engine
+
+| Mode | EC2 / Bare Metal | k3s | EKS |
+|------|-----------------|-----|-----|
+| `none` | No TLS | No TLS | No TLS |
+| `cloudflare` | Caddy + CF origin cert | ingress-nginx + CF TLS secret | Supported by guardrails; engine workflow applies ingress resources |
+| `caddy` | Caddy + Let's Encrypt | Not supported | Not supported |
+| `ingress_nginx` | Not supported | ingress-nginx + cert-manager | Supported by guardrails; install ingress-nginx + cert-manager in EKS workflow |
+
+## Security Headers
+
+All modes automatically apply security headers:
+
+| Header | Value |
+|--------|-------|
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Content-Security-Policy` | `default-src 'none'; frame-ancestors 'none'` |
+| `Server` | Hidden |
+
+Enable HSTS preload with `ingress_hsts_preload = true` (only after confirming your domain is eligible).
+
+## Variables Reference
+
+See the [Ingress & TLS section](../variable-reference#ingress--tls) in the variable reference for the full list.
