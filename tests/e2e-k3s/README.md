@@ -8,7 +8,7 @@ End-to-end tests that deploy workloads on a **persistent k3s VPS** via the real 
 |--------|---------|-------------|------------|
 | `make qa` | none | $0 | $0 |
 | `make test-k8s` | kind (local) | $0 | $0 |
-| **`make test-e2e-k8s`** | **k3s (AWS EC2)** | **$0** | **~$17/mo** |
+| **`make test-e2e-k3s`** | **k3s (AWS EC2)** | **$0** | **~$17/mo** |
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ End-to-end tests that deploy workloads on a **persistent k3s VPS** via the real 
 
 ```bash
 # Set kubeconfig and run
-E2E_KUBECONFIG=~/.kube/evm-cloud-e2e make test-e2e-k8s
+E2E_KUBECONFIG=~/.kube/evm-cloud-e2e make test-e2e-k3s
 ```
 
 ## Infrastructure Setup
@@ -56,7 +56,7 @@ KUBECONFIG=~/.kube/evm-cloud-e2e kubectl get nodes
 ### 3. Run tests
 
 ```bash
-E2E_KUBECONFIG=~/.kube/evm-cloud-e2e make test-e2e-k8s
+E2E_KUBECONFIG=~/.kube/evm-cloud-e2e make test-e2e-k3s
 ```
 
 ## Environment Variables
@@ -66,6 +66,7 @@ E2E_KUBECONFIG=~/.kube/evm-cloud-e2e make test-e2e-k8s
 | `E2E_KUBECONFIG` | — | **Required.** Path to k3s kubeconfig file |
 | `E2E_TIMEOUT` | `300` | Overall test timeout in seconds |
 | `GITHUB_RUN_ID` | `$(date +%s)` | Used for unique namespace naming |
+| `E2E_TLS_PUBLIC_DOMAIN` | `none` | Optional strict TLS check against a real public domain (DNS + reachable `:443`). |
 
 ## Test Phases
 
@@ -75,7 +76,7 @@ E2E_KUBECONFIG=~/.kube/evm-cloud-e2e make test-e2e-k8s
 | 1 | Cluster health — node Ready, CoreDNS, system pods, k3s version |
 | 2 | Deploy — synthetic handoff JSON → `deploy.sh` → Helm releases |
 | 3 | Resource assertions — ConfigMaps, Deployments, Services, Secrets, env vars, volumes |
-| 4 | Runtime — eRPC Running + HTTP via port-forward, rindexer CrashLoop (expected) |
+| 4 | Runtime — eRPC Running + HTTP via port-forward, rindexer CrashLoop (expected), ingress TLS handshake via port-forward |
 | 4.5 | Upgrade — config change → helm upgrade → verify new config active |
 | 5 | Networking — NodePort in-cluster, DNS resolution via Job |
 | 6 | k3s-specific — local-path PVC with pod mount, pod restart resilience |

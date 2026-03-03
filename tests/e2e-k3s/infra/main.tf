@@ -23,7 +23,7 @@ module "evm_cloud" {
   runtime_arch            = "multi"
   database_mode           = "self_hosted"
   streaming_mode          = "disabled"
-  ingress_mode            = "self_hosted"
+  ingress_mode            = "none"
 
   compute_engine = "k3s"
   workload_mode  = "external"

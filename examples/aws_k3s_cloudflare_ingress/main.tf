@@ -11,19 +11,24 @@ module "evm_cloud" {
   runtime_arch            = "multi"
   database_mode           = "self_hosted"
   streaming_mode          = "disabled"
-  ingress_mode            = "none"
+
+  # Cloudflare ingress — TLS termination via CF origin certificate
+  ingress_mode                   = "cloudflare"
+  ingress_domain                 = var.ingress_domain
+  ingress_cloudflare_origin_cert = var.ingress_cloudflare_origin_cert
+  ingress_cloudflare_origin_key  = var.ingress_cloudflare_origin_key
 
   # k3s compute engine — Phase 1 (Terraform) provisions EC2 + installs k3s
   # Phase 2: run deployers/k3s/deploy.sh with the workload_handoff output
   compute_engine = "k3s"
   workload_mode  = "external"
 
-  # SSH keys — public key for EC2, private key path for k3s provisioner
+  # SSH keys
   ssh_public_key           = var.ssh_public_key
   k3s_ssh_private_key_path = var.k3s_ssh_private_key_path
   k3s_instance_type        = var.k3s_instance_type
   k3s_version              = var.k3s_version
-  k3s_api_allowed_cidrs    = var.k3s_api_allowed_cidrs # Must include your IP for SSH + k3s provisioning
+  k3s_api_allowed_cidrs    = var.k3s_api_allowed_cidrs
 
   # AWS
   aws_region                      = var.aws_region
@@ -32,10 +37,10 @@ module "evm_cloud" {
   network_environment             = "dev"
   network_vpc_cidr                = var.network_vpc_cidr
   network_availability_zones      = var.network_availability_zones
-  network_enable_nat_gateway      = false # k3s host is on public subnet with public IP — no NAT needed
+  network_enable_nat_gateway      = false
   network_enable_vpc_endpoints    = false
 
-  # RPC Proxy — config will be deployed via Helm in Phase 2
+  # RPC Proxy
   rpc_proxy_enabled = var.rpc_proxy_enabled
   rpc_proxy_image   = var.rpc_proxy_image
 
@@ -50,7 +55,7 @@ module "evm_cloud" {
   indexer_clickhouse_password = var.indexer_clickhouse_password
   indexer_clickhouse_db       = var.indexer_clickhouse_db
 
-  # Config injection — used by workload_handoff for the deployer
+  # Config injection
   erpc_config_yaml     = file("${path.module}/config/erpc.yaml")
   rindexer_config_yaml = file("${path.module}/config/rindexer.yaml")
   rindexer_abis = {

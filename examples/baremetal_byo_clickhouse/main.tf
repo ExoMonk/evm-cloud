@@ -10,7 +10,7 @@ module "evm_cloud" {
   deployment_target       = "self_hosted"
   database_mode           = "self_hosted"
   streaming_mode          = "disabled"
-  ingress_mode            = "self_hosted"
+  ingress_mode            = "none"
   compute_engine          = "docker_compose"
   workload_mode           = var.workload_mode
 

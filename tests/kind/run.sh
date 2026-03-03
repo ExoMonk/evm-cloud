@@ -303,6 +303,52 @@ else
   fail "indexer Helm chart dry-run failed"
 fi
 
+# 5c. Ingress: Cloudflare mode dry-run
+if helm template test-rpc-ingress-cf "$CHARTS_DIR/rpc-proxy" \
+    --values "$CHARTS_DIR/rpc-proxy/values.yaml" \
+    --set ingress.enabled=true \
+    --set ingress.host=test.example.com \
+    --set ingress.tlsProvider=cloudflare \
+    --set ingress.tlsSecretName=cloudflare-origin-tls 2>&1 \
+    | kubectl apply --dry-run=server -f - >/dev/null 2>&1; then
+  pass "rpc-proxy Ingress (Cloudflare mode) renders and validates"
+else
+  fail "rpc-proxy Ingress (Cloudflare mode) dry-run failed"
+fi
+
+# 5d. Ingress: cert-manager mode dry-run
+if helm template test-rpc-ingress-cm "$CHARTS_DIR/rpc-proxy" \
+    --values "$CHARTS_DIR/rpc-proxy/values.yaml" \
+    --set ingress.enabled=true \
+    --set ingress.host=test.example.com \
+    --set ingress.tlsProvider=cert-manager \
+    --set ingress.clusterIssuer=letsencrypt-staging 2>&1 \
+    | kubectl apply --dry-run=server -f - >/dev/null 2>&1; then
+  pass "rpc-proxy Ingress (cert-manager mode) renders and validates"
+else
+  fail "rpc-proxy Ingress (cert-manager mode) dry-run failed"
+fi
+
+# Verify cert-manager annotation is present in the cert-manager template
+CM_RENDERED=$(helm template test-rpc-cm "$CHARTS_DIR/rpc-proxy" \
+    --values "$CHARTS_DIR/rpc-proxy/values.yaml" \
+    --set ingress.enabled=true \
+    --set ingress.host=test.example.com \
+    --set ingress.tlsProvider=cert-manager \
+    --set ingress.clusterIssuer=letsencrypt-staging 2>&1)
+
+if echo "$CM_RENDERED" | grep -q "cert-manager.io/cluster-issuer"; then
+  pass "cert-manager Ingress has cluster-issuer annotation"
+else
+  fail "cert-manager Ingress missing cluster-issuer annotation"
+fi
+
+if echo "$CM_RENDERED" | grep -q "ingressClassName: nginx"; then
+  pass "Ingress has ingressClassName: nginx"
+else
+  fail "Ingress missing ingressClassName"
+fi
+
 # --- Phase 6: Deployer scripts pipeline test ---
 echo ""
 echo "=== Phase 6: Deployer scripts pipeline ==="
@@ -410,6 +456,88 @@ if bash "$SCRIPTS_DIR/render-values-from-handoff.sh" "$TEST_DIR/bad-handoff.json
   fail "render script should reject mode=terraform handoff"
 else
   pass "render script correctly rejects invalid handoff (mode=terraform)"
+fi
+
+# 6d. k3s render-values.sh: Cloudflare ingress handoff
+K3S_RENDER="${REPO_ROOT}/deployers/k3s/scripts/render-values.sh"
+mkdir -p "$TEST_DIR/ingress-cf-values"
+cat > "$TEST_DIR/ingress-cf-handoff.json" <<'INGCF'
+{
+  "mode": "external",
+  "compute_engine": "k3s",
+  "project_name": "ingress-test",
+  "services": { "rpc_proxy": { "port": 4000 } },
+  "data": { "backend": "clickhouse", "clickhouse": { "url": "http://localhost:8123", "user": "default", "password": "test", "db": "default" } },
+  "ingress": {
+    "mode": "cloudflare",
+    "domain": "rpc.test.example.com",
+    "nginx_chart_version": "4.11.3",
+    "cloudflare": { "origin_cert": "FAKE_CERT_PEM", "origin_key": "FAKE_KEY_PEM" }
+  }
+}
+INGCF
+
+if bash "$K3S_RENDER" "$TEST_DIR/ingress-cf-handoff.json" "$TEST_DIR/ingress-cf-values" >/dev/null 2>&1; then
+  pass "k3s render-values.sh handles Cloudflare ingress handoff"
+else
+  fail "k3s render-values.sh failed on Cloudflare ingress handoff"
+fi
+
+CF_VALUES="$TEST_DIR/ingress-cf-values/rpc-proxy-values.yaml"
+if grep -q "enabled: true" "$CF_VALUES" && grep -q "rpc.test.example.com" "$CF_VALUES"; then
+  pass "Cloudflare ingress values: enabled + correct host"
+else
+  fail "Cloudflare ingress values missing enabled/host"
+fi
+
+if grep -q 'tlsProvider: "cloudflare"' "$CF_VALUES"; then
+  pass "Cloudflare ingress values: tlsProvider=cloudflare"
+else
+  fail "Cloudflare ingress values missing tlsProvider"
+fi
+
+if grep -q 'tlsSecretName: "cloudflare-origin-tls"' "$CF_VALUES"; then
+  pass "Cloudflare ingress values: correct tlsSecretName"
+else
+  fail "Cloudflare ingress values missing tlsSecretName"
+fi
+
+# 6e. k3s render-values.sh: ingress_nginx mode
+mkdir -p "$TEST_DIR/ingress-nginx-values"
+cat > "$TEST_DIR/ingress-nginx-handoff.json" <<'INGNX'
+{
+  "mode": "external",
+  "compute_engine": "k3s",
+  "project_name": "ingress-test",
+  "services": { "rpc_proxy": { "port": 4000 } },
+  "data": { "backend": "clickhouse", "clickhouse": { "url": "http://localhost:8123", "user": "default", "password": "test", "db": "default" } },
+  "ingress": {
+    "mode": "ingress_nginx",
+    "domain": "rpc.test.example.com",
+    "tls_email": "test@example.com",
+    "tls_staging": true,
+    "cert_manager_chart_version": "1.16.2"
+  }
+}
+INGNX
+
+if bash "$K3S_RENDER" "$TEST_DIR/ingress-nginx-handoff.json" "$TEST_DIR/ingress-nginx-values" >/dev/null 2>&1; then
+  pass "k3s render-values.sh handles ingress_nginx handoff"
+else
+  fail "k3s render-values.sh failed on ingress_nginx handoff"
+fi
+
+NX_VALUES="$TEST_DIR/ingress-nginx-values/rpc-proxy-values.yaml"
+if grep -q 'tlsProvider: "cert-manager"' "$NX_VALUES"; then
+  pass "ingress_nginx values: tlsProvider=cert-manager"
+else
+  fail "ingress_nginx values missing tlsProvider"
+fi
+
+if grep -q 'clusterIssuer: "letsencrypt-staging"' "$NX_VALUES"; then
+  pass "ingress_nginx values: clusterIssuer=letsencrypt-staging (staging mode)"
+else
+  fail "ingress_nginx values missing staging clusterIssuer"
 fi
 
 # --- Phase 7: Helm install + assertions ---

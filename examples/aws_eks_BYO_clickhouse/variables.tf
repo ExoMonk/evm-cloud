@@ -29,7 +29,7 @@ variable "streaming_mode" {
 
 variable "ingress_mode" {
   type    = string
-  default = "self_hosted"
+  default = "none"
 }
 
 variable "compute_engine" {

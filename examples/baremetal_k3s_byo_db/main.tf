@@ -11,7 +11,7 @@ module "evm_cloud" {
   runtime_arch            = "multi"
   database_mode           = "self_hosted"
   streaming_mode          = "disabled"
-  ingress_mode            = "self_hosted"
+  ingress_mode            = "none"
 
   # k3s compute engine — Phase 1 (Terraform) provisions k3s on existing VPS
   # Phase 2: run deployers/k3s/deploy.sh with the workload_handoff output

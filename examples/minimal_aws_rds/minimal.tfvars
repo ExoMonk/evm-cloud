@@ -5,7 +5,7 @@ deployment_target               = "managed"
 runtime_arch                    = "multi"
 database_mode                   = "managed"
 streaming_mode                  = "disabled"
-ingress_mode                    = "self_hosted"
+ingress_mode                    = "none"
 aws_region                      = "us-east-1"
 aws_skip_credentials_validation = false
 
