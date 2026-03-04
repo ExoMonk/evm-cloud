@@ -15,6 +15,22 @@ CLI wrapper mapping (CLI1.1):
 - `terraform destroy` → `evm-cloud destroy --yes`
 - Keep raw Terraform as an escape hatch when needed.
 
+Recommended invocation from repo root:
+
+```bash
+make evm-cloud <command> -- [evm-cloud flags] -- [terraform flags]
+```
+
+Example:
+
+```bash
+make evm-cloud apply -- --dir examples/baremetal_k3s_byo_db --allow-raw-terraform -- -var-file=bare_metal_k3s.tfvars -parallelism=3
+```
+
+Notes:
+- `--dir` and `--allow-raw-terraform` are `evm-cloud` flags.
+- `-var-file` and `-parallelism` are Terraform flags.
+
 Validate output:
 
 ```bash

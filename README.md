@@ -66,18 +66,40 @@ make test-k8s    # Kubernetes chart tests (kind)
 
 The new Rust CLI wraps the existing Terraform flow while preserving an escape hatch for direct Terraform usage.
 
+Recommended entrypoint from repo root:
+
+```bash
+make evm-cloud
+```
+
+This prints CLI help by default.
+
+Use this flag routing rule:
+- `evm-cloud` flags go first (for example: `--dir`, `--allow-raw-terraform`)
+- Terraform passthrough flags go after a second `--` (for example: `-var-file`, `-parallelism`)
+
+Canonical example:
+
+```bash
+make evm-cloud apply -- --dir examples/baremetal_k3s_byo_db --allow-raw-terraform -- -var-file=bare_metal_k3s.tfvars -parallelism=3
+```
+
 | Existing workflow | New wrapper |
 |---|---|
 | `terraform init` | `evm-cloud init` |
 | `terraform apply` | `evm-cloud apply` |
 | `terraform destroy` | `evm-cloud destroy --yes` |
-| `terraform apply -- -parallelism=50` | `evm-cloud apply -- --parallelism=50` |
+| `terraform apply -parallelism=50` | `evm-cloud apply -- -- -parallelism=50` |
 
 Safety defaults:
 - `destroy` requires explicit `--yes`.
 - In non-interactive shells, `destroy` requires both `--yes` and `--auto-approve`.
 - In non-interactive shells, `apply` requires `--auto-approve`.
 - Raw Terraform roots require explicit `--allow-raw-terraform`.
+
+Current scope note:
+- `init`, `apply`, and `destroy` are functional wrappers.
+- `deploy`, `status`, and `logs` are scaffolded and currently print "not yet implemented".
 
 Raw Terraform remains supported for advanced workflows and troubleshooting.
 
