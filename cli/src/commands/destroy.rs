@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 
+use crate::easy_mode;
 use crate::error::{CliError, Result};
 use crate::output::{self, ColorMode};
 use crate::preflight::{self, ProjectKind};
@@ -24,10 +25,16 @@ pub(crate) struct DestroyArgs {
 
 pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
     let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
-    match preflight.project_kind {
-        ProjectKind::EvmCloudToml => output::info("Detected evm-cloud.toml project", color),
-        ProjectKind::RawTerraform => output::info("Detected raw Terraform project (*.tf files)", color),
-    }
+    let terraform_dir = match preflight.project_kind {
+        ProjectKind::EvmCloudToml => {
+            output::info("Detected evm-cloud.toml project", color);
+            easy_mode::prepare_workspace(&preflight.resolved_root, color)?
+        }
+        ProjectKind::RawTerraform => {
+            output::info("Detected raw Terraform project (*.tf files)", color);
+            preflight.resolved_root.clone()
+        }
+    };
 
     if !args.yes {
         return Err(CliError::Message(
@@ -48,11 +55,11 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
         output::warn("Running destroy in interactive mode", color);
     }
 
-    let runner = TerraformRunner::check_installed(&preflight.resolved_root)?;
+    let runner = TerraformRunner::check_installed(&terraform_dir)?;
     output::info(
         &format!("Using terraform {}", runner.version()),
         color,
     );
 
-    runner.destroy(&preflight.resolved_root, args.auto_approve, &args.terraform_args)
+    runner.destroy(&terraform_dir, args.auto_approve, &args.terraform_args)
 }

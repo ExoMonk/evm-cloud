@@ -1,4 +1,7 @@
+mod codegen;
 mod commands;
+mod config;
+mod easy_mode;
 mod error;
 mod output;
 mod preflight;

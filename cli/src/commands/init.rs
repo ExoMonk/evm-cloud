@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::Args;
 
+use crate::easy_mode;
 use crate::error::Result;
 use crate::output::{self, ColorMode};
 use crate::preflight::{self, ProjectKind};
@@ -19,16 +20,22 @@ pub(crate) struct InitArgs {
 
 pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
     let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
-    match preflight.project_kind {
-        ProjectKind::EvmCloudToml => output::info("Detected evm-cloud.toml project", color),
-        ProjectKind::RawTerraform => output::info("Detected raw Terraform project (*.tf files)", color),
-    }
+    let terraform_dir = match preflight.project_kind {
+        ProjectKind::EvmCloudToml => {
+            output::info("Detected evm-cloud.toml project", color);
+            easy_mode::prepare_workspace(&preflight.resolved_root, color)?
+        }
+        ProjectKind::RawTerraform => {
+            output::info("Detected raw Terraform project (*.tf files)", color);
+            preflight.resolved_root.clone()
+        }
+    };
 
-    let runner = TerraformRunner::check_installed(&preflight.resolved_root)?;
+    let runner = TerraformRunner::check_installed(&terraform_dir)?;
     output::info(
         &format!("Using terraform {}", runner.version()),
         color,
     );
 
-    runner.init(&preflight.resolved_root, &args.terraform_args)
+    runner.init(&terraform_dir, &args.terraform_args)
 }

@@ -23,8 +23,7 @@ Use this if you want to run `evm-cloud` from your own Terraform repository (with
 ### Option 1: Homebrew (recommended)
 
 ```bash
-brew tap ExoMonk/tap
-brew install evm-cloud
+brew install ExoMonk/tap/evm-cloud
 evm-cloud --help
 ```
 

@@ -32,6 +32,15 @@ pub(crate) enum CliError {
     #[error("failed to parse terraform output: {0}")]
     OutputParseError(#[from] serde_json::Error),
 
+    #[error("failed to parse config at {path}: {details}")]
+    ConfigParse { path: PathBuf, details: String },
+
+    #[error("invalid config field `{field}`: {message}")]
+    ConfigValidation { field: String, message: String },
+
+    #[error("unsupported schema_version={found}. This CLI supports schema_version=1")]
+    UnsupportedSchemaVersion { found: u32 },
+
     #[error("{0}")]
     Message(String),
 
