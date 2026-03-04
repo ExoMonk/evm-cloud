@@ -35,6 +35,16 @@ pub(crate) enum CliError {
     #[error("invalid mode marker at {path}: `{value}` (expected `easy` or `power` and matching project files)")]
     InvalidModeMarker { path: PathBuf, value: String },
 
+    #[error("invalid .evm-cloud-version at {path}: `{value}` (expected semver-like value such as `v0.1.0`)")]
+    PinnedVersionInvalid { path: PathBuf, value: String },
+
+    #[error("evm-cloud version mismatch: project requires `{required}` from {path}, current CLI is `{current}`")]
+    PinnedVersionMismatch {
+        path: PathBuf,
+        required: String,
+        current: String,
+    },
+
     #[error("failed to probe terraform version: {details}")]
     TerraformVersionProbeFailed { details: String },
 

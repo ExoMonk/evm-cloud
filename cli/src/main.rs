@@ -12,6 +12,7 @@ mod init_wizard;
 mod output;
 mod preflight;
 mod terraform;
+mod version_guard;
 
 use clap::{Parser, Subcommand};
 
@@ -50,6 +51,11 @@ enum Commands {
 
 fn main() {
     let cli = Cli::parse();
+
+    if let Err(err) = version_guard::enforce_pinned_version_from_cwd() {
+        output::error(&err.to_string(), cli.color);
+        std::process::exit(1);
+    }
 
     let result = match cli.command {
         Commands::Init(args) => commands::init::run(args, cli.color),
