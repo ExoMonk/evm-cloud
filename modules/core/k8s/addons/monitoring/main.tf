@@ -91,32 +91,33 @@ resource "helm_release" "kube_prometheus_stack" {
   timeout          = 600
 
   # --- Prometheus resource limits ---
-  # Expected cardinality: ~15-20K active series
+  # Lightweight defaults: single rindexer + eRPC = ~few hundred series.
+  # Prometheus runs fine with 128Mi for small deployments; limit at 512Mi for headroom.
   set {
     name  = "prometheus.prometheusSpec.resources.requests.memory"
-    value = "512Mi"
+    value = "128Mi"
   }
   set {
     name  = "prometheus.prometheusSpec.resources.limits.memory"
-    value = "1Gi"
+    value = "512Mi"
   }
   set {
     name  = "prometheus.prometheusSpec.resources.requests.cpu"
-    value = "250m"
+    value = "100m"
   }
 
   # --- Grafana resource limits ---
   set {
     name  = "grafana.resources.requests.memory"
-    value = "128Mi"
+    value = "64Mi"
   }
   set {
     name  = "grafana.resources.limits.memory"
-    value = "384Mi"
+    value = "196Mi"
   }
   set {
     name  = "grafana.resources.requests.cpu"
-    value = "100m"
+    value = "50m"
   }
 
   # --- Retention + storage ---

@@ -10,13 +10,14 @@ Production-grade multi-node k3s cluster on AWS with **secrets via AWS Secrets Ma
 │  EC2: Server (t3.small, on-demand)                   │
 │  ├── k3s control plane                               │
 │  ├── eRPC pod (RPC proxy)                            │
-│  └── rindexer pod (live indexer)                     │
-│       └── writes to ──────────────────────────────────→ ClickHouse (external)
+│  ├── rindexer pod (live indexer)                     │
+│  │    └── writes to ─────────────────────────────────→ ClickHouse (external)
+│  └── Monitoring (Prometheus + Grafana + Alertmanager)│
 │                                                      │
 │  EC2: Worker (t3.small, spot)                        │
 │  ├── k3s agent — label: evm-cloud/role=indexer       │
 │  └── rindexer pod (backfill indexer / job)           │
-│       └── writes to ──────────────────────────────────→ ClickHouse (external)
+│       └── writes to ─────────────────────────────────→ ClickHouse (external)
 │                                                      │
 │  Flannel VXLAN (UDP 8472) connects nodes             │
 └──────────────────────────────────────────────────────┘
@@ -37,6 +38,7 @@ Production-grade multi-node k3s cluster on AWS with **secrets via AWS Secrets Ma
 - eRPC and rindexer (live) deployed on server node
 - rindexer (backfill) deployed on worker node via Kubernetes affinity rules
 - Helm charts create ExternalSecret CRs — ESO syncs credentials from SM into K8s Secrets
+- kube-prometheus-stack deployed with Prometheus, Grafana, Alertmanager, and 3 dashboards
 
 ## What's Different from Single-Node k3s
 
@@ -113,6 +115,24 @@ terraform output -json workload_handoff | \
 terraform output -json workload_handoff | \
 ./../../deployers/k3s/teardown.sh /dev/stdin
 ```
+
+## Monitoring
+
+This example enables the monitoring stack by default (`monitoring_enabled = true`), which deploys kube-prometheus-stack with Prometheus, Grafana, and Alertmanager. Three dashboards (rindexer, eRPC, infrastructure) are auto-provisioned.
+
+```hcl
+# Optional: expose Grafana via ingress
+grafana_hostname = "grafana.yourdomain.com"
+
+# Optional: route alerts to Slack
+alertmanager_slack_webhook_secret_name = "slack-webhook"
+alertmanager_slack_channel             = "#evm-alerts"
+
+# Optional: add log aggregation
+loki_enabled = true
+```
+
+See the [Observability Guide](../guides/observability) for full setup and dashboard descriptions.
 
 ## Key Variables
 

@@ -374,12 +374,14 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
   GRAFANA_HOSTNAME=$(jq -r '.services.monitoring.grafana_hostname // empty' "$HANDOFF_FILE")
   GRAFANA_INGRESS_CLASS=$(jq -r '.services.monitoring.ingress_class_name // "nginx"' "$HANDOFF_FILE")
 
-  # Memory gate: skip monitoring on small nodes unless forced
+  # Memory gate: skip monitoring on nodes with <1.5GB allocatable unless forced
+  # Monitoring stack requests ~300Mi total (Prometheus 128Mi + Grafana 64Mi + exporters).
+  # A t3.small (2GB) has ~1.7GB allocatable — fits lightweight workloads + monitoring.
   if [[ "${FORCE_MONITORING:-}" != "true" ]]; then
-    ALLOC_MEM_KB=$(kubectl get nodes -o jsonpath='{.items[0].status.allocatable.memory}' 2>/dev/null | sed 's/Ki//')
-    ALLOC_MEM_GB=$((ALLOC_MEM_KB / 1048576))
-    if [[ "$ALLOC_MEM_GB" -lt 6 ]]; then
-      echo "WARNING: Node has <6GB allocatable memory (${ALLOC_MEM_GB}GB). Skipping monitoring." >&2
+    ALLOC_MEM_KI=$(kubectl get nodes -o jsonpath='{.items[0].status.allocatable.memory}' 2>/dev/null | sed 's/Ki//')
+    ALLOC_MEM_MB=$((ALLOC_MEM_KI / 1024))
+    if [[ "$ALLOC_MEM_MB" -lt 1536 ]]; then
+      echo "WARNING: Node has <1.5GB allocatable memory (~${ALLOC_MEM_MB}Mi). Skipping monitoring." >&2
       echo "  Set FORCE_MONITORING=true to override." >&2
       MONITORING_ENABLED="false"
     fi
@@ -398,14 +400,14 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
     --version "$KUBE_PROM_VERSION"
     --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
     --set prometheus.prometheusSpec.retention=7d
-    --set prometheus.prometheusSpec.resources.requests.cpu=200m
-    --set prometheus.prometheusSpec.resources.requests.memory=512Mi
-    --set prometheus.prometheusSpec.resources.limits.memory=1Gi
+    --set prometheus.prometheusSpec.resources.requests.cpu=100m
+    --set prometheus.prometheusSpec.resources.requests.memory=128Mi
+    --set prometheus.prometheusSpec.resources.limits.memory=512Mi
     --set grafana.sidecar.dashboards.enabled=true
     --set grafana.sidecar.dashboards.searchNamespace=ALL
-    --set grafana.resources.requests.cpu=100m
-    --set grafana.resources.requests.memory=128Mi
-    --set grafana.resources.limits.memory=256Mi
+    --set grafana.resources.requests.cpu=50m
+    --set grafana.resources.requests.memory=64Mi
+    --set grafana.resources.limits.memory=196Mi
   )
 
   # Grafana admin secret

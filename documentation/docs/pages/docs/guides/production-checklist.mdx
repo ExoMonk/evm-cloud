@@ -262,12 +262,35 @@ terraform apply destroy-plan
 
 ## Monitoring
 
+### Kubernetes (k3s, EKS) — kube-prometheus-stack
+
+Enable the built-in monitoring addon for Prometheus + Grafana + Alertmanager:
+
+```hcl
+# production.tfvars
+monitoring_enabled = true
+grafana_hostname   = "grafana.yourdomain.com"
+```
+
+This deploys kube-prometheus-stack with:
+- **Prometheus** scraping rindexer (`:8080/metrics`), eRPC (`:4001/metrics`), node-exporter, kube-state-metrics
+- **Grafana** with 3 pre-built dashboards (rindexer, eRPC, infrastructure)
+- **7 alert rules** (lag, reorgs, RPC errors, DB errors, rindexer down)
+- **Alertmanager** routing to Slack, SNS, or PagerDuty
+
+Optional log aggregation:
+
+```hcl
+loki_enabled = true
+```
+
+See the [Observability Guide](./observability.mdx) for full setup, dashboard descriptions, and alert tuning.
+
 ### EC2
 
 Terraform creates a CloudWatch log group (available in the handoff as `artifacts.cloudwatch_log_group`). View logs:
 
 ```bash
-# From the instance
 ssh ubuntu@<ip> "sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs rindexer --tail 100"
 ssh ubuntu@<ip> "sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs erpc --tail 100"
 
@@ -275,19 +298,7 @@ ssh ubuntu@<ip> "sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs e
 aws logs tail /evm-cloud/my-indexer --follow
 ```
 
-### Kubernetes (k3s, EKS)
-
-```bash
-kubectl logs -l app=rindexer --tail=100
-kubectl logs -l app=erpc --tail=100
-
-# Watch for restarts
-kubectl get pods -w
-```
-
 ### Health checks
-
-Verify the indexer is making progress:
 
 ```bash
 # rindexer health endpoint
@@ -296,8 +307,6 @@ curl http://<ip>:3001/health
 # eRPC health endpoint
 curl http://<ip>:4000/health
 ```
-
-> **Note:** A future release will include a Prometheus + Grafana monitoring addon for dashboards and alerting. For now, use CloudWatch (EC2) or standard Kubernetes monitoring tooling.
 
 ---
 
@@ -315,7 +324,8 @@ Use this as a pre-launch checklist:
 - [ ] Secrets Manager recovery window set to 30 days
 - [ ] `secrets.auto.tfvars` and `handoff.json` are in `.gitignore`
 - [ ] Destroy procedure documented (workload teardown before `terraform destroy`)
-- [ ] Monitoring and log access verified
+- [ ] Monitoring enabled (`monitoring_enabled = true`) with Grafana ingress configured
+- [ ] Alert routing configured (Slack/SNS/PagerDuty)
 - [ ] Health check endpoints reachable
 
 ---

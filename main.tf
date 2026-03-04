@@ -64,11 +64,6 @@ resource "terraform_data" "provider_guardrails" {
     }
 
     precondition {
-      condition     = !(var.ingress_mode != "none" && var.erpc_hostname == "")
-      error_message = "erpc_hostname is required when ingress_mode is not none."
-    }
-
-    precondition {
       condition     = !(var.ingress_mode == "cloudflare" && var.ingress_cloudflare_origin_cert == "")
       error_message = "ingress_cloudflare_origin_cert is required when ingress_mode = cloudflare. Generate at Cloudflare dashboard > SSL/TLS > Origin Server."
     }

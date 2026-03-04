@@ -62,16 +62,16 @@ export default defineConfig({
         { text: "EKS + ClickHouse", link: "/docs/examples/eks-clickhouse" },
         { text: "k3s + ClickHouse", link: "/docs/examples/k3s-clickhouse" },
         {
-          text: "k3s Multi-Node + ClickHouse",
-          link: "/docs/examples/k3s-multi-clickhouse",
-        },
-        {
           text: "Bare Metal + ClickHouse",
           link: "/docs/examples/bare-metal-clickhouse",
         },
         { text: "External EC2", link: "/docs/examples/external-ec2" },
         { text: "k3s + Cloudflare Ingress", link: "/docs/examples/k3s-cloudflare" },
         { text: "Bare Metal k3s + Postgres", link: "/docs/examples/bare-metal-k3s" },
+        {
+          text: "Prod: k3s Multi-Node + ClickHouse",
+          link: "/docs/examples/k3s-multi-clickhouse",
+        },
       ],
     },
     {
@@ -101,6 +101,7 @@ export default defineConfig({
           text: "External Deployers",
           link: "/docs/guides/external-deployers",
         },
+        { text: "Observability", link: "/docs/guides/observability" },
         { text: "Config Updates", link: "/docs/guides/config-updates" },
         {
           text: "Production Checklist",

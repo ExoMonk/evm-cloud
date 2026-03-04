@@ -96,6 +96,7 @@ output "workload_handoff" {
 | **aws/eks_cluster** | `modules/providers/aws/eks/` | EKS cluster, managed node groups, OIDC provider, CoreDNS/kube-proxy addons. |
 | **aws/k3s-host** | `modules/providers/aws/k3s-host/` | EC2 instance bootstrapped with k3s via the `core/k8s/k3s-bootstrap` module. |
 | **aws/postgres** | `modules/providers/aws/postgres/` | RDS PostgreSQL with automated backups, security group rules, and Secrets Manager integration. |
+| **core/k8s/addons/monitoring** | `modules/core/k8s/addons/monitoring/` | kube-prometheus-stack + Loki + Promtail addon. Deploys Prometheus, Grafana, Alertmanager, dashboards, and alert rules. |
 | **bare_metal** | `modules/providers/bare_metal/` | SSH + Docker Compose on any VPS. No cloud provider required. |
 
 ### Module Dependency Graph
@@ -113,6 +114,10 @@ root module (main.tf)
   │   │   └── modules/core/k8s/k3s-bootstrap/
   │   │   └── modules/core/k8s/k3s-agent/   # Worker node join
   │   └── postgres/                       # RDS PostgreSQL
+  │
+  ├── modules/core/k8s/addons/           # K8s addon modules
+  │   ├── monitoring/                    # kube-prometheus-stack + Loki
+  │   └── eso/                           # External Secrets Operator
   │
   └── modules/providers/bare_metal/       # Bare metal adapter
       └── modules/core/k8s/k3s-bootstrap/ (optional)

@@ -125,9 +125,9 @@ const layers: Layer[] = [
     ],
     annotation: "Monitors all pipeline services · Routes external traffic",
     nodes: [
-      { id: "grafana", label: "Grafana", optional: true },
-      { id: "prometheus", label: "Prometheus", optional: true },
-      { id: "alerting", label: "Alerting", optional: true },
+      { id: "grafana", label: "Grafana", sub: "Dashboards" },
+      { id: "prometheus", label: "Prometheus", sub: "Metrics + Rules" },
+      { id: "alerting", label: "Alerting", sub: "Slack / SNS / PagerDuty" },
       { id: "tls", label: "TLS", sub: "Cloudflare / Caddy / ingress-nginx" },
       { id: "routing", label: "Routing", sub: "GraphQL · Admin", optional: true },
     ],

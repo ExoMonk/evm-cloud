@@ -1,0 +1,269 @@
+# Observability
+
+Full-stack monitoring for your evm-cloud deployment with Prometheus, Grafana, and optional Loki log aggregation.
+
+---
+
+## What this unlocks
+
+- **Grafana dashboards** for rindexer indexing progress, eRPC proxy health, and infrastructure metrics
+- **Alert rules** for indexer lag, reorgs, RPC errors, DB failures, and service downtime
+- **Alert routing** to Slack, SNS, or PagerDuty via Alertmanager
+- **Log aggregation** (optional) via Loki + Promtail for centralized pod log search
+
+---
+
+## Requirements
+
+- `compute_engine` must be `eks` or `k3s` (monitoring requires Kubernetes)
+- Minimum **1.5 GB allocatable memory** on the node (monitoring stack requests ~300 Mi). A `t3.small` (2 GB, free tier eligible) fits lightweight workloads + monitoring. The k3s deployer skips monitoring on smaller nodes unless `FORCE_MONITORING=true` is set
+- For Grafana ingress: `ingress_mode != "none"` and `grafana_hostname` must be set
+
+---
+
+## Quick start
+
+### Minimal (metrics + dashboards only)
+
+```hcl
+monitoring_enabled = true
+```
+
+This deploys kube-prometheus-stack with Prometheus, Grafana, and Alertmanager using chart defaults. Grafana is accessible via `kubectl port-forward`.
+
+### Production (ingress + alerting)
+
+```hcl
+monitoring_enabled = true
+grafana_hostname   = "grafana.yourdomain.com"
+
+# Alert routing
+alertmanager_route_target              = "slack"
+alertmanager_slack_webhook_secret_name = "slack-webhook"
+alertmanager_slack_channel             = "#evm-alerts"
+```
+
+Create the Slack webhook K8s Secret before applying:
+
+```bash
+kubectl create secret generic slack-webhook \
+  --namespace monitoring \
+  --from-literal=webhook_url="https://hooks.slack.com/services/T.../B.../xxx"
+```
+
+### With log aggregation
+
+```hcl
+monitoring_enabled     = true
+loki_enabled           = true
+loki_persistence_enabled = true  # PVC for log retention across restarts
+```
+
+---
+
+## Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                        K8s Cluster                              │
+│                                                                 │
+│  rindexer :8080/metrics ──► ServiceMonitor ──┐                  │
+│  eRPC     :4001/metrics ──► ServiceMonitor ──┤                  │
+│  node-exporter          ──► DaemonSet ───────┤                  │
+│  kube-state-metrics     ──► Deployment ──────┤                  │
+│                                              ▼                  │
+│                                         Prometheus              │
+│                                           │    │                │
+│                              ┌────────────┘    └──────────┐     │
+│                              ▼                            ▼     │
+│                          Grafana                    Alertmanager │
+│                        (dashboards)              (Slack/SNS/PD) │
+│                                                                 │
+│  (optional)                                                     │
+│  Promtail (DaemonSet) ──► Loki ──► Grafana (log datasource)    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+All components deploy as a single kube-prometheus-stack Helm release (one Prometheus, one Grafana, one Alertmanager). Prometheus uses `serviceMonitorSelectorNilUsesHelmValues: false` to discover ALL ServiceMonitors cluster-wide.
+
+---
+
+## Dashboards
+
+Three dashboards are auto-provisioned as ConfigMaps with the `grafana_dashboard: "1"` label.
+
+### rindexer
+
+| Panel | Metric | What to watch |
+|-------|--------|---------------|
+| Blocks Behind | `rindexer_blocks_behind` | Should trend toward 0 after initial sync |
+| Events/sec | `rindexer_events_processed_total` | Throughput by network + contract |
+| RPC Error Rate | `rindexer_rpc_requests_total{status="error"}` | Spikes indicate upstream RPC issues |
+| DB Ops/sec | `rindexer_db_operations_total` | Write throughput and error detection |
+| Reorgs Detected | `rindexer_reorgs_detected_total` | Bars — occasional is normal, frequent is not |
+| Reorg Depth | `rindexer_reorg_depth` | Stat — depth > 2 warrants investigation |
+
+### eRPC
+
+| Panel | Metric | What to watch |
+|-------|--------|---------------|
+| Request Rate | `erpc_requests_total` | Inbound RPC traffic by network |
+| Error Rate | `erpc_errors_total / erpc_requests_total` | Should stay < 1% |
+| Upstream Latency (p99) | `erpc_upstream_request_duration_seconds` | Per-upstream response times |
+| Cache Hit Rate | `erpc_cache_hits_total` | Higher is better — reduces upstream calls |
+| Upstream Health | `erpc_upstream_healthy` | Binary health per upstream provider |
+
+### Infrastructure
+
+| Panel | Metric | What to watch |
+|-------|--------|---------------|
+| CPU by Pod | `container_cpu_usage_seconds_total` | Right-size your instances |
+| Memory by Pod | `container_memory_working_set_bytes` | Watch for OOM pressure |
+| Network I/O | `container_network_*_bytes_total` | RPC traffic volume |
+| Disk Usage | `node_filesystem_avail_bytes` | Alert at 80% for PVC or root disk |
+| Pod Restarts | `kube_pod_container_status_restarts_total` | Non-zero = investigate |
+| Node CPU | `node_cpu_seconds_total` | Overall node utilization |
+
+---
+
+## Alert rules
+
+Seven alert rules fire automatically when monitoring is enabled:
+
+| Alert | Expression | For | Severity |
+|-------|-----------|-----|----------|
+| **RindexerHighLag** | `rindexer_blocks_behind > 100` | 5m | warning |
+| **RindexerCriticalLag** | `rindexer_blocks_behind > 1000` | 10m | critical |
+| **RindexerDeepReorg** | `rindexer_reorg_depth > 2` | 1m | warning |
+| **RindexerFrequentReorgs** | `increase(rindexer_reorgs_detected_total[15m]) > 5` | 5m | warning |
+| **RindexerRPCErrorRate** | RPC error rate > 5% (with min traffic threshold) | 5m | warning |
+| **RindexerDBErrors** | Any DB write errors in 5m | 2m | critical |
+| **RindexerDown** | Prometheus target unreachable | 2m | critical |
+
+Three recording rules pre-compute common aggregations:
+
+| Rule | Expression |
+|------|-----------|
+| `rindexer:blocks_behind:max_by_network` | `max by (network) (rindexer_blocks_behind)` |
+| `rindexer:events_per_second:5m` | `sum by (network, contract) (rate(rindexer_events_processed_total[5m]))` |
+| `rindexer:rpc_error_rate:5m` | Error/total rate by network |
+
+---
+
+## Alert routing
+
+### Slack
+
+```hcl
+alertmanager_route_target              = "slack"
+alertmanager_slack_webhook_secret_name = "slack-webhook"  # K8s Secret with key: webhook_url
+alertmanager_slack_channel             = "#evm-alerts"
+```
+
+### SNS
+
+```hcl
+alertmanager_route_target = "sns"
+alertmanager_sns_topic_arn = "arn:aws:sns:us-east-1:123456789:evm-alerts"
+```
+
+SNS uses sigv4 native integration — no webhook adapter needed. The node IAM role must have `sns:Publish` permission on the topic.
+
+### PagerDuty
+
+```hcl
+alertmanager_route_target                        = "pagerduty"
+alertmanager_pagerduty_routing_key_secret_name   = "pagerduty-key"  # K8s Secret with key: routing_key
+```
+
+---
+
+## Grafana ingress
+
+When `grafana_ingress_enabled = true` (the default), Grafana gets an Ingress resource at the specified hostname:
+
+```hcl
+grafana_hostname   = "grafana.yourdomain.com"
+ingress_class_name = "nginx"  # default
+```
+
+This works with both `cloudflare` and `ingress_nginx` ingress modes. Point your DNS record at the cluster's ingress controller.
+
+### Custom admin password
+
+Create a K8s Secret before deployment:
+
+```bash
+kubectl create secret generic grafana-admin \
+  --namespace monitoring \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password="$(openssl rand -base64 24)"
+```
+
+Then reference it:
+
+```hcl
+grafana_admin_password_secret_name = "grafana-admin"
+```
+
+---
+
+## BYO ClickHouse metrics
+
+If you run a self-hosted ClickHouse that exposes Prometheus metrics, add it as a scrape target:
+
+```hcl
+clickhouse_metrics_url = "http://clickhouse:9363/metrics"
+```
+
+Prometheus will scrape this endpoint alongside rindexer and eRPC metrics.
+
+---
+
+## k3s memory gate
+
+The k3s deployer (`deploy.sh`) checks allocatable memory before installing the monitoring stack. If the node has less than 1.5 GB allocatable, monitoring is skipped with a warning.
+
+To force installation on small nodes:
+
+```bash
+FORCE_MONITORING=true ./deployers/k3s/deploy.sh handoff.json
+```
+
+---
+
+## Verifying the stack
+
+After deployment, check that all monitoring pods are running:
+
+```bash
+kubectl get pods -n monitoring
+```
+
+Expected pods:
+- `prometheus-monitoring-kube-prometheus-prometheus-0`
+- `monitoring-grafana-*`
+- `monitoring-kube-prometheus-operator-*`
+- `monitoring-kube-state-metrics-*`
+- `monitoring-prometheus-node-exporter-*` (one per node)
+- `alertmanager-monitoring-kube-prometheus-alertmanager-0`
+- (if Loki enabled) `loki-0`, `promtail-*`
+
+Access Grafana:
+
+```bash
+# Via port-forward (no ingress)
+kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+
+# Via ingress
+curl https://grafana.yourdomain.com/api/health
+```
+
+---
+
+## Related pages
+
+- **[Variable Reference — Monitoring](../variable-reference.mdx#monitoring)** — All 17 monitoring variables
+- **[Production Checklist](./production-checklist.mdx)** — Pre-launch checklist including monitoring
+- **[TLS & Ingress](./tls-ingress.mdx)** — Ingress modes for Grafana exposure
+- **[Outputs Reference](../outputs-reference.mdx)** — `services.monitoring` in workload handoff

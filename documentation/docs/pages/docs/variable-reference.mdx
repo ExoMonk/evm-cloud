@@ -267,6 +267,55 @@ Control how traffic reaches your services with automatic TLS termination. See th
 
 ---
 
+## Monitoring
+
+Observability stack powered by kube-prometheus-stack. Requires `compute_engine = "eks"` or `"k3s"`.
+
+| Variable | Type | Default | Sensitive | Description |
+|----------|------|---------|-----------|-------------|
+| `monitoring_enabled` | `bool` | `false` | No | Enable kube-prometheus-stack monitoring addon. |
+| `kube_prometheus_stack_version` | `string` | `"72.6.2"` | No | kube-prometheus-stack Helm chart version. |
+| `grafana_admin_password_secret_name` | `string` | `""` | No | Existing K8s Secret name for Grafana admin password (keys: `admin-user`, `admin-password`). Empty = chart default (`prom-operator`). |
+| `grafana_ingress_enabled` | `bool` | `true` | No | Expose Grafana via Ingress. Requires `ingress_mode != "none"` and `grafana_hostname` set. |
+| `grafana_hostname` | `string` | `""` | No | Grafana hostname for Ingress (e.g., `grafana.yourdomain.com`). |
+| `ingress_class_name` | `string` | `"nginx"` | No | Ingress class name for the Grafana Ingress resource. |
+| `alertmanager_route_target` | `string` | `"slack"` | No | Alertmanager receiver target: `slack`, `sns`, or `pagerduty`. |
+| `alertmanager_slack_webhook_secret_name` | `string` | `""` | Yes | Existing K8s Secret name holding Slack webhook URL (key: `webhook_url`). |
+| `alertmanager_slack_channel` | `string` | `"#alerts"` | No | Slack channel name for alert delivery. |
+| `alertmanager_sns_topic_arn` | `string` | `""` | No | SNS topic ARN for Alertmanager routing. |
+| `alertmanager_pagerduty_routing_key_secret_name` | `string` | `""` | Yes | Existing K8s Secret name holding PagerDuty routing key (key: `routing_key`). |
+| `loki_enabled` | `bool` | `false` | No | Deploy Loki + Promtail for log aggregation. Requires `monitoring_enabled = true`. |
+| `loki_chart_version` | `string` | `"6.24.0"` | No | Loki Helm chart version. |
+| `promtail_chart_version` | `string` | `"6.16.6"` | No | Promtail Helm chart version. |
+| `loki_persistence_enabled` | `bool` | `false` | No | Enable PVC for Loki. `false` = logs lost on pod restart. |
+| `clickhouse_metrics_url` | `string` | `""` | No | Optional BYO ClickHouse metrics endpoint for Prometheus scraping (e.g., `http://clickhouse:9363/metrics`). |
+
+### Alert Rules (built-in)
+
+When monitoring is enabled, these PrometheusRule alerts are created automatically:
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| RindexerHighLag | `rindexer_blocks_behind > 100` for 5m | warning |
+| RindexerCriticalLag | `rindexer_blocks_behind > 1000` for 10m | critical |
+| RindexerDeepReorg | `rindexer_reorg_depth > 2` for 1m | warning |
+| RindexerFrequentReorgs | `>5 reorgs` in 15m | warning |
+| RindexerRPCErrorRate | `>5%` RPC errors for 5m | warning |
+| RindexerDBErrors | Any DB write errors in 5m | critical |
+| RindexerDown | Target unreachable for 2m | critical |
+
+### Dashboards (built-in)
+
+Three Grafana dashboards are provisioned automatically:
+
+| Dashboard | Panels |
+|-----------|--------|
+| **rindexer** | Blocks behind, events/sec, RPC error rate, DB ops/sec, reorgs detected, reorg depth |
+| **eRPC** | Request rate, error rate, upstream latency (p99), cache hit rate, upstream health |
+| **Infrastructure** | CPU by pod, memory by pod, network I/O, disk usage, pod restarts, node CPU |
+
+---
+
 ## Bare Metal
 
 Required when `infrastructure_provider = "bare_metal"`.

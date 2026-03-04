@@ -56,8 +56,8 @@ config:
     projects: []
 EOF
 
-# Ingress: configure when mode is cloudflare or ingress_nginx (k3s paths)
-if [[ "$INGRESS_MODE" == "cloudflare" ]]; then
+# Ingress: configure when mode is cloudflare or ingress_nginx AND erpc_hostname is set
+if [[ "$INGRESS_MODE" == "cloudflare" && -n "$ERPC_HOSTNAME" ]]; then
   cat >> "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
 ingress:
   enabled: true
@@ -65,7 +65,7 @@ ingress:
   tlsProvider: "cloudflare"
   tlsSecretName: "cloudflare-origin-tls"
 EOF
-elif [[ "$INGRESS_MODE" == "ingress_nginx" ]]; then
+elif [[ "$INGRESS_MODE" == "ingress_nginx" && -n "$ERPC_HOSTNAME" ]]; then
   TLS_STAGING=$(jq -r '.ingress.tls_staging // false' "$HANDOFF")
   ISSUER="letsencrypt-prod"
   if [[ "$TLS_STAGING" == "true" ]]; then

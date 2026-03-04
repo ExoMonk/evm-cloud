@@ -108,6 +108,7 @@ Workload service metadata.
 |-------|-------------|----------|
 | `services.rpc_proxy` | `rpc_proxy_enabled` | `{ service_name, port, internal_url }` |
 | `services.indexer` | `indexer_enabled` | `{ service_name, single_writer_required, storage_backend }` |
+| `services.monitoring` | `monitoring_enabled` | `{ enabled, kube_prometheus_stack_version, grafana_ingress_enabled, grafana_hostname, ingress_class_name, loki_enabled, loki_chart_version, promtail_chart_version, loki_persistence_enabled, clickhouse_metrics_url, alertmanager }` |
 
 ### ingress
 
@@ -167,7 +168,8 @@ Database connection information.
   },
   "services": {
     "rpc_proxy": { "service_name": "erpc", "port": 4000, "internal_url": "http://erpc:4000" },
-    "indexer": { "service_name": "rindexer", "single_writer_required": true, "storage_backend": "clickhouse" }
+    "indexer": { "service_name": "rindexer", "single_writer_required": true, "storage_backend": "clickhouse" },
+    "monitoring": null
   },
   "data": {
     "backend": "clickhouse",
@@ -200,6 +202,19 @@ Database connection information.
   "data": {
     "backend": "clickhouse",
     "clickhouse": { "url": "https://ch.clickhouse.cloud:8443", "user": "default", "db": "default", "password": "secret" }
+  },
+  "services": {
+    "rpc_proxy": { "service_name": "erpc", "port": 4000, "internal_url": "http://erpc:4000" },
+    "indexer": { "service_name": "rindexer", "single_writer_required": true, "storage_backend": "clickhouse" },
+    "monitoring": {
+      "enabled": true,
+      "kube_prometheus_stack_version": "72.6.2",
+      "grafana_ingress_enabled": true,
+      "grafana_hostname": "grafana.yourdomain.com",
+      "ingress_class_name": "nginx",
+      "loki_enabled": false,
+      "alertmanager": { "route_target": "slack", "slack_channel": "#alerts" }
+    }
   },
   "artifacts": { "config_channel": "helm" }
 }
