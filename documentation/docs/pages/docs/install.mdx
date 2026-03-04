@@ -36,6 +36,16 @@ cd evm-cloud && cargo install --path cli
 evm-cloud --version
 ```
 
+## CI (GitHub Actions, pinned version)
+
+```yaml
+- name: Install evm-cloud (pinned)
+  run: curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/v0.1.0/install.sh | bash -s -- v0.1.0
+
+- name: Verify evm-cloud version
+  run: evm-cloud --version
+```
+
 ## Prerequisites
 
 The CLI wraps Terraform — you'll also need:

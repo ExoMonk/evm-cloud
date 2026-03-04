@@ -42,6 +42,16 @@ Install a pinned version:
 curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/v0.1.0/install.sh | bash -s -- v0.1.0
 ```
 
+### CI: pinned version (GitHub Actions)
+
+```yaml
+- name: Install evm-cloud (pinned)
+	run: curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/v0.1.0/install.sh | bash -s -- v0.1.0
+
+- name: Verify evm-cloud version
+	run: evm-cloud --version
+```
+
 ### Option 3: Source build
 
 ```bash
