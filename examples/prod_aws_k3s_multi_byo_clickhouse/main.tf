@@ -5,12 +5,12 @@ terraform {
 module "evm_cloud" {
   source = "../.."
 
-  project_name            = var.project_name
-  infrastructure_provider = "aws"
-  deployment_target       = "managed"
-  runtime_arch            = "multi"
-  database_mode           = "self_hosted"
-  streaming_mode          = "disabled"
+  project_name                   = var.project_name
+  infrastructure_provider        = "aws"
+  deployment_target              = "managed"
+  runtime_arch                   = "multi"
+  database_mode                  = "self_hosted"
+  streaming_mode                 = "disabled"
   ingress_mode                   = "cloudflare"
   ingress_cloudflare_origin_cert = var.ingress_cloudflare_origin_cert
   ingress_cloudflare_origin_key  = var.ingress_cloudflare_origin_key

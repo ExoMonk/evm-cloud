@@ -235,10 +235,8 @@ metadata:
   name: ingress-nginx-custom-headers
   namespace: ingress-nginx
 data:
-  X-Frame-Options: "DENY"
   X-Content-Type-Options: "nosniff"
   Referrer-Policy: "strict-origin-when-cross-origin"
-  Content-Security-Policy: "default-src 'none'; frame-ancestors 'none'"
 HEADERSEOF
 
       helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
@@ -254,6 +252,9 @@ HEADERSEOF
         --set controller.config.add-headers="ingress-nginx/ingress-nginx-custom-headers" \
         --set controller.hostPort.enabled=true \
         --set controller.service.type=ClusterIP \
+        --set controller.nodeSelector."node-role\.kubernetes\.io/master"=true \
+        --set controller.tolerations[0].key="node-role.kubernetes.io/master" \
+        --set controller.tolerations[0].effect="NoSchedule" \
         "${NGINX_EXTRA_ARGS[@]}" \
         --atomic --timeout 300s
       echo "[evm-cloud] ingress-nginx installed."

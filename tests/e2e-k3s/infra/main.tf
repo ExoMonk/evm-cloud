@@ -63,8 +63,8 @@ module "evm_cloud" {
   indexer_clickhouse_db       = "default"
 
   # Monitoring
-  monitoring_enabled       = true
-  grafana_ingress_enabled  = false
+  monitoring_enabled      = true
+  grafana_ingress_enabled = false
 
   # Config injection
   erpc_config_yaml     = file("${path.module}/../config/erpc.yaml")
