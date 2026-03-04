@@ -60,6 +60,8 @@ pub(crate) fn render_erpc_yaml(answers: &InitAnswers) -> String {
         .cloned()
         .unwrap_or_else(|| "ethereum".to_string());
 
+    let chain_id = chain_id_for(&first_chain).unwrap_or(1);
+
     let first_endpoint = answers
         .rpc_endpoints
         .get(&first_chain)
@@ -67,9 +69,22 @@ pub(crate) fn render_erpc_yaml(answers: &InitAnswers) -> String {
         .unwrap_or_else(|| "https://ethereum-rpc.publicnode.com".to_string());
 
     format!(
-        "logLevel: warn\nprojects:\n  - id: main\n    networks:\n      - architecture: evm\n        evm:\n          chainId: 1\n    upstreams:\n      - id: primary\n        endpoint: {}\n        type: evm\nserver:\n  listenV4: true\n  httpHostV4: 0.0.0.0\n  httpPort: 4000\n",
-        first_endpoint
+        "logLevel: warn\nprojects:\n  - id: main\n    networks:\n      - architecture: evm\n        evm:\n          chainId: {}\n    upstreams:\n      - id: primary\n        endpoint: {}\n        type: evm\nserver:\n  listenV4: true\n  httpHostV4: 0.0.0.0\n  httpPort: 4000\n",
+        chain_id, first_endpoint
     )
+}
+
+fn chain_id_for(chain: &str) -> Option<u64> {
+    let normalized = chain.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "ethereum" | "eth" | "mainnet" => Some(1),
+        "polygon" | "matic" => Some(137),
+        "arbitrum" | "arbitrum_one" => Some(42161),
+        "base" => Some(8453),
+        "optimism" | "op" => Some(10),
+        "hyperliquid" | "hyperliquid_mainnet" | "hyperevm" => Some(999),
+        _ => None,
+    }
 }
 
 pub(crate) fn render_versions_tf() -> String {

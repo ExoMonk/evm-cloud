@@ -152,7 +152,14 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
 }
 
 fn select_chains(theme: &ColorfulTheme) -> Result<Vec<String>> {
-    let chain_options = ["ethereum", "polygon", "arbitrum", "base", "optimism"];
+    let chain_options = [
+        "ethereum",
+        "polygon",
+        "arbitrum",
+        "base",
+        "optimism",
+        "hyperliquid",
+    ];
     let done_label = "Done";
 
     let mut selected = vec![false; chain_options.len()];
