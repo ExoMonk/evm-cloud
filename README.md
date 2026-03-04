@@ -62,6 +62,21 @@ make verify      # qa + plan all examples
 make test-k8s    # Kubernetes chart tests (kind)
 ```
 
+## Install CLI (Standalone)
+
+Use this if you want to run `evm-cloud` from your own Terraform repository (without cloning this repo).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ExoMonk/evm-cloud/main/scripts/install.sh | bash
+evm-cloud --help
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ExoMonk/evm-cloud/main/scripts/install.sh | bash -s -- v0.1.0
+```
+
 ## Terraform CLI Migration (CLI1.1)
 
 The new Rust CLI wraps the existing Terraform flow while preserving an escape hatch for direct Terraform usage.
@@ -73,6 +88,8 @@ make evm-cloud
 ```
 
 This prints CLI help by default.
+
+If you installed the standalone binary, use `evm-cloud` directly.
 
 Use this flag routing rule:
 - `evm-cloud` flags go first (for example: `--dir`, `--allow-raw-terraform`)

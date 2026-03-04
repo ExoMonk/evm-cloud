@@ -23,7 +23,7 @@ Deploy an EVM blockchain indexer on AWS in under 10 minutes. This guide uses the
 
 **Fast path:**
 - Configure variables and secrets (`secrets.auto.tfvars` + `minimal_clickhouse.tfvars`)
-- Deploy with `terraform apply -var-file=minimal_clickhouse.tfvars`
+- Deploy with `evm-cloud apply` (or raw Terraform)
 - Verify with `terraform output -json workload_handoff` + `docker compose ps` on the EC2 host
 
 ## Prerequisites
@@ -112,6 +112,12 @@ Review the plan. You should see resources for:
 
 ```bash
 terraform apply -var-file=minimal_clickhouse.tfvars
+```
+
+If using an installed standalone binary:
+
+```bash
+evm-cloud apply --dir examples/minimal_aws_byo_clickhouse -- -var-file=minimal_clickhouse.tfvars
 ```
 
 This takes 3-5 minutes. Terraform will:

@@ -21,10 +21,22 @@ Recommended invocation from repo root:
 make evm-cloud <command> -- [evm-cloud flags] -- [terraform flags]
 ```
 
+Standalone binary invocation (if installed):
+
+```bash
+evm-cloud <command> [evm-cloud flags] -- [terraform flags]
+```
+
 Example:
 
 ```bash
 make evm-cloud apply -- --dir examples/baremetal_k3s_byo_db --allow-raw-terraform -- -var-file=bare_metal_k3s.tfvars -parallelism=3
+```
+
+Standalone equivalent:
+
+```bash
+evm-cloud apply --dir examples/baremetal_k3s_byo_db --allow-raw-terraform -- -var-file=bare_metal_k3s.tfvars -parallelism=3
 ```
 
 Notes:
