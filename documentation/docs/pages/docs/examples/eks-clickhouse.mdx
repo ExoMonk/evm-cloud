@@ -45,11 +45,24 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars:
 #   indexer_clickhouse_url      = "https://your-instance.clickhouse.cloud:8443"
 #   indexer_clickhouse_password = "your-password"
+```
 
+:::code-group
+
+```bash [CLI]
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 terraform init
 terraform plan
 terraform apply
+```
 
+:::
+
+```bash
 # Configure kubectl
 aws eks update-kubeconfig --name <cluster-name> --region us-east-1
 kubectl get pods

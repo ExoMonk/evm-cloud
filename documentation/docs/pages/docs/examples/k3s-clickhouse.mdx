@@ -56,10 +56,23 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 #   k3s_ssh_private_key_path = "~/.ssh/evm-cloud"
 #   indexer_clickhouse_url   = "https://your-instance.clickhouse.cloud:8443"
 #   indexer_clickhouse_password = "your-password"
+```
 
+:::code-group
+
+```bash [CLI]
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 terraform init
 terraform apply
+```
 
+:::
+
+```bash
 # Phase 2: Deploy workloads
 terraform output -json workload_handoff  # contains kubeconfig + connection details
 # Use the output to configure kubectl and deploy via Helm

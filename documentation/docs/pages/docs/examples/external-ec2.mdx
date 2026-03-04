@@ -50,10 +50,23 @@ cd evm-cloud/examples/minimal_aws_external_ec2_byo
 
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars with your values
+```
 
+:::code-group
+
+```bash [CLI]
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 terraform init
 terraform apply
+```
 
+:::
+
+```bash
 # Get the handoff output for your deploy pipeline
 terraform output -json workload_handoff
 # Contains: SSH IP, instance ID, security group IDs, secret ARNs, config payloads

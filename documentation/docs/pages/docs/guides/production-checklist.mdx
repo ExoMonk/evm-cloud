@@ -223,10 +223,21 @@ Always remove workloads before destroying infrastructure:
 # Step 1: Remove workloads
 ./deployers/k3s/teardown.sh handoff.json
 # or: helm uninstall rindexer erpc
+```
 
+:::code-group
+
+```bash [CLI]
+# Step 2: Destroy infrastructure
+evm-cloud destroy
+```
+
+```bash [Terraform]
 # Step 2: Destroy infrastructure
 terraform destroy -var-file=production.tfvars
 ```
+
+:::
 
 Skipping step 1 will not leak AWS resources (the EC2 instance is terminated along with everything on it), but Helm release state and any persistent volumes will be lost without clean shutdown.
 

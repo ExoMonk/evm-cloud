@@ -37,6 +37,10 @@ export default defineConfig({
       link: "/docs/getting-started",
     },
     {
+      text: "Install CLI",
+      link: "/docs/install",
+    },
+    {
       text: "Architecture",
       items: [
         { text: "System Architecture", link: "/docs/architecture" },

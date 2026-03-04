@@ -53,7 +53,14 @@ resource "kubernetes_deployment" "erpc" {
           args    = ["--config", "/config/erpc.yaml"]
 
           port {
+            name           = "http"
             container_port = var.container_port
+          }
+
+          port {
+            name           = "metrics"
+            container_port = 4001
+            protocol       = "TCP"
           }
 
           volume_mount {
@@ -98,8 +105,15 @@ resource "kubernetes_service" "erpc" {
     }
 
     port {
+      name        = "http"
       port        = var.container_port
       target_port = var.container_port
+    }
+
+    port {
+      name        = "metrics"
+      port        = 4001
+      target_port = 4001
     }
 
     type = "ClusterIP"

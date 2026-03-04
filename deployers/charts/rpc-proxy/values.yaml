@@ -10,6 +10,12 @@ service:
   type: ClusterIP
   port: 4000
 
+# eRPC metrics port (separate from RPC proxy port)
+metricsPort: 4001
+
+# Prometheus Operator release name for ServiceMonitor label matching
+monitoringRelease: "monitoring"
+
 resources:
   requests:
     cpu: 250m

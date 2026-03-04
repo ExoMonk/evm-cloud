@@ -99,11 +99,25 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 #   bare_metal_host                 = "203.0.113.42"
 #   bare_metal_ssh_private_key_path = "~/.ssh/id_ed25519"
 #   indexer_postgres_url            = "postgres://user:pass@host:5432/db"
+```
 
+:::code-group
+
+```bash [CLI]
+# Phase 1: Install k3s
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 # Phase 1: Install k3s
 terraform init
 terraform apply -var-file=bare_metal_k3s.tfvars
+```
 
+:::
+
+```bash
 # Phase 2: Deploy workloads
 terraform output -json workload_handoff | \
   ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config

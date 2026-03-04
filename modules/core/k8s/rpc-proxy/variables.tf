@@ -50,6 +50,12 @@ variable "memory_limit" {
   default     = "1Gi"
 }
 
+variable "monitoring_enabled" {
+  description = "Whether monitoring stack is enabled (controls ServiceMonitor creation)."
+  type        = bool
+  default     = false
+}
+
 variable "wait_for_rollout" {
   description = "Wait for the Deployment rollout to complete."
   type        = bool

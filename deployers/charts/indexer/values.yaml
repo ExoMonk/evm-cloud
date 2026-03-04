@@ -30,6 +30,9 @@ job:
   backoffLimit: 0
   ttlSecondsAfterFinished: 86400
 
+# Prometheus Operator release name for ServiceMonitor label matching
+monitoringRelease: "monitoring"
+
 storageBackend: postgres
 
 rpcUrl: ""

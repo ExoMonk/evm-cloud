@@ -1,0 +1,19 @@
+{{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "rpc-proxy.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "rpc-proxy.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    release: {{ .Values.monitoringRelease | default "monitoring" }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "rpc-proxy.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+{{- end }}

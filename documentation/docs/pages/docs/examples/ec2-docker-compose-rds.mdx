@@ -44,11 +44,24 @@ cd evm-cloud/examples/minimal_aws_rds
 
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars: set ssh_public_key
+```
 
+:::code-group
+
+```bash [CLI]
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 terraform init
 terraform plan
 terraform apply
+```
 
+:::
+
+```bash
 # Verify
 terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip'
 ssh -i ~/.ssh/evm-cloud ubuntu@<public-ip> 'sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps'

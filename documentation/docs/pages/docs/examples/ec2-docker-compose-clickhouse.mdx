@@ -47,11 +47,24 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 #   ssh_public_key             = "ssh-ed25519 AAAA..."
 #   indexer_clickhouse_url      = "https://your-instance.clickhouse.cloud:8443"
 #   indexer_clickhouse_password = "your-password"
+```
 
+:::code-group
+
+```bash [CLI]
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 terraform init
 terraform plan -var-file=minimal_clickhouse.tfvars
 terraform apply -var-file=minimal_clickhouse.tfvars
+```
 
+:::
+
+```bash
 # Verify
 terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip'
 ssh -i ~/.ssh/evm-cloud ubuntu@<public-ip> 'sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps'

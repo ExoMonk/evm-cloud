@@ -1,0 +1,52 @@
+# Install evm-cloud CLI
+
+The fastest way to deploy EVM data infrastructure. Install the CLI and run `evm-cloud init` to get started.
+
+<div style={{ display: 'flex', gap: '12px', margin: '16px 0' }}>
+  <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: '#10b98120', border: '1px solid #10b98150', color: '#10b981', fontSize: '13px', fontWeight: 500 }}>
+    ~30 seconds
+  </span>
+  <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: '#8b5cf620', border: '1px solid #8b5cf650', color: '#8b5cf6', fontSize: '13px', fontWeight: 500 }}>
+    macOS + Linux
+  </span>
+</div>
+
+## Quick Install
+
+:::code-group
+
+```bash [macOS (Homebrew)]
+brew install ExoMonk/tap/evm-cloud
+```
+
+```bash [macOS / Linux (curl)]
+curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/latest/download/install.sh | bash
+```
+
+```bash [From Source]
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud && cargo install --path cli
+```
+
+:::
+
+## Verify
+
+```bash
+evm-cloud --version
+```
+
+## Prerequisites
+
+The CLI wraps Terraform — you'll also need:
+
+| Tool | Version | Install |
+|------|---------|---------|
+| **Terraform** | >= 1.5.0 | [terraform.io/downloads](https://developer.hashicorp.com/terraform/downloads) |
+| **AWS CLI** | v2 | [docs.aws.amazon.com/cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
+
+## What's Next
+
+- [Getting Started](/docs/getting-started) — deploy your first stack in 5 minutes
+- [Examples](/docs/examples) — choose from 9 deployment patterns
+- [Architecture](/docs/architecture) — understand what gets deployed

@@ -49,18 +49,30 @@ spec:
                   name: {{ include "indexer.fullname" . }}-secrets
                   key: CLICKHOUSE_PASSWORD
 {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
           resources:
 {{ toYaml .Values.resources | indent 12 }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            failureThreshold: 30
+            periodSeconds: 10
           readinessProbe:
-            exec:
-              command: ["sh", "-c", "test -f /config/rindexer.yaml"]
+            httpGet:
+              path: /health
+              port: metrics
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            exec:
-              command: ["sh", "-c", "test -f /config/rindexer.yaml"]
-            initialDelaySeconds: 15
+            tcpSocket:
+              port: metrics
+            initialDelaySeconds: 10
             periodSeconds: 20
+            failureThreshold: 5
           volumeMounts:
             - name: config
               mountPath: /config/rindexer.yaml

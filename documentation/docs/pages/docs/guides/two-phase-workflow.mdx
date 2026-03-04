@@ -32,11 +32,21 @@ Separating into two phases resolves this. Phase 1 creates the cluster and output
 
 `terraform apply` provisions all infrastructure and outputs the `workload_handoff`.
 
-```bash
+:::code-group
+
+```bash [CLI]
+cd examples/minimal_aws_k3s_byo_clickhouse
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 cd examples/minimal_aws_k3s_byo_clickhouse
 terraform init
 terraform apply -var-file=minimal_k3s.tfvars
 ```
+
+:::
 
 Terraform creates:
 - VPC with public subnets and security groups
@@ -122,10 +132,19 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 
 ### 2. Phase 1 -- Provision Infrastructure
 
-```bash
+:::code-group
+
+```bash [CLI]
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 terraform init
 terraform apply -var-file=minimal_k3s.tfvars
 ```
+
+:::
 
 ### 3. Phase 2 -- Deploy Workloads
 
@@ -170,9 +189,17 @@ terraform output -json workload_handoff | ./../../deployers/k3s/teardown.sh /dev
 
 ### 2. Destroy Infrastructure (Phase 1)
 
-```bash
+:::code-group
+
+```bash [CLI]
+evm-cloud destroy
+```
+
+```bash [Terraform]
 terraform destroy -var-file=minimal_k3s.tfvars
 ```
+
+:::
 
 > **Note:** If you skip the workload teardown and go straight to `terraform destroy`, the EC2 instance (and all its containers) will be terminated. No resources leak on AWS, but Helm release state is lost. This is acceptable for dev environments but not recommended for production -- see [Production Checklist](./production-checklist.mdx#destroy-safety).
 
@@ -199,10 +226,19 @@ See [Updating Configuration After Deployment](./config-updates.mdx) for config u
 
 The same two-phase pattern applies to EKS with `workload_mode = "external"`. The difference is in how you authenticate:
 
-```bash
-# Phase 1: Terraform provisions EKS cluster
-terraform apply -var-file=eks_external.tfvars
+:::code-group
 
+```bash [CLI]
+evm-cloud apply
+```
+
+```bash [Terraform]
+terraform apply -var-file=eks_external.tfvars
+```
+
+:::
+
+```bash
 # Phase 2: Deploy using EKS deployer
 terraform output -json workload_handoff | ./../../deployers/eks/deploy.sh /dev/stdin --config-dir ./config
 ```

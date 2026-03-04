@@ -408,6 +408,25 @@ module "k8s_addons" {
   project_name      = var.project_name
   eso_enabled       = var.secrets_mode != "inline"
   eso_chart_version = var.eso_chart_version
+
+  # Monitoring
+  monitoring_enabled                             = var.monitoring_enabled
+  kube_prometheus_stack_version                   = var.kube_prometheus_stack_version
+  grafana_admin_password_secret_name              = var.grafana_admin_password_secret_name
+  alertmanager_slack_webhook_secret_name           = var.alertmanager_slack_webhook_secret_name
+  alertmanager_sns_topic_arn                       = var.alertmanager_sns_topic_arn
+  alertmanager_pagerduty_routing_key_secret_name   = var.alertmanager_pagerduty_routing_key_secret_name
+  alertmanager_route_target                        = var.alertmanager_route_target
+  alertmanager_slack_channel                       = var.alertmanager_slack_channel
+  loki_enabled                                    = var.loki_enabled
+  loki_chart_version                              = var.loki_chart_version
+  promtail_chart_version                          = var.promtail_chart_version
+  loki_persistence_enabled                        = var.loki_persistence_enabled
+  clickhouse_metrics_url                          = var.clickhouse_metrics_url
+  grafana_ingress_enabled                         = var.grafana_ingress_enabled
+  grafana_hostname                                = var.grafana_hostname
+  ingress_class_name                              = var.ingress_class_name
+  aws_region                                      = var.aws_region
 }
 
 # --- RPC Proxy: eRPC (EKS) ---
@@ -416,9 +435,10 @@ module "eks_rpc_proxy" {
   source = "../../core/k8s/rpc-proxy"
   count  = (var.rpc_proxy_enabled && var.compute_engine == "eks" && local.terraform_manages_workloads) ? 1 : 0
 
-  project_name     = var.project_name
-  image            = var.rpc_proxy_image
-  erpc_config_yaml = var.erpc_config_yaml
+  project_name       = var.project_name
+  image              = var.rpc_proxy_image
+  erpc_config_yaml   = var.erpc_config_yaml
+  monitoring_enabled = var.monitoring_enabled
 }
 
 # --- Indexer: rindexer (EKS) ---
@@ -432,6 +452,7 @@ module "eks_indexer" {
   rpc_url              = local.resolved_indexer_rpc_url
   rindexer_config_yaml = var.rindexer_config_yaml
   rindexer_abis        = var.rindexer_abis
+  monitoring_enabled   = var.monitoring_enabled
 
   storage_backend = var.indexer_storage_backend
 

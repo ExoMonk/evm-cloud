@@ -20,7 +20,7 @@ const columns: Column[] = [
       { label: "ssh_public_key", sub: "EC2 access" },
       { label: "ClickHouse URL + Password", sub: "Stored in secrets.auto.tfvars" },
       { label: "rindexer.yaml + ABIs", sub: "Indexer behavior" },
-      { label: "Command: terraform init", sub: "Initialize providers" },
+      { label: "Command: evm-cloud init", sub: "Initialize providers" },
     ],
   },
   {
@@ -31,7 +31,7 @@ const columns: Column[] = [
       { label: "EC2 t3.micro", sub: "Docker host" },
       { label: "IAM Role + Secrets Manager", sub: "Runtime secret delivery" },
       { label: "Docker Compose Stack", sub: "Rendered on /opt/evm-cloud" },
-      { label: "Command: terraform apply", sub: "Creates infra + starts containers" },
+      { label: "Command: evm-cloud apply", sub: "Creates infra + starts containers" },
     ],
   },
   {

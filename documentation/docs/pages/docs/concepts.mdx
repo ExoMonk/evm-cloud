@@ -321,15 +321,25 @@ The Terraform `kubernetes` and `helm` providers need a kubeconfig to connect to 
 
 ### The Solution
 
-**Phase 1: Infrastructure** — `terraform apply`
+**Phase 1: Infrastructure** — `evm-cloud apply` (or `terraform apply`)
 
 Provisions compute (EC2 with k3s installed, or EKS cluster), networking, database, and outputs the `workload_handoff`.
 
-```bash
+:::code-group
+
+```bash [CLI]
+cd examples/k3s_rds
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 cd examples/k3s_rds
 terraform init
 terraform apply
 ```
+
+:::
 
 **Phase 2: Workloads** — deployer script
 
@@ -350,11 +360,23 @@ Reverse order. Remove workloads before destroying infrastructure:
 # Phase 2 teardown
 cd deployers/k3s
 ./teardown.sh ../../examples/k3s_rds
+```
 
+:::code-group
+
+```bash [CLI]
+# Phase 1 teardown
+cd examples/k3s_rds
+evm-cloud destroy
+```
+
+```bash [Terraform]
 # Phase 1 teardown
 cd examples/k3s_rds
 terraform destroy
 ```
+
+:::
 
 If you skip Phase 2 and go straight to `terraform destroy`, the EC2 instance (and its containers) will be terminated. No resources leak, but Helm release state is lost.
 

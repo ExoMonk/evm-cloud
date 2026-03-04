@@ -78,12 +78,24 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 
 ### 3. Deploy
 
-```bash
+:::code-group
+
+```bash [CLI]
+# Phase 1: Provision EC2 + k3s
+evm-cloud init
+evm-cloud apply
+```
+
+```bash [Terraform]
 # Phase 1: Provision EC2 + k3s
 terraform init
 terraform plan -var-file=cloudflare_k3s.tfvars -out=plan.tfplan
 terraform apply plan.tfplan
+```
 
+:::
+
+```bash
 # Extract handoff
 terraform output -json workload_handoff > handoff.json
 
@@ -168,8 +180,19 @@ k3s_instance_type = "t3.medium"  # 2 vCPU, 4GB (~$30/mo)
 
 ```bash
 ../../deployers/k3s/teardown.sh handoff.json
+```
+
+:::code-group
+
+```bash [CLI]
+evm-cloud destroy
+```
+
+```bash [Terraform]
 terraform destroy -var-file=cloudflare_k3s.tfvars
 ```
+
+:::
 
 Remove the DNS A record in Cloudflare after destroying.
 

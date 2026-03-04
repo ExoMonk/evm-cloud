@@ -55,9 +55,29 @@ resource "kubernetes_secret" "indexer" {
 
 # Single-writer constraint: rindexer must run exactly one active writer per
 # dataset. replicas=1 with Recreate strategy prevents two pods running during rollout.
+resource "kubernetes_service" "indexer" {
+  #checkov:skip=CKV_K8S_21:Default namespace acceptable for Tier 0
+  metadata {
+    name      = "${var.project_name}-indexer"
+    namespace = var.namespace
+  }
+
+  spec {
+    selector = {
+      app = "${var.project_name}-indexer"
+    }
+
+    port {
+      name        = "metrics"
+      port        = 8080
+      target_port = 8080
+    }
+
+    type = "ClusterIP"
+  }
+}
+
 resource "kubernetes_deployment" "indexer" {
-  #checkov:skip=CKV_K8S_8:Liveness probe deferred to Tier 1
-  #checkov:skip=CKV_K8S_9:Readiness probe deferred to Tier 1
   #checkov:skip=CKV_K8S_14:Image tag pinning is user responsibility via var.image
   #checkov:skip=CKV_K8S_21:Default namespace acceptable for Tier 0
   #checkov:skip=CKV_K8S_28:NET_RAW drop deferred to Tier 1
@@ -100,6 +120,39 @@ resource "kubernetes_deployment" "indexer" {
           image             = var.image
           image_pull_policy = "Always"
           args              = ["start", "--path", "/config", "all"]
+
+          port {
+            name           = "metrics"
+            container_port = 8080
+            protocol       = "TCP"
+          }
+
+          startup_probe {
+            http_get {
+              path = "/health"
+              port = "metrics"
+            }
+            failure_threshold = 30
+            period_seconds    = 10
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/health"
+              port = "metrics"
+            }
+            initial_delay_seconds = 5
+            period_seconds        = 10
+          }
+
+          liveness_probe {
+            tcp_socket {
+              port = 8080
+            }
+            initial_delay_seconds = 10
+            period_seconds        = 20
+            failure_threshold     = 5
+          }
 
           # Plain env vars
           dynamic "env" {
