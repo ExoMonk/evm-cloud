@@ -17,7 +17,7 @@ evm-cloud [--color auto|always|never] <command> [flags]
 Initialize Terraform and/or scaffold project files.
 
 ```bash
-evm-cloud init [--dir <path>] [--example <name>] [--list-examples] [--mode easy|power] [--force] [--non-interactive --config <file>] [--skip-terraform-init]
+evm-cloud init [--dir <path>] [--example <name>] [--list-examples] [--mode easy|power] [--force] [--allow-raw-terraform] [--non-interactive --config <file>] [--skip-terraform-init]
 ```
 
 Key behavior:
@@ -27,6 +27,7 @@ Key behavior:
 - Supports both answers TOML and runtime `evm-cloud.toml` in non-interactive mode
 - `--example <name>` bootstraps from local `examples/` when in a repo checkout, otherwise downloads examples from GitHub (current CLI tag, fallback `main`) before init
 - `--list-examples` prints canonical example names and aliases
+- `--allow-raw-terraform` is required in raw Terraform roots without easy-mode markers
 
 ### `apply`
 
@@ -37,6 +38,9 @@ evm-cloud apply [--dir <path>] [--dry-run] [--auto-approve] [--allow-raw-terrafo
 ```
 
 - `--dry-run` runs Terraform plan (no changes applied)
+- Interactive mode prompts: `Apply these changes? (y/N)`
+- Non-interactive shells require `--auto-approve`
+- Terraform output is captured for concise UX; detailed output is written to `.evm-cloud/logs/`
 
 ### `deploy`
 
@@ -56,19 +60,23 @@ evm-cloud destroy [--dir <path>] --yes [--auto-approve] [--allow-raw-terraform] 
 
 ### `status`
 
-Display project/runtime status information.
+Status command placeholder.
 
 ```bash
-evm-cloud status [--dir <path>] [--allow-raw-terraform]
+evm-cloud status
 ```
+
+Current behavior: prints `status command not yet implemented`.
 
 ### `logs`
 
-Fetch/stream workload logs (where supported by deployer/runtime).
+Logs command placeholder.
 
 ```bash
-evm-cloud logs [--dir <path>] [--allow-raw-terraform] [-- <log args>]
+evm-cloud logs
 ```
+
+Current behavior: prints `logs command not yet implemented`.
 
 ## Project Modes
 

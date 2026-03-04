@@ -1,6 +1,6 @@
 [package]
 name = "evm-cloud"
-version = "0.0.1-alpha2"
+version = "0.0.1-alpha3"
 edition = "2021"
 description = "CLI for provisioning and operating EVM blockchain data infrastructure"
 homepage = "https://evm-cloud.xyz"

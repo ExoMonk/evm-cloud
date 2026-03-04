@@ -229,7 +229,7 @@ Always remove workloads before destroying infrastructure:
 
 ```bash [CLI]
 # Step 2: Destroy infrastructure
-evm-cloud destroy
+evm-cloud destroy --yes
 ```
 
 ```bash [Terraform]
@@ -238,6 +238,8 @@ terraform destroy -var-file=production.tfvars
 ```
 
 :::
+
+For CI/non-interactive workflows: `evm-cloud destroy --yes --auto-approve`.
 
 Skipping step 1 will not leak AWS resources (the EC2 instance is terminated along with everything on it), but Helm release state and any persistent volumes will be lost without clean shutdown.
 

@@ -30,7 +30,7 @@ Deploy an EVM blockchain indexer on AWS in under 10 minutes. This guide uses the
 
 | Tool | Version | Install |
 |------|---------|---------|
-| **Terraform** | >= 1.5.0 | [terraform.io/downloads](https://developer.hashicorp.com/terraform/downloads) |
+| **Terraform** | >= 1.14.6 | [terraform.io/downloads](https://developer.hashicorp.com/terraform/downloads) |
 | **AWS CLI** | v2 | [docs.aws.amazon.com/cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
 | **jq** | any | `brew install jq` or `apt install jq` |
 | **SSH key pair** | Ed25519 or RSA | `ssh-keygen -t ed25519` |
@@ -117,7 +117,9 @@ terraform plan -var-file=minimal_clickhouse.tfvars
 
 :::
 
-You should see resources for:
+`evm-cloud apply --dry-run` prints a concise summary and writes full Terraform plan details to `.evm-cloud/logs/terraform-plan-<timestamp>.log`.
+
+Plan output includes resources for:
 - VPC, subnets, security groups
 - EC2 instance (t3.micro — AWS free tier eligible)
 - IAM role + Secrets Manager secret
@@ -136,6 +138,8 @@ terraform apply -var-file=minimal_clickhouse.tfvars
 ```
 
 :::
+
+`evm-cloud apply` prompts `Apply these changes? (y/N)` in interactive shells. In CI/non-interactive shells, use `evm-cloud apply --auto-approve`.
 
 This takes 3-5 minutes. Terraform will:
 1. Create a VPC with public subnets
@@ -163,7 +167,7 @@ You should see `erpc` and `rindexer` containers in `running` state.
 :::code-group
 
 ```bash [CLI]
-evm-cloud destroy
+evm-cloud destroy --yes
 ```
 
 ```bash [Terraform]
@@ -171,6 +175,8 @@ terraform destroy -var-file=minimal_clickhouse.tfvars
 ```
 
 :::
+
+For CI/non-interactive usage, run `evm-cloud destroy --yes --auto-approve`.
 
 ## What Just Happened
 

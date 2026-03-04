@@ -192,7 +192,7 @@ terraform output -json workload_handoff | ./../../deployers/k3s/teardown.sh /dev
 :::code-group
 
 ```bash [CLI]
-evm-cloud destroy
+evm-cloud destroy --yes
 ```
 
 ```bash [Terraform]
@@ -200,6 +200,8 @@ terraform destroy -var-file=minimal_k3s.tfvars
 ```
 
 :::
+
+For CI/non-interactive runs: `evm-cloud destroy --yes --auto-approve`.
 
 > **Note:** If you skip the workload teardown and go straight to `terraform destroy`, the EC2 instance (and all its containers) will be terminated. No resources leak on AWS, but Helm release state is lost. This is acceptable for dev environments but not recommended for production -- see [Production Checklist](./production-checklist.mdx#destroy-safety).
 
