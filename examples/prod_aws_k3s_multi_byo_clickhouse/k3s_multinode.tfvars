@@ -6,13 +6,13 @@ aws_region   = "us-east-1"
 network_vpc_cidr           = "10.42.0.0/16"
 network_availability_zones = ["us-east-1a", "us-east-1b"]
 
-# k3s server node — runs control plane + live indexer + eRPC
-k3s_instance_type = "t3.small"
+# k3s server node — runs control plane + live indexer + eRPC + Monitoring stack
+k3s_instance_type = "c7i-flex.large"
 k3s_version       = "v1.30.4+k3s1"
 
 # k3s worker node — spot instance for backfill indexer (~70% cheaper, interruptible)
 k3s_worker_nodes = [
-  { name = "backfill", role = "indexer", instance_type = "t3.small", use_spot = true },
+  { name = "backfill", role = "indexer", instance_type = "t3.micro", use_spot = true },
 ]
 
 # Workloads (deployed via deployers/k3s/deploy.sh after terraform apply)

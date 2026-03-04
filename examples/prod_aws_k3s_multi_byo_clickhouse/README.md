@@ -110,11 +110,13 @@ terraform init
 terraform plan -var-file=k3s_multinode.tfvars
 terraform apply -var-file=k3s_multinode.tfvars
 
+export KUBECONFIG=$(terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > /tmp/k3s-kubeconfig && echo /tmp/k3s-kubeconfig)
+
 # 4) Verify cluster nodes
-sudo kubectl get nodes --show-labels
+kubectl get nodes --show-labels
 # Should show: server + backfill worker with evm-cloud/role=indexer label
 
-# 5) Deploy workloads (Phase 2) — eRPC + live indexer only
+# 5) Deploy workloads (Phase 2) — ESO + Monitoring + eRPC + live indexer only
 terraform output -json workload_handoff | \
   ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config --instance indexer
 # deploy.sh will:
@@ -127,8 +129,8 @@ terraform output -json workload_handoff | \
   ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config --instance backfill --job
 
 # 6) Verify pods + ExternalSecret sync
-sudo kubectl get pods -A
-sudo kubectl get externalsecrets -A
+kubectl get pods -A
+kubectl get externalsecrets -A
 # STATUS should show "SecretSynced"
 rm -f "$KUBECONFIG"
 
@@ -204,3 +206,69 @@ terraform destroy            → Drain worker, delete node, uninstall k3s, termi
 ```
 
 On `terraform destroy`, the worker is drained and deleted from the cluster before its EC2 instance is terminated. The server runs `k3s-uninstall.sh` last.
+
+## Monitoring
+
+This example enables monitoring by default (`monitoring_enabled = true`). Phase 2 (`deploy.sh`) installs kube-prometheus-stack with Prometheus, Grafana, Alertmanager, and 3 auto-provisioned dashboards (rindexer, eRPC, infrastructure).
+
+### Accessing Grafana
+
+Without ingress (`grafana_hostname` not set), use port-forward:
+
+```bash
+kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+# Open http://localhost:3000
+# Default credentials: admin / prom-operator
+```
+
+With Cloudflare ingress:
+
+```hcl
+# In secrets.auto.tfvars or k3s_multinode.tfvars:
+grafana_hostname = "grafana.yourdomain.com"
+```
+
+Then add a DNS A record in Cloudflare pointing `grafana.yourdomain.com` to the EC2 public IP (proxied). Get the IP from:
+
+```bash
+terraform output -json workload_handoff | jq -r '.runtime.k3s.cluster_endpoint'
+```
+
+### Verifying monitoring pods
+
+```bash
+kubectl get pods -n monitoring
+```
+
+Expected pods:
+
+- `prometheus-monitoring-kube-prometheus-prometheus-0`
+- `monitoring-grafana-*`
+- `monitoring-kube-prometheus-operator-*`
+- `monitoring-kube-state-metrics-*`
+- `monitoring-prometheus-node-exporter-*` (one per node)
+- `alertmanager-monitoring-kube-prometheus-alertmanager-0`
+
+### Optional: Alert routing
+
+```hcl
+alertmanager_route_target              = "slack"
+alertmanager_slack_webhook_secret_name = "slack-webhook"
+alertmanager_slack_channel             = "#evm-alerts"
+```
+
+Create the Slack webhook secret before deploying:
+
+```bash
+kubectl create secret generic slack-webhook \
+  --namespace monitoring \
+  --from-literal=webhook_url="https://hooks.slack.com/services/T.../B.../xxx"
+```
+
+### Optional: Log aggregation
+
+```hcl
+loki_enabled = true
+```
+
+See the [Observability Guide](../../documentation/docs/pages/docs/guides/observability.mdx) for full details on dashboards, alert rules, and configuration.

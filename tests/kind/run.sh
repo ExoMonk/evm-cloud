@@ -30,7 +30,9 @@ cleanup() {
   cd "$SCRIPT_DIR"
   helm uninstall test-rpc -n "$HELM_NS" 2>/dev/null || true
   helm uninstall test-idx -n "$HELM_NS" 2>/dev/null || true
+  helm uninstall test-dashboards -n "$HELM_NS" 2>/dev/null || true
   kubectl delete namespace "$HELM_NS" 2>/dev/null || true
+  kubectl delete namespace monitoring 2>/dev/null || true
   terraform destroy -auto-approve \
     -var="kubeconfig_path=${KUBECONFIG_PATH}" 2>/dev/null || true
   kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
@@ -764,6 +766,84 @@ if [ -n "$HELM_INDEXER_POD" ] && [ -n "$HELM_INDEXER_PHASE" ]; then
   fi
 else
   fail "[helm] rindexer pod did not start within 120s"
+fi
+
+# --- Phase 9: Monitoring / Observability chart validation ---
+echo ""
+echo "=== Phase 9: Monitoring charts ==="
+
+# 9.1 Dashboards chart dry-run (ConfigMaps target namespace: monitoring — create it first)
+kubectl create namespace monitoring 2>/dev/null || true
+if helm template test-dashboards "$CHARTS_DIR/dashboards" \
+    --values "$CHARTS_DIR/dashboards/values.yaml" 2>&1 \
+    | kubectl apply --dry-run=server -f - >/dev/null 2>&1; then
+  pass "dashboards Helm chart renders and validates against K8s API"
+else
+  fail "dashboards Helm chart dry-run failed"
+fi
+kubectl delete namespace monitoring 2>/dev/null || true
+
+# 9.2 Verify dashboards chart produces 3 ConfigMaps (rindexer, eRPC, infra)
+DASHBOARDS_RENDERED=$(helm template test-dashboards "$CHARTS_DIR/dashboards" \
+    --values "$CHARTS_DIR/dashboards/values.yaml" 2>&1)
+
+for dashboard in rindexer-dashboard erpc-dashboard infra-dashboard; do
+  if echo "$DASHBOARDS_RENDERED" | grep -q "$dashboard"; then
+    pass "dashboards chart includes $dashboard ConfigMap"
+  else
+    fail "dashboards chart missing $dashboard ConfigMap"
+  fi
+done
+
+# 9.3 Verify dashboard ConfigMaps have grafana_dashboard label
+DASHBOARD_LABELS=$(echo "$DASHBOARDS_RENDERED" | grep -A2 "grafana_dashboard" || echo "")
+if echo "$DASHBOARD_LABELS" | grep -q 'grafana_dashboard: "1"'; then
+  pass "dashboard ConfigMaps have grafana_dashboard: '1' label"
+else
+  fail "dashboard ConfigMaps missing grafana_dashboard label"
+fi
+
+# 9.4 Verify PrometheusRule is NOT rendered (no monitoring.coreos.com CRD in kind)
+if echo "$DASHBOARDS_RENDERED" | grep -q "PrometheusRule"; then
+  fail "PrometheusRule rendered without CRD (should be conditional)"
+else
+  pass "PrometheusRule correctly skipped (no monitoring.coreos.com CRD)"
+fi
+
+# 9.5 Indexer chart ServiceMonitor is NOT rendered (no monitoring.coreos.com CRD in kind)
+INDEXER_RENDERED=$(helm template test-idx-sm "$CHARTS_DIR/indexer" \
+    --values "$CHARTS_DIR/indexer/values.yaml" 2>&1)
+
+if echo "$INDEXER_RENDERED" | grep -q "ServiceMonitor"; then
+  fail "indexer ServiceMonitor rendered without CRD (should be conditional)"
+else
+  pass "indexer ServiceMonitor correctly skipped (no monitoring.coreos.com CRD)"
+fi
+
+# 9.6 rpc-proxy chart ServiceMonitor is NOT rendered (no monitoring.coreos.com CRD in kind)
+RPCPROXY_RENDERED=$(helm template test-rpc-sm "$CHARTS_DIR/rpc-proxy" \
+    --values "$CHARTS_DIR/rpc-proxy/values.yaml" 2>&1)
+
+if echo "$RPCPROXY_RENDERED" | grep -q "ServiceMonitor"; then
+  fail "rpc-proxy ServiceMonitor rendered without CRD (should be conditional)"
+else
+  pass "rpc-proxy ServiceMonitor correctly skipped (no monitoring.coreos.com CRD)"
+fi
+
+# 9.7 Indexer Service exposes metrics port 8080
+INDEXER_SVC_RENDERED=$(helm template test-idx-svc "$CHARTS_DIR/indexer" \
+    --values "$CHARTS_DIR/indexer/values.yaml" 2>&1)
+if echo "$INDEXER_SVC_RENDERED" | grep -q "8080"; then
+  pass "indexer chart Service includes metrics port 8080"
+else
+  fail "indexer chart Service missing metrics port 8080"
+fi
+
+# 9.8 rpc-proxy Service exposes metrics port 4001
+if echo "$RPCPROXY_RENDERED" | grep -q "4001"; then
+  pass "rpc-proxy chart Service includes metrics port 4001"
+else
+  fail "rpc-proxy chart Service missing metrics port 4001"
 fi
 
 # --- Summary ---

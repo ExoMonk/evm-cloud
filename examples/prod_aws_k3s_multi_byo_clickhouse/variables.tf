@@ -163,3 +163,61 @@ variable "indexer_instances" {
     { name = "backfill", config_key = "backfill", node_role = "indexer" }, # backfill: runs on worker, uses config/backfill/rindexer.yaml
   ]
 }
+
+# --- Monitoring ---
+
+variable "monitoring_enabled" {
+  description = "Enable kube-prometheus-stack monitoring addon."
+  type        = bool
+  default     = true
+}
+
+variable "grafana_hostname" {
+  description = "Grafana hostname for Ingress (e.g., grafana.yourdomain.com)."
+  type        = string
+  default     = ""
+}
+
+variable "alertmanager_route_target" {
+  description = "Alertmanager receiver target: slack, sns, or pagerduty."
+  type        = string
+  default     = "slack"
+}
+
+variable "alertmanager_slack_webhook_secret_name" {
+  description = "Existing K8s Secret name holding Slack webhook URL (key: webhook_url)."
+  type        = string
+  default     = ""
+}
+
+variable "alertmanager_slack_channel" {
+  description = "Slack channel name for alert delivery."
+  type        = string
+  default     = "#alerts"
+}
+
+variable "loki_enabled" {
+  description = "Deploy Loki + Promtail for log aggregation."
+  type        = bool
+  default     = false
+}
+
+variable "clickhouse_metrics_url" {
+  description = "Optional BYO ClickHouse metrics endpoint for Prometheus scraping."
+  type        = string
+  default     = ""
+}
+
+# --- Ingress (Cloudflare) ---
+
+variable "ingress_cloudflare_origin_cert" {
+  description = "Cloudflare origin certificate (PEM)"
+  type        = string
+  sensitive   = true
+}
+
+variable "ingress_cloudflare_origin_key" {
+  description = "Cloudflare origin certificate private key (PEM)"
+  type        = string
+  sensitive   = true
+}

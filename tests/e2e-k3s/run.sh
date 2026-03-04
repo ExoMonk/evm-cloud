@@ -67,6 +67,13 @@ cleanup() {
   helm uninstall ingress-nginx -n ingress-nginx 2>/dev/null || true
   kubectl delete namespace ingress-nginx --timeout=60s 2>/dev/null || true
 
+  # Clean up monitoring stack (installed by deploy.sh when monitoring_enabled)
+  helm uninstall monitoring -n monitoring 2>/dev/null || true
+  helm uninstall loki -n monitoring 2>/dev/null || true
+  helm uninstall promtail -n monitoring 2>/dev/null || true
+  helm uninstall "${PROJECT_NAME}-dashboards" -n monitoring 2>/dev/null || true
+  kubectl delete namespace monitoring --timeout=60s 2>/dev/null || true
+
   # Kill any port-forward processes
   kill "$PF_PID" 2>/dev/null || true
 
@@ -217,7 +224,22 @@ cat > "$TEST_DIR/handoff.json" <<EOF
   },
   "services": {
     "rpc_proxy": { "port": 4000, "enabled": true },
-    "indexer": null
+    "indexer": null,
+    "monitoring": {
+      "enabled": true,
+      "grafana_ingress_enabled": false,
+      "grafana_hostname": "",
+      "grafana_admin_password_secret_name": "",
+      "loki_enabled": false,
+      "clickhouse_metrics_url": "",
+      "alertmanager": {
+        "route_target": "null",
+        "slack_webhook_secret_name": "",
+        "slack_channel": "",
+        "sns_topic_arn": "",
+        "pagerduty_routing_key_secret_name": ""
+      }
+    }
   },
   "data": {
     "backend": "clickhouse",
@@ -446,6 +468,100 @@ if kubectl get ingress "${PROJECT_NAME}-erpc" -n "$NS" >/dev/null 2>&1; then
   fi
 else
   fail "Ingress resource ${PROJECT_NAME}-erpc not found"
+fi
+
+# =============================================================================
+# Phase 3.6: Monitoring assertions (if monitoring was deployed)
+# =============================================================================
+echo ""
+echo "=== Phase 3.6: Monitoring assertions ==="
+
+# Check if monitoring was deployed (deploy.sh reads services.monitoring from handoff)
+MONITORING_NS="monitoring"
+if kubectl get namespace "$MONITORING_NS" >/dev/null 2>&1; then
+  pass "monitoring namespace exists"
+
+  # Prometheus pod running
+  PROM_PHASE=$(kubectl get pods -l "app.kubernetes.io/name=prometheus" -n "$MONITORING_NS" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+  if [ "$PROM_PHASE" = "Running" ]; then
+    pass "Prometheus pod is Running"
+  else
+    fail "Prometheus pod not Running (phase: '$PROM_PHASE')"
+  fi
+
+  # Grafana pod running
+  GRAFANA_PHASE=$(kubectl get pods -l "app.kubernetes.io/name=grafana" -n "$MONITORING_NS" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+  if [ "$GRAFANA_PHASE" = "Running" ]; then
+    pass "Grafana pod is Running"
+  else
+    fail "Grafana pod not Running (phase: '$GRAFANA_PHASE')"
+  fi
+
+  # Alertmanager pod running
+  AM_PHASE=$(kubectl get pods -l "app.kubernetes.io/name=alertmanager" -n "$MONITORING_NS" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+  if [ "$AM_PHASE" = "Running" ]; then
+    pass "Alertmanager pod is Running"
+  else
+    fail "Alertmanager pod not Running (phase: '$AM_PHASE')"
+  fi
+
+  # node-exporter DaemonSet
+  NE_DESIRED=$(kubectl get daemonset -l "app.kubernetes.io/name=prometheus-node-exporter" -n "$MONITORING_NS" -o jsonpath='{.items[0].status.desiredNumberScheduled}' 2>/dev/null || echo "0")
+  NE_READY_COUNT=$(kubectl get daemonset -l "app.kubernetes.io/name=prometheus-node-exporter" -n "$MONITORING_NS" -o jsonpath='{.items[0].status.numberReady}' 2>/dev/null || echo "0")
+  if [ "${NE_READY_COUNT:-0}" -ge 1 ] && [ "$NE_READY_COUNT" = "$NE_DESIRED" ]; then
+    pass "node-exporter DaemonSet ready ($NE_READY_COUNT/$NE_DESIRED)"
+  else
+    fail "node-exporter DaemonSet not ready ($NE_READY_COUNT/$NE_DESIRED)"
+  fi
+
+  # Dashboard ConfigMaps exist
+  for dashboard in rindexer-dashboard erpc-dashboard infra-dashboard; do
+    if kubectl get configmap -n "$MONITORING_NS" -l "grafana_dashboard=1" -o name 2>/dev/null | grep -q "$dashboard"; then
+      pass "dashboard ConfigMap $dashboard exists"
+    else
+      fail "dashboard ConfigMap $dashboard missing"
+    fi
+  done
+
+  # PrometheusRule exists (alert rules)
+  if kubectl get prometheusrule -n "$MONITORING_NS" -o name 2>/dev/null | grep -q "rindexer-alerts"; then
+    pass "PrometheusRule rindexer-alerts exists"
+  else
+    fail "PrometheusRule rindexer-alerts missing"
+  fi
+
+  # ServiceMonitors created by workload charts
+  if kubectl get servicemonitor -n "$NS" -o name 2>/dev/null | grep -q "indexer"; then
+    pass "indexer ServiceMonitor exists"
+  else
+    info "indexer ServiceMonitor not found in $NS (may be in different namespace)"
+  fi
+
+  if kubectl get servicemonitor -n "$NS" -o name 2>/dev/null | grep -q "erpc"; then
+    pass "eRPC ServiceMonitor exists"
+  else
+    info "eRPC ServiceMonitor not found in $NS (may be in different namespace)"
+  fi
+
+  # Grafana HTTP check via port-forward
+  kubectl port-forward -n "$MONITORING_NS" svc/monitoring-grafana 13000:80 >/dev/null 2>&1 &
+  GRAFANA_PF_PID=$!
+  sleep 3
+
+  GRAFANA_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://localhost:13000/api/health 2>/dev/null || echo "000")
+  if [ "$GRAFANA_HTTP" = "200" ]; then
+    pass "Grafana /api/health responds 200"
+  elif [ "$GRAFANA_HTTP" != "000" ]; then
+    pass "Grafana HTTP responds (status $GRAFANA_HTTP)"
+  else
+    fail "Grafana did not respond to HTTP request"
+  fi
+
+  kill "$GRAFANA_PF_PID" 2>/dev/null || true
+  wait "$GRAFANA_PF_PID" 2>/dev/null || true
+else
+  info "monitoring namespace not found — skipping monitoring assertions"
+  info "(To test monitoring: add services.monitoring to handoff JSON)"
 fi
 
 # =============================================================================

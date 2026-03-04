@@ -11,7 +11,9 @@ module "evm_cloud" {
   runtime_arch            = "multi"
   database_mode           = "self_hosted"
   streaming_mode          = "disabled"
-  ingress_mode            = "none"
+  ingress_mode                   = "cloudflare"
+  ingress_cloudflare_origin_cert = var.ingress_cloudflare_origin_cert
+  ingress_cloudflare_origin_key  = var.ingress_cloudflare_origin_key
 
   # k3s compute engine — Phase 1 (Terraform) provisions EC2 + installs k3s
   # Phase 2: run deployers/k3s/deploy.sh with the workload_handoff output
@@ -53,6 +55,15 @@ module "evm_cloud" {
 
   # Multi-instance indexer — live on server, backfill on worker node
   indexer_instances = var.indexer_instances
+
+  # Monitoring — Prometheus + Grafana + Alertmanager
+  monitoring_enabled                     = var.monitoring_enabled
+  grafana_hostname                       = var.grafana_hostname
+  alertmanager_route_target              = var.alertmanager_route_target
+  alertmanager_slack_webhook_secret_name = var.alertmanager_slack_webhook_secret_name
+  alertmanager_slack_channel             = var.alertmanager_slack_channel
+  loki_enabled                           = var.loki_enabled
+  clickhouse_metrics_url                 = var.clickhouse_metrics_url
 
   # Secrets — provider mode: AWS Secrets Manager + ESO (no passwords in handoff)
   secrets_mode                       = var.secrets_mode

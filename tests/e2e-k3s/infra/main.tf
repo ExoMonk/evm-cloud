@@ -62,6 +62,10 @@ module "evm_cloud" {
   indexer_clickhouse_password = "e2e-test-not-real"
   indexer_clickhouse_db       = "default"
 
+  # Monitoring
+  monitoring_enabled       = true
+  grafana_ingress_enabled  = false
+
   # Config injection
   erpc_config_yaml     = file("${path.module}/../config/erpc.yaml")
   rindexer_config_yaml = file("${path.module}/../config/rindexer.yaml")
