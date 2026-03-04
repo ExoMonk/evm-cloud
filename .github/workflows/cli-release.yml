@@ -55,6 +55,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Install Rust target
+        working-directory: cli
         shell: bash
         run: |
           rustup target add "${{ matrix.rust_target }}"
