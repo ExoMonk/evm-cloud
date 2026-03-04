@@ -47,14 +47,14 @@ All services are exposed via NodePort — no `kubectl port-forward` needed. Endp
 ## Quick start
 
 ```bash
-# Boot the stack (~2 minutes)
-./local/up.sh
+# Boot the stack (~2 minutes, forks Ethereum mainnet by default)
+evm-cloud local up
 
 # Check all services
-./local/status.sh
+evm-cloud local status
 
 # Tear down
-./local/down.sh
+evm-cloud local down
 ```
 
 Or via Make targets:
@@ -75,23 +75,34 @@ make local-down
 | eRPC       | `http://localhost:4000`    | RPC proxy (same as prod)    |
 | ClickHouse | `http://localhost:8123`    | Query indexed data (HTTP)   |
 | rindexer   | `http://localhost:18080`   | Indexer metrics             |
-| Grafana    | `http://localhost:3000`    | Dashboards (if monitoring)  |
 
 ---
 
-## Fork mode
+## Fork mode (default)
 
-Index real mainnet contracts locally by forking chain state into Anvil:
+By default, the local stack forks Ethereum mainnet via `https://ethereum-rpc.publicnode.com`. Anvil serves real mainnet state with local block production. rindexer indexes real contracts.
+
+To fork a different chain:
 
 ```bash
-./local/up.sh --anvil-fork https://eth.llamarpc.com
+evm-cloud local up --rpc https://polygon-rpc.com
 ```
 
-Anvil serves real mainnet state with local block production. rindexer indexes real contracts.
+The CLI probes the chain ID from the RPC URL and configures all services accordingly.
 
 :::warning
-In fork mode, set `start_block` in `local/config/rindexer.yaml` close to the fork block number. Historical `eth_getLogs` requests are proxied to the fork RPC, which may rate-limit or timeout on large ranges.
+In fork mode, set `start_block` in your `rindexer.yaml` close to the fork block number. Historical `eth_getLogs` requests are proxied to the fork RPC, which may rate-limit or timeout on large ranges.
 :::
+
+## Fresh mode
+
+For pure local development without external dependencies:
+
+```bash
+evm-cloud local up --fresh
+```
+
+This uses chain_id=31337 (Anvil default) with no fork.
 
 ---
 
@@ -100,7 +111,7 @@ In fork mode, set `start_block` in `local/config/rindexer.yaml` close to the for
 Run a script after the stack boots:
 
 ```bash
-./local/up.sh --post-deploy ./my-deploy.sh
+evm-cloud local up --post-deploy ./my-deploy.sh
 ```
 
 The script receives environment variables:
@@ -109,7 +120,7 @@ The script receives environment variables:
 ANVIL_RPC_URL=http://localhost:8545
 ERPC_URL=http://localhost:4000
 CLICKHOUSE_URL=http://localhost:8123
-CHAIN_ID=31337
+CHAIN_ID=1  # or whatever chain was probed
 ```
 
 Example workflow:
@@ -119,8 +130,8 @@ Example workflow:
 # Deploy contract
 forge script script/Deploy.s.sol --rpc-url $ANVIL_RPC_URL --broadcast
 
-# Update rindexer config with deployed address
-# Then re-run: ./local/up.sh (idempotent Helm upgrade)
+# Update rindexer config with deployed address, then re-run:
+# evm-cloud local up (idempotent Helm upgrade)
 ```
 
 ---
@@ -143,25 +154,25 @@ For basic contract development. Fits on 8GB+ laptops with other apps running.
 For fork-mode Anvil with large state. Requires Docker Desktop with 8GB+ memory.
 
 ```bash
-./local/up.sh --profile heavy --anvil-fork https://eth.llamarpc.com
+evm-cloud local up --profile heavy --rpc https://eth.llamarpc.com
 ```
 
 ---
 
 ## Data persistence
 
-By default, data is **ephemeral** — lost on `./local/down.sh`, including rindexer progress tables. This means a full re-index from `start_block` on each restart.
+By default, data is **ephemeral** — lost on `evm-cloud local down`, including rindexer progress tables. This means a full re-index from `start_block` on each restart.
 
 For persistent sessions:
 
 ```bash
-./local/up.sh --persist
+evm-cloud local up --persist
 ```
 
 Data is stored in `~/.evm-cloud/local-data/`. To reset:
 
 ```bash
-./local/reset.sh
+evm-cloud local reset
 ```
 
 :::note
@@ -170,27 +181,32 @@ Persistent data does not survive Docker Desktop VM resets on macOS (kind runs in
 
 ---
 
-## Config changes
+## Config
 
-Edit files in `local/config/`:
-- `erpc.yaml` — eRPC proxy config
-- `rindexer.yaml` — indexer config (add contracts here)
+Provide your own `rindexer.yaml` to index custom contracts:
 
-Then re-run `./local/up.sh`. Helm performs an idempotent upgrade — no tear-down needed.
+```bash
+evm-cloud local up --config ./my-rindexer.yaml
+```
+
+Place ABI files in an `abis/` directory next to the config file. If no config is provided, a starter config with a placeholder contract is generated automatically.
+
+Re-running `evm-cloud local up` performs an idempotent Helm upgrade — no tear-down needed.
 
 ---
 
 ## All options
 
 ```bash
-./local/up.sh [OPTIONS]
+evm-cloud local up [OPTIONS]
 
-  --profile <name>     Resource profile: default, heavy (default: default)
-  --persist            Persistent ClickHouse data across restarts
-  --force              Force-recreate cluster even if it exists
-  --with-monitoring    Deploy Prometheus + Grafana
-  --anvil-fork <url>   Fork mainnet/testnet state from RPC URL
-  --post-deploy <sh>   Script to run after stack is healthy
+  --rpc <url>            Fork from this RPC URL (default: Ethereum mainnet)
+  --fresh                No fork, chain_id=31337
+  --profile <name>       Resource profile: default, heavy (default: default)
+  --persist              Persistent ClickHouse data across restarts
+  --force                Force-recreate cluster even if it exists
+  --config <path>        Path to rindexer.yaml config
+  --post-deploy <path>   Script to run after stack is healthy
 ```
 
 ---
@@ -199,7 +215,7 @@ Then re-run `./local/up.sh`. Helm performs an idempotent upgrade — no tear-dow
 
 ### Port conflicts
 
-`up.sh` checks if ports 8545, 4000, 8123, 18080 are already bound and reports which one conflicts. Free the port and retry.
+`evm-cloud local up` checks if ports 8545, 4000, 8123, 18080 are available and reports which one conflicts. Free the port and retry.
 
 ### Docker memory
 
@@ -215,7 +231,7 @@ kubectl logs deploy/local-indexer --context kind-evm-cloud-local
 
 ### Cluster unreachable
 
-NodePort mappings survive laptop sleep. If the cluster is gone (Docker restart), run `./local/up.sh` — it recreates automatically.
+NodePort mappings survive laptop sleep. If the cluster is gone (Docker restart), run `evm-cloud local up` — it recreates automatically.
 
 ---
 

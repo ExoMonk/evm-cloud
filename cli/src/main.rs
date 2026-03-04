@@ -10,6 +10,7 @@ mod init_answers;
 mod init_scaffold;
 mod init_templates;
 mod init_wizard;
+mod local;
 mod output;
 mod preflight;
 mod terraform;
@@ -24,6 +25,7 @@ use crate::commands::init::InitArgs;
 use crate::commands::logs::LogsArgs;
 use crate::commands::status::StatusArgs;
 use crate::error::CliError;
+use crate::local::LocalCommand;
 use crate::output::ColorMode;
 
 #[derive(Parser)]
@@ -48,6 +50,9 @@ enum Commands {
     Status(StatusArgs),
     Logs(LogsArgs),
     Destroy(DestroyArgs),
+    /// Manage the local dev stack (kind + Anvil + eRPC + ClickHouse + rindexer)
+    #[command(subcommand)]
+    Local(LocalCommand),
 }
 
 fn main() {
@@ -65,6 +70,7 @@ fn main() {
         Commands::Status(args) => commands::status::run(args, cli.color),
         Commands::Logs(args) => commands::logs::run(args, cli.color),
         Commands::Destroy(args) => commands::destroy::run(args, cli.color),
+        Commands::Local(cmd) => local::run(cmd, cli.color),
     };
 
     if let Err(err) = result {

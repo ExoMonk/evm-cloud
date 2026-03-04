@@ -83,16 +83,16 @@ docs-dev:
 # --- Local dev stack (kind + Anvil) ---
 
 local-up:
-	@bash local/up.sh $(ARGS)
+	@cargo run --manifest-path cli/Cargo.toml -- local up $(ARGS)
 
 local-down:
-	@bash local/down.sh
+	@cargo run --manifest-path cli/Cargo.toml -- local down
 
 local-status:
-	@bash local/status.sh
+	@cargo run --manifest-path cli/Cargo.toml -- local status
 
 local-reset:
-	@bash local/reset.sh $(ARGS)
+	@cargo run --manifest-path cli/Cargo.toml -- local reset $(ARGS)
 
 # --- CLI ---
 

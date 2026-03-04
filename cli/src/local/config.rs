@@ -1,0 +1,237 @@
+use std::fs;
+use std::path::Path;
+
+use super::profiles::ResourceSet;
+use crate::error::{CliError, Result};
+
+pub(crate) const DEFAULT_FORK_RPC: &str = "https://ethereum-rpc.publicnode.com";
+
+pub(crate) const STARTER_RINDEXER_YAML_FORK: &str = r#"name: local-indexer
+project_type: no-code
+networks:
+  - name: ethereum
+    chain_id: 1
+    rpc: http://local-erpc:4000/local/evm/1
+storage:
+  clickhouse:
+    enabled: true
+contracts:
+  - name: Placeholder
+    details:
+      - network: ethereum
+        address: "0x0000000000000000000000000000000000000001"
+        start_block: "0"
+    abi: ./abis/placeholder.json
+"#;
+
+pub(crate) const STARTER_RINDEXER_YAML_FRESH: &str = r#"name: local-indexer
+project_type: no-code
+networks:
+  - name: anvil
+    chain_id: 31337
+    rpc: http://local-erpc:4000/local/evm/31337
+storage:
+  clickhouse:
+    enabled: true
+contracts:
+  - name: Placeholder
+    details:
+      - network: anvil
+        address: "0x0000000000000000000000000000000000000001"
+        start_block: "0"
+    abi: ./abis/placeholder.json
+"#;
+
+pub(crate) const PLACEHOLDER_ABI: &str = r#"[{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":false,"name":"value","type":"uint256"}],"name":"Transfer","type":"event"}]"#;
+
+pub(crate) fn generate_kind_config(persist: bool) -> Result<String> {
+    let base_mappings = r#"kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30545
+        hostPort: 8545
+        protocol: TCP
+      - containerPort: 30400
+        hostPort: 4000
+        protocol: TCP
+      - containerPort: 30123
+        hostPort: 8123
+        protocol: TCP
+      - containerPort: 31808
+        hostPort: 18080
+        protocol: TCP
+      - containerPort: 30300
+        hostPort: 3000
+        protocol: TCP"#;
+
+    if !persist {
+        return Ok(base_mappings.to_string());
+    }
+
+    let data_dir = data_dir();
+    Ok(format!(
+        "{base_mappings}\n    extraMounts:\n      - hostPath: {data_dir}\n        containerPath: /var/local-data"
+    ))
+}
+
+pub(crate) fn generate_erpc_values(chain_id: u64, res: &ResourceSet) -> String {
+    format!(
+        r#"fullnameOverride: local-erpc
+service:
+  type: NodePort
+  nodePort: 30400
+  port: 4000
+resources:
+  requests:
+    cpu: {cpu_req}
+    memory: {mem_req}
+  limits:
+    cpu: {cpu_lim}
+    memory: {mem_lim}
+config:
+  erpcYaml: |
+    logLevel: debug
+    server:
+      listenV4: true
+      httpHostV4: 0.0.0.0
+      httpPort: 4000
+    projects:
+      - id: local
+        networks:
+          - architecture: evm
+            evm:
+              chainId: {chain_id}
+        networkDefaults:
+          failsafe:
+            retry:
+              maxAttempts: 3
+              delay: 500ms
+        upstreams:
+          - id: anvil
+            endpoint: http://local-anvil:8545
+            type: evm
+"#,
+        cpu_req = res.cpu_req,
+        mem_req = res.mem_req,
+        cpu_lim = res.cpu_lim,
+        mem_lim = res.mem_lim,
+    )
+}
+
+pub(crate) fn generate_indexer_values(
+    rindexer_yaml: &str,
+    abis: &[(String, String)],
+    chain_id: u64,
+    res: &ResourceSet,
+) -> String {
+    let indented_yaml = rindexer_yaml
+        .lines()
+        .map(|l| format!("    {l}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let abis_yaml = abis
+        .iter()
+        .map(|(name, content)| format!("    {name}: '{content}'"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"fullnameOverride: local-indexer
+storageBackend: clickhouse
+secretsMode: inline
+rpcUrl: http://local-erpc:4000/local/evm/{chain_id}
+clickhouse:
+  url: http://clickhouse:8123
+  user: default
+  db: default
+  password: local-dev
+service:
+  type: NodePort
+  nodePort: 31808
+  port: 8080
+resources:
+  requests:
+    cpu: {cpu_req}
+    memory: {mem_req}
+  limits:
+    cpu: {cpu_lim}
+    memory: {mem_lim}
+config:
+  rindexerYaml: |
+{indented_yaml}
+  abis:
+{abis_yaml}
+"#,
+        cpu_req = res.cpu_req,
+        mem_req = res.mem_req,
+        cpu_lim = res.cpu_lim,
+        mem_lim = res.mem_lim,
+    )
+}
+
+/// Load user's rindexer.yaml and discover ABIs from the sibling abis/ directory.
+/// Returns (yaml_content, vec of (filename, json_content)).
+pub(crate) fn load_user_rindexer_config(
+    config_path: &Path,
+) -> Result<(String, Vec<(String, String)>)> {
+    let yaml = fs::read_to_string(config_path).map_err(|_| CliError::RindexerConfigNotFound {
+        path: config_path.display().to_string(),
+    })?;
+
+    let abis_dir = config_path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("abis");
+
+    let mut abis = Vec::new();
+    if abis_dir.is_dir() {
+        let mut entries: Vec<_> = fs::read_dir(&abis_dir)
+            .map_err(|source| CliError::Io {
+                source,
+                path: abis_dir.clone(),
+            })?
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "json")
+                    .unwrap_or(false)
+            })
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+
+        for entry in entries {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let content = fs::read_to_string(entry.path()).map_err(|source| CliError::Io {
+                source,
+                path: entry.path(),
+            })?;
+            abis.push((name, content.trim().to_string()));
+        }
+    }
+
+    Ok((yaml, abis))
+}
+
+pub(crate) fn data_dir() -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    format!("{home}/.evm-cloud/local-data")
+}
+
+pub(crate) fn resolve_config_path(explicit: Option<&Path>) -> Option<std::path::PathBuf> {
+    if let Some(p) = explicit {
+        if p.exists() {
+            return Some(p.to_path_buf());
+        }
+        return None;
+    }
+    let default = std::path::PathBuf::from("rindexer.yaml");
+    if default.exists() {
+        Some(default)
+    } else {
+        None
+    }
+}

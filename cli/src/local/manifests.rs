@@ -1,4 +1,6 @@
-apiVersion: v1
+use super::profiles::ResourceSet;
+
+const CLICKHOUSE_YAML: &str = r#"apiVersion: v1
 kind: Service
 metadata:
   name: clickhouse
@@ -45,11 +47,11 @@ spec:
               value: local-dev
           resources:
             requests:
-              cpu: 200m
-              memory: 512Mi
+              cpu: __CH_CPU_REQ__
+              memory: __CH_MEM_REQ__
             limits:
-              cpu: 500m
-              memory: 1Gi
+              cpu: __CH_CPU_LIM__
+              memory: __CH_MEM_LIM__
           readinessProbe:
             httpGet:
               path: /ping
@@ -70,7 +72,7 @@ spec:
               subPath: local.xml
       volumes:
         - name: data
-          emptyDir: {}
+          __VOLUME_SOURCE__
         - name: config
           configMap:
             name: clickhouse-local-config
@@ -88,3 +90,19 @@ data:
         </default>
       </profiles>
     </clickhouse>
+"#;
+
+pub(crate) fn clickhouse_manifest(persist: bool, res: &ResourceSet) -> String {
+    let volume_source = if persist {
+        "hostPath:\n            path: /var/local-data/clickhouse\n            type: DirectoryOrCreate"
+    } else {
+        "emptyDir: {}"
+    };
+
+    CLICKHOUSE_YAML
+        .replace("__CH_CPU_REQ__", res.cpu_req)
+        .replace("__CH_MEM_REQ__", res.mem_req)
+        .replace("__CH_CPU_LIM__", res.cpu_lim)
+        .replace("__CH_MEM_LIM__", res.mem_lim)
+        .replace("__VOLUME_SOURCE__", volume_source)
+}

@@ -75,7 +75,7 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
     update_gitignore(project_root, answers.mode)?;
     let _ = loader::load(&toml_path)?;
 
-    output::info("Scaffolded project files successfully.", color);
+    output::success("Scaffolded project files", color);
     Ok(())
 }
 

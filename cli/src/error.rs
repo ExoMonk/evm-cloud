@@ -115,6 +115,30 @@ pub(crate) enum CliError {
     #[error("deployer process terminated by signal {signal:?}")]
     DeployerSignaled { signal: Option<i32> },
 
+    #[error("{tool} not found on PATH. Install it and retry")]
+    PrerequisiteNotFound { tool: String },
+
+    #[error("Docker daemon is not running. Start Docker Desktop and retry")]
+    DockerNotRunning,
+
+    #[error("port {port} is already in use. Free it before running `evm-cloud local up`")]
+    PortConflict { port: u16 },
+
+    #[error("kind cluster `{name}` exists but is unreachable. Run with --force to recreate")]
+    ClusterUnreachable { name: String },
+
+    #[error("health check timed out waiting for {service} at {url}")]
+    HealthCheckTimeout { service: String, url: String },
+
+    #[error("failed to probe chain ID from {url}: {details}")]
+    ChainIdProbeFailed { url: String, details: String },
+
+    #[error("rindexer config not found at {path}. Create one or use --config to specify a path")]
+    RindexerConfigNotFound { path: String },
+
+    #[error("{tool} failed: {details}")]
+    ToolFailed { tool: String, details: String },
+
     #[error("{0}")]
     Message(String),
 

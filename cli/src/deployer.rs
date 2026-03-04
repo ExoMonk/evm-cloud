@@ -55,6 +55,7 @@ impl Drop for DeployLockGuard {
 
 pub(crate) struct InvokeOptions<'a> {
     pub(crate) passthrough_args: &'a [String],
+    pub(crate) quiet_output: bool,
 }
 
 pub(crate) fn invoke_deployer(handoff: &WorkloadHandoff, action: Action, options: InvokeOptions<'_>) -> Result<()> {
@@ -87,17 +88,31 @@ pub(crate) fn invoke_deployer(handoff: &WorkloadHandoff, action: Action, options
     args.extend_from_slice(options.passthrough_args);
 
     let mut command = Command::new(script_path);
-    command
-        .args(args)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+    command.args(args).stdin(Stdio::inherit());
+
+    if options.quiet_output {
+        command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    } else {
+        command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    }
 
     apply_sanitized_env(&mut command);
 
-    let status = command.status().map_err(|err| CliError::Other(err.into()))?;
+    let output = command.output().map_err(|err| CliError::Other(err.into()))?;
+    let status = output.status;
     if status.success() {
         return Ok(());
+    }
+
+    if options.quiet_output {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        if !stderr.trim().is_empty() {
+            eprintln!("{}", stderr.trim());
+        } else if !stdout.trim().is_empty() {
+            eprintln!("{}", stdout.trim());
+        }
     }
 
     if let Some(code) = status.code() {

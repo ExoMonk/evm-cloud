@@ -8,12 +8,12 @@ use serde_json::Value;
 use crate::error::{CliError, Result};
 
 const BASELINE_MIN_VERSION: (u32, u32, u32) = (1, 14, 6);
+const DEFAULT_TERRAFORM_PARALLELISM: &str = "-parallelism=3";
 type VersionTuple = (u32, u32, u32);
 type VersionFloor = (VersionTuple, String);
 
 pub(crate) struct TerraformRunner {
     binary_path: PathBuf,
-    version: String,
 }
 
 #[derive(Deserialize)]
@@ -47,48 +47,54 @@ impl TerraformRunner {
             });
         }
 
-        Ok(Self {
-            binary_path,
-            version,
-        })
+        Ok(Self { binary_path })
     }
 
     pub(crate) fn init(&self, dir: &Path, passthrough_args: &[String]) -> Result<()> {
         let mut args = vec!["init".to_string()];
         args.extend_from_slice(passthrough_args);
-        self.run_inherited(dir, &args)
+        self.run_captured(dir, &args)
     }
 
-    pub(crate) fn apply(&self, dir: &Path, auto_approve: bool, passthrough_args: &[String]) -> Result<()> {
+    pub(crate) fn apply_captured_with_log(
+        &self,
+        dir: &Path,
+        auto_approve: bool,
+        passthrough_args: &[String],
+        log_path: &Path,
+    ) -> Result<()> {
         let mut args = vec!["apply".to_string()];
         if auto_approve {
             args.push("-auto-approve".to_string());
         }
         args.extend_from_slice(passthrough_args);
-        self.run_inherited(dir, &args)
+        ensure_default_parallelism(&mut args);
+        self.run_captured_with_log(dir, &args, Some(log_path))
     }
 
-    pub(crate) fn plan(&self, dir: &Path, passthrough_args: &[String]) -> Result<()> {
+    pub(crate) fn plan_with_log(&self, dir: &Path, passthrough_args: &[String], log_path: &Path) -> Result<()> {
         let mut args = vec!["plan".to_string()];
         args.extend_from_slice(passthrough_args);
-        self.run_inherited(dir, &args)
+        ensure_default_parallelism(&mut args);
+        self.run_captured_with_log(dir, &args, Some(log_path))
     }
 
     pub(crate) fn fmt(&self, dir: &Path) -> Result<()> {
-        self.run_inherited(dir, &["fmt".to_string()])
+        self.run_captured(dir, &["fmt".to_string()])
     }
 
     pub(crate) fn validate(&self, dir: &Path) -> Result<()> {
-        self.run_inherited(dir, &["validate".to_string()])
+        self.run_captured(dir, &["validate".to_string()])
     }
 
-    pub(crate) fn destroy(&self, dir: &Path, auto_approve: bool, passthrough_args: &[String]) -> Result<()> {
+    pub(crate) fn destroy_captured(&self, dir: &Path, auto_approve: bool, passthrough_args: &[String]) -> Result<()> {
         let mut args = vec!["destroy".to_string()];
         if auto_approve {
             args.push("-auto-approve".to_string());
         }
         args.extend_from_slice(passthrough_args);
-        self.run_inherited(dir, &args)
+        ensure_default_parallelism(&mut args);
+        self.run_captured(dir, &args)
     }
 
     pub(crate) fn output_json(&self, dir: &Path) -> Result<Value> {
@@ -150,22 +156,102 @@ impl TerraformRunner {
         Ok(parsed)
     }
 
-    pub(crate) fn version(&self) -> &str {
-        &self.version
+    fn run_captured(&self, dir: &Path, args: &[String]) -> Result<()> {
+        self.run_captured_with_log(dir, args, None)
     }
 
-    fn run_inherited(&self, dir: &Path, args: &[String]) -> Result<()> {
-        let status = Command::new(&self.binary_path)
+    fn run_captured_with_log(&self, dir: &Path, args: &[String], log_path: Option<&Path>) -> Result<()> {
+        let output = Command::new(&self.binary_path)
             .args(args)
             .current_dir(dir)
             .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
             .map_err(|err| CliError::Other(err.into()))?;
 
-        map_status(status)
+        if let Some(path) = log_path {
+            append_terraform_log(path, args, &output.stdout, &output.stderr)?;
+        }
+
+        if output.status.success() {
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let excerpt = if !stderr.trim().is_empty() {
+            stderr.trim()
+        } else {
+            stdout.trim()
+        };
+
+        if !excerpt.is_empty() {
+            eprintln!("{}", excerpt);
+        }
+
+        map_status(output.status)
     }
+}
+
+fn ensure_default_parallelism(args: &mut Vec<String>) {
+    let has_parallelism = args.iter().any(|arg| {
+        arg == "-parallelism"
+            || arg == "--parallelism"
+            || arg.starts_with("-parallelism=")
+            || arg.starts_with("--parallelism=")
+    });
+
+    if !has_parallelism {
+        args.push(DEFAULT_TERRAFORM_PARALLELISM.to_string());
+    }
+}
+
+fn append_terraform_log(path: &Path, args: &[String], stdout: &[u8], stderr: &[u8]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|source| CliError::Io {
+            source,
+            path: parent.to_path_buf(),
+        })?;
+    }
+
+    let mut payload = String::new();
+    payload.push_str("\n=== terraform ");
+    payload.push_str(&args.join(" "));
+    payload.push_str(" ===\n");
+
+    if !stdout.is_empty() {
+        payload.push_str("--- stdout ---\n");
+        payload.push_str(&String::from_utf8_lossy(stdout));
+        if !payload.ends_with('\n') {
+            payload.push('\n');
+        }
+    }
+
+    if !stderr.is_empty() {
+        payload.push_str("--- stderr ---\n");
+        payload.push_str(&String::from_utf8_lossy(stderr));
+        if !payload.ends_with('\n') {
+            payload.push('\n');
+        }
+    }
+
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|source| CliError::Io {
+            source,
+            path: path.to_path_buf(),
+        })?;
+    file.write_all(payload.as_bytes())
+        .map_err(|source| CliError::Io {
+            source,
+            path: path.to_path_buf(),
+        })?;
+
+    Ok(())
 }
 
 pub(crate) fn map_status(status: ExitStatus) -> Result<()> {

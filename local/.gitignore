@@ -1,3 +1,0 @@
-# Generated at runtime by up.sh
-values/*.yaml
-!values/.gitkeep

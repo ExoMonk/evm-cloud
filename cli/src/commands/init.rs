@@ -39,6 +39,11 @@ pub(crate) struct InitArgs {
 pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
     let allow_raw_terraform = args.allow_raw_terraform || args.example.is_some();
 
+    output::headline(
+        &format!("🏰 ⚒️ Initializing project in {}", args.dir.display()),
+        color,
+    );
+
     if args.list_examples {
         let examples = examples::list_examples_from_cwd()?;
         for example in examples {
@@ -82,20 +87,16 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
         }
 
         let bootstrap = examples::bootstrap_example_to_dir(example, &args.dir, args.force)?;
-        output::info(
-            &format!(
-                "Bootstrapped example `{}` from {} ({} files copied)",
-                bootstrap.canonical,
-                bootstrap.source_dir.display(),
-                bootstrap.copied_files
-            ),
+        output::subline(
+            &format!("📦 Bootstrapped example `{}`", bootstrap.canonical),
             color,
         );
         if bootstrap.wrote_power_metadata {
-            output::info(
-                "Generated Power-mode project metadata: evm-cloud.toml and .evm-cloud/mode",
-                color,
-            );
+            output::subline("🎉 Generated evm-cloud.toml project metadata", color);
+        }
+
+        if args.dir.join("rindexer.yaml").exists() || args.dir.join("config/rindexer.yaml").exists() {
+            output::subline("🦀 Rindexer Linked rindexer.yaml", color);
         }
     }
 
@@ -121,19 +122,11 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
                     args.mode,
                 )?;
                 init_scaffold::scaffold_project(&preflight.resolved_root, &answers, true, color)?;
-            } else {
-                output::info("Project already exists; running terraform init without scaffolding.", color);
             }
 
             match preflight.project_kind {
-                ProjectKind::EasyToml => {
-                    output::info("Detected evm-cloud.toml project", color);
-                    easy_mode::prepare_workspace(&preflight.resolved_root, color)?
-                }
-                ProjectKind::RawTerraform => {
-                    output::info("Detected raw Terraform project (*.tf files)", color);
-                    preflight.resolved_root.clone()
-                }
+                ProjectKind::EasyToml => easy_mode::prepare_workspace(&preflight.resolved_root, color)?,
+                ProjectKind::RawTerraform => preflight.resolved_root.clone(),
             }
         }
         Err(CliError::NoProjectDetected { .. }) => {
@@ -153,19 +146,20 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
     };
 
     if args.skip_terraform_init {
-        output::info("Scaffold complete; skipping terraform init by request.", color);
+        output::headline("🏰 ✅ Project initialized", color);
         return Ok(());
     }
 
     let runner = TerraformRunner::check_installed(&terraform_dir)?;
-    output::info(&format!("Using terraform {}", runner.version()), color);
 
-    runner.init(&terraform_dir, &args.terraform_args)?;
+    output::with_terraforming(color, || runner.init(&terraform_dir, &args.terraform_args))?;
 
     if terraform_dir.join("versions.tf").is_file() {
-        runner.fmt(&terraform_dir)?;
-        runner.validate(&terraform_dir)?;
+        output::with_terraforming(color, || runner.fmt(&terraform_dir))?;
+        output::with_terraforming(color, || runner.validate(&terraform_dir))?;
     }
+
+    output::headline("🏰 ✅ Project initialized", color);
 
     Ok(())
 }

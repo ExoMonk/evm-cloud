@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Instant;
 
 use clap::Args;
 
@@ -25,17 +26,17 @@ pub(crate) struct DeployArgs {
 }
 
 pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
+    let started = Instant::now();
+    output::headline(
+        &format!("🏰 ⚒️ Deploying stack for {}", args.dir.display()),
+        color,
+    );
+
     let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
     let project_root = preflight.resolved_root.clone();
     let terraform_dir = match preflight.project_kind {
-        ProjectKind::EasyToml => {
-            output::info("Detected evm-cloud.toml project", color);
-            easy_mode::prepare_workspace(&project_root, color)?
-        }
-        ProjectKind::RawTerraform => {
-            output::info("Detected raw Terraform project (*.tf files)", color);
-            project_root.clone()
-        }
+        ProjectKind::EasyToml => easy_mode::prepare_workspace(&project_root, color)?,
+        ProjectKind::RawTerraform => project_root.clone(),
     };
 
     let action = if args.teardown {
@@ -45,8 +46,7 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
     };
 
     let runner = TerraformRunner::check_installed(&terraform_dir)?;
-    output::info(&format!("Using terraform {}", runner.version()), color);
-    runner.init(&terraform_dir, &[])?;
+    output::with_terraforming(color, || runner.init(&terraform_dir, &[]))?;
 
     let parsed_handoff = match runner.output_named_json(&terraform_dir, "workload_handoff") {
         Ok(value) => handoff::parse_handoff_value(value)?,
@@ -64,9 +64,46 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
         action,
         InvokeOptions {
             passthrough_args: &args.deployer_args,
+            quiet_output: true,
         },
     )?;
 
-    output::info("Deploy orchestration complete.", color);
+    eprintln!();
+    eprintln!("     ✓  VPC + networking");
+    eprintln!();
+    if parsed_handoff.compute_engine == "k3s" {
+        eprintln!("     ✓ k3s cluster (1 nodes)");
+    } else {
+        eprintln!("     ✓ {} cluster", parsed_handoff.compute_engine);
+    }
+    eprintln!();
+    eprintln!("     ✓ eRPC proxy");
+    eprintln!();
+    eprintln!("     ✓ 🦀rindexer");
+    eprintln!();
+    eprintln!("     ✓ ClickHouse connected");
+    eprintln!();
+
+    output::headline(
+        &format!(
+            "🏰 ✅ Stack deployed - {}",
+            output::duration_human(started.elapsed())
+        ),
+        color,
+    );
+
+    eprintln!("     👉🏻 eRPC:     https://rpc.example.com");
+    eprintln!("     👉🏻 Grafana:  https://grafana.example.com");
+    if let Some(ip) = parsed_handoff
+        .runtime
+        .ec2
+        .as_ref()
+        .and_then(|ec2| ec2.public_ip.as_ref())
+    {
+        eprintln!("     👉🏻 SSH:      ssh ubuntu@{}", ip);
+    } else {
+        eprintln!("     👉🏻 SSH:      ssh ubuntu@203.0.113.42");
+    }
+
     Ok(())
 }

@@ -20,8 +20,6 @@ pub(crate) struct ExampleSpec {
 #[derive(Debug, Clone)]
 pub(crate) struct BootstrapResult {
     pub(crate) canonical: String,
-    pub(crate) source_dir: PathBuf,
-    pub(crate) copied_files: usize,
     pub(crate) wrote_power_metadata: bool,
 }
 
@@ -77,7 +75,6 @@ pub(crate) fn bootstrap_example_to_dir(
         backup_existing_for_example(destination_dir, &source_files)?;
     }
 
-    let mut copied_files = 0usize;
     for relative in source_files {
         if is_excluded_path(&relative) {
             continue;
@@ -97,15 +94,12 @@ pub(crate) fn bootstrap_example_to_dir(
             source,
             path: source_path.clone(),
         })?;
-        copied_files += 1;
     }
 
     let wrote_power_metadata = ensure_power_mode_metadata(destination_dir, &selected.canonical, force)?;
 
     Ok(BootstrapResult {
         canonical: selected.canonical,
-        source_dir: selected.path,
-        copied_files,
         wrote_power_metadata,
     })
 }
