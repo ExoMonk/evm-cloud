@@ -25,6 +25,24 @@ Client (wallet/app)
 
 Result: users only see a secure HTTPS endpoint, while internal services stay behind your ingress boundary.
 
+## When to choose each mode
+
+Use this quick rule of thumb:
+
+| If you want... | Choose | Why |
+|---|---|---|
+| Fastest secure setup with edge protection | `cloudflare` | Easy HTTPS with optional WAF/DDoS and a stable public hostname |
+| Simple direct HTTPS on EC2/bare metal | `caddy` | Automatic Let's Encrypt certs with minimal moving parts |
+| Kubernetes-native certificate lifecycle | `ingress_nginx` | Standard ingress + cert-manager workflow for K8s environments |
+| No public HTTPS entrypoint | `none` | Dev/internal-only mode with raw service ports |
+
+Practical guidance:
+
+- Prefer `cloudflare` for most internet-facing RPC deployments.
+- Use `caddy` when running EC2/bare metal without an external edge provider.
+- Use `ingress_nginx` when your platform already standardizes on ingress + cert-manager.
+- Keep `none` for local/dev or private network scenarios.
+
 ## Quick Start
 
 ```hcl
