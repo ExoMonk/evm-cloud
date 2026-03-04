@@ -35,6 +35,25 @@ pub(crate) enum CliError {
     #[error("invalid mode marker at {path}: `{value}` (expected `easy` or `power` and matching project files)")]
     InvalidModeMarker { path: PathBuf, value: String },
 
+    #[error("could not locate repository root from `{start}` (expected a parent directory containing `examples/`)")]
+    ExampleRepoRootNotFound { start: String },
+
+    #[error("unknown example `{requested}`. Available: {available:?}")]
+    ExampleNotFound {
+        requested: String,
+        available: Vec<String>,
+    },
+
+    #[error("example alias collision for `{alias}` between `{first}` and `{second}`")]
+    ExampleAliasCollision {
+        alias: String,
+        first: String,
+        second: String,
+    },
+
+    #[error("symlinks are not supported in example bootstrap: {path}")]
+    ExampleSymlinkUnsupported { path: PathBuf },
+
     #[error("invalid .evm-cloud-version at {path}: `{value}` (expected semver-like value such as `v0.1.0`)")]
     PinnedVersionInvalid { path: PathBuf, value: String },
 

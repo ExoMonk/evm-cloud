@@ -41,7 +41,7 @@ pub(crate) fn run_checks(dir: &Path, allow_raw_terraform: bool) -> Result<Prefli
                 }
             }
             ModeMarker::Power => {
-                if !has_explicit_root {
+                if !has_any_tf_files(&canonical)? {
                     Err(CliError::InvalidModeMarker {
                         path: canonical.join(".evm-cloud/mode"),
                         value: "power".to_string(),
@@ -226,6 +226,17 @@ mod tests {
         write(&dir.join("main.tf"), "terraform {}\n");
         write(&dir.join("versions.tf"), "terraform { required_version = \">= 1.14.6\" }\n");
         write(&dir.join("evm-cloud.toml"), "schema_version = 1\n");
+
+        let result = run_checks(&dir, false).expect("preflight must succeed");
+        assert!(matches!(result.project_kind, ProjectKind::RawTerraform));
+    }
+
+    #[test]
+    fn marker_power_routes_with_non_explicit_tf_root() {
+        let dir = temp_dir("marker-power-any-tf");
+        fs::create_dir_all(dir.join(".evm-cloud")).expect("create marker dir");
+        write(&dir.join(".evm-cloud/mode"), "power\n");
+        write(&dir.join("provider.tf"), "terraform {}\n");
 
         let result = run_checks(&dir, false).expect("preflight must succeed");
         assert!(matches!(result.project_kind, ProjectKind::RawTerraform));

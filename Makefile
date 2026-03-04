@@ -5,7 +5,7 @@ LOCALSTACK_ENDPOINT ?= http://localhost:4566
 
 LOCAL_ENV = AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(LOCALSTACK_ENDPOINT)
 
-.PHONY: fmt-check validate lint security qa plan verify up down test-k8s test-e2e-k8s docs docs-dev cli-build cli-check evm-cloud
+.PHONY: fmt-check validate lint security qa plan verify up down test-k8s test-e2e-k8s docs docs-dev cli-build cli-check evm-cloud local-up local-down local-status local-reset
 
 # --- QA ---
 
@@ -80,6 +80,20 @@ docs:
 docs-dev:
 	cd documentation && npm run dev
 
+# --- Local dev stack (kind + Anvil) ---
+
+local-up:
+	@bash local/up.sh $(ARGS)
+
+local-down:
+	@bash local/down.sh
+
+local-status:
+	@bash local/status.sh
+
+local-reset:
+	@bash local/reset.sh $(ARGS)
+
 # --- CLI ---
 
 cli-build:
@@ -90,9 +104,9 @@ cli-check:
 
 evm-cloud:
 	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
-		./cli/target/debug/evm-cloud --help; \
+		cargo run --manifest-path cli/Cargo.toml -- --help; \
 	else \
-		./cli/target/debug/evm-cloud $(filter-out $@,$(MAKECMDGOALS)); \
+		cargo run --manifest-path cli/Cargo.toml -- $(filter-out $@,$(MAKECMDGOALS)); \
 	fi
 
 %:

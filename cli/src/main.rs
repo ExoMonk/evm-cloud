@@ -4,6 +4,7 @@ mod config;
 mod deployer;
 mod easy_mode;
 mod error;
+mod examples;
 mod handoff;
 mod init_answers;
 mod init_scaffold;
