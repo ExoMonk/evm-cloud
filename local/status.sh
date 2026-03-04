@@ -71,7 +71,8 @@ ANVIL_RESPONSE=$(curl -sf http://localhost:8545 -X POST -H "Content-Type: applic
   -d '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1}' 2>/dev/null || echo "")
 if [[ -n "$ANVIL_RESPONSE" ]]; then
   echo "Accounts (Anvil defaults):"
-  echo "$ANVIL_RESPONSE" | python3 -c "
+  if command -v python3 &>/dev/null; then
+    echo "$ANVIL_RESPONSE" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
@@ -81,7 +82,10 @@ try:
     if total > 5:
         print(f'  ... ({total - 5} more)')
 except: pass
-" 2>/dev/null || true
+" 2>/dev/null || echo "  (could not parse response)"
+  else
+    echo "  (install python3 to display formatted accounts)"
+  fi
   echo ""
 fi
 

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DATA_DIR="${HOME}/.evm-cloud/local-data"
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -14,9 +15,9 @@ info "Tearing down local stack..."
 "$SCRIPT_DIR/down.sh"
 
 # Clean persistent data if it exists
-if [[ -d "${HOME}/.evm-cloud/local-data" ]]; then
-  info "Clearing persistent data at ~/.evm-cloud/local-data/"
-  rm -rf "${HOME}/.evm-cloud/local-data"
+if [[ -d "$DATA_DIR" ]]; then
+  info "Clearing persistent data at $DATA_DIR"
+  rm -rf "$DATA_DIR"
   ok "Persistent data cleared."
 fi
 

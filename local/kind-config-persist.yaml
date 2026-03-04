@@ -1,3 +1,6 @@
+## NOTE: This file is a TEMPLATE. It is generated at runtime by up.sh
+## with $HOME expanded. Do not use this file directly with kind.
+## See kind-config.yaml for the non-persistent variant.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
@@ -19,5 +22,5 @@ nodes:
         hostPort: 3000
         protocol: TCP
     extraMounts:
-      - hostPath: /tmp/evm-cloud-local-data
+      - hostPath: __EVM_CLOUD_DATA_DIR__
         containerPath: /var/local-data

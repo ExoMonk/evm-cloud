@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CLUSTER_NAME="evm-cloud-local"
+DATA_DIR="${HOME}/.evm-cloud/local-data"
 PROFILE="default"
 PERSIST=false
 FORCE=false
@@ -11,13 +12,25 @@ WITH_MONITORING=false
 ANVIL_FORK_URL=""
 POST_DEPLOY=""
 
+# ─── Colors ─────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+info()  { echo -e "${BLUE}[info]${NC}  $*"; }
+ok()    { echo -e "${GREEN}[ok]${NC}    $*"; }
+warn()  { echo -e "${YELLOW}[warn]${NC}  $*"; }
+err()   { echo -e "${RED}[error]${NC} $*" >&2; }
+
 # ─── Argument parsing ───────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --profile)       PROFILE="$2"; shift 2 ;;
     --persist)       PERSIST=true; shift ;;
     --force)         FORCE=true; shift ;;
-    --with-monitoring) WITH_MONITORING=true; shift ;;
+    --with-monitoring) WITH_MONITORING=true; warn "--with-monitoring is not yet implemented. Prometheus + Grafana support coming soon."; shift ;;
     --anvil-fork)    ANVIL_FORK_URL="$2"; shift 2 ;;
     --post-deploy)   POST_DEPLOY="$2"; shift 2 ;;
     -h|--help)
@@ -37,17 +50,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ─── Colors ─────────────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-info()  { echo -e "${BLUE}[info]${NC}  $*"; }
-ok()    { echo -e "${GREEN}[ok]${NC}    $*"; }
-warn()  { echo -e "${YELLOW}[warn]${NC}  $*"; }
-err()   { echo -e "${RED}[error]${NC} $*" >&2; }
+# ─── Profile resource defaults ───────────────────────────────────────
+if [[ "$PROFILE" == "heavy" ]]; then
+  ERPC_CPU_REQ=250m;  ERPC_MEM_REQ=256Mi;  ERPC_CPU_LIM=1;    ERPC_MEM_LIM=512Mi
+  IDX_CPU_REQ=500m;   IDX_MEM_REQ=512Mi;   IDX_CPU_LIM=2;     IDX_MEM_LIM=1Gi
+  CH_CPU_REQ=500m;    CH_MEM_REQ=1Gi;      CH_CPU_LIM=2;      CH_MEM_LIM=2Gi
+else
+  ERPC_CPU_REQ=100m;  ERPC_MEM_REQ=128Mi;  ERPC_CPU_LIM=250m; ERPC_MEM_LIM=256Mi
+  IDX_CPU_REQ=200m;   IDX_MEM_REQ=256Mi;   IDX_CPU_LIM=500m;  IDX_MEM_LIM=512Mi
+  CH_CPU_REQ=200m;    CH_MEM_REQ=512Mi;    CH_CPU_LIM=500m;   CH_MEM_LIM=1Gi
+fi
 
 # ─── Phase 0: Prerequisites ────────────────────────────────────────
 info "Checking prerequisites..."
@@ -124,9 +136,12 @@ if ! kind get clusters 2>/dev/null | grep -q "$CLUSTER_NAME"; then
   info "Creating kind cluster: $CLUSTER_NAME"
   KIND_CONFIG="$SCRIPT_DIR/kind-config.yaml"
   if [[ "$PERSIST" == "true" ]]; then
-    KIND_CONFIG="$SCRIPT_DIR/kind-config-persist.yaml"
-    mkdir -p "${HOME}/.evm-cloud/local-data"
-    info "Persistence enabled — data stored in ~/.evm-cloud/local-data/"
+    mkdir -p "$DATA_DIR"
+    # Generate kind config with $HOME expanded (kind YAML doesn't support ~)
+    KIND_CONFIG="$SCRIPT_DIR/values/kind-config-persist-generated.yaml"
+    sed "s|__EVM_CLOUD_DATA_DIR__|${DATA_DIR}|g" \
+      "$SCRIPT_DIR/kind-config-persist.yaml" > "$KIND_CONFIG"
+    info "Persistence enabled — data stored in $DATA_DIR"
   fi
   kind create cluster \
     --name "$CLUSTER_NAME" \
@@ -139,7 +154,21 @@ kubectl config use-context "kind-${CLUSTER_NAME}" &>/dev/null
 
 # ─── Phase 2: Deploy ClickHouse ────────────────────────────────────
 info "Deploying ClickHouse..."
-kubectl apply -f "$SCRIPT_DIR/manifests/clickhouse.yaml"
+if [[ "$PERSIST" == "true" ]]; then
+  # Swap emptyDir → hostPath (mapped via kind extraMounts to $DATA_DIR)
+  sed 's|emptyDir: {}|hostPath:\n            path: /var/local-data/clickhouse\n            type: DirectoryOrCreate|' \
+    "$SCRIPT_DIR/manifests/clickhouse.yaml" | kubectl apply -f -
+  info "ClickHouse data persisted to $DATA_DIR/clickhouse"
+else
+  kubectl apply -f "$SCRIPT_DIR/manifests/clickhouse.yaml"
+fi
+# Apply profile-based resource overrides for ClickHouse
+kubectl patch statefulset clickhouse --type=json -p="[
+  {\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/resources/requests/cpu\",\"value\":\"${CH_CPU_REQ}\"},
+  {\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/resources/requests/memory\",\"value\":\"${CH_MEM_REQ}\"},
+  {\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/resources/limits/cpu\",\"value\":\"${CH_CPU_LIM}\"},
+  {\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/resources/limits/memory\",\"value\":\"${CH_MEM_LIM}\"}
+]" 2>/dev/null || true
 info "Waiting for ClickHouse readiness..."
 kubectl wait --for=condition=Ready pod -l app=clickhouse --timeout=120s
 ok "ClickHouse is ready."
@@ -189,11 +218,11 @@ service:
   port: 4000
 resources:
   requests:
-    cpu: 100m
-    memory: 128Mi
+    cpu: ${ERPC_CPU_REQ}
+    memory: ${ERPC_MEM_REQ}
   limits:
-    cpu: 250m
-    memory: 256Mi
+    cpu: ${ERPC_CPU_LIM}
+    memory: ${ERPC_MEM_LIM}
 config:
   erpcYaml: |
 $(echo "$ERPC_CONFIG" | sed 's/^/    /')
@@ -237,11 +266,11 @@ service:
   port: 8080
 resources:
   requests:
-    cpu: 200m
-    memory: 256Mi
+    cpu: ${IDX_CPU_REQ}
+    memory: ${IDX_MEM_REQ}
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: ${IDX_CPU_LIM}
+    memory: ${IDX_MEM_LIM}
 config:
   rindexerYaml: |
 $(echo "$RINDEXER_CONFIG" | sed 's/^/    /')

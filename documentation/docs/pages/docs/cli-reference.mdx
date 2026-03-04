@@ -25,7 +25,7 @@ Key behavior:
 - Existing project: init-only unless `--force`
 - `--config` on existing project requires `--force` (fails fast otherwise)
 - Supports both answers TOML and runtime `evm-cloud.toml` in non-interactive mode
-- `--example <name>` bootstraps from repository `examples/` before init
+- `--example <name>` bootstraps from local `examples/` when in a repo checkout, otherwise downloads examples from GitHub (current CLI tag, fallback `main`) before init
 - `--list-examples` prints canonical example names and aliases
 
 ### `apply`
