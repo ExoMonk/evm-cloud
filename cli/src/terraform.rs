@@ -68,6 +68,14 @@ impl TerraformRunner {
         self.run_inherited(dir, &args)
     }
 
+    pub(crate) fn fmt(&self, dir: &Path) -> Result<()> {
+        self.run_inherited(dir, &["fmt".to_string()])
+    }
+
+    pub(crate) fn validate(&self, dir: &Path) -> Result<()> {
+        self.run_inherited(dir, &["validate".to_string()])
+    }
+
     pub(crate) fn destroy(&self, dir: &Path, auto_approve: bool, passthrough_args: &[String]) -> Result<()> {
         let mut args = vec!["destroy".to_string()];
         if auto_approve {

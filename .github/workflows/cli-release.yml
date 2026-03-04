@@ -69,6 +69,17 @@ jobs:
         run: |
           rustup target add "${{ matrix.rust_target }}"
 
+      - name: Install cargo-dist
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-dist@0.28.0
+
+      - name: Build release artifacts with cargo-dist
+        working-directory: cli
+        shell: bash
+        run: |
+          dist build --allow-dirty --artifacts=local --target "${{ matrix.rust_target }}"
+
       - name: Build CLI
         working-directory: cli
         shell: bash

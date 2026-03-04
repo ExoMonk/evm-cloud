@@ -1,0 +1,15 @@
+[workspace]
+members = ["cargo:cli"]
+
+[dist]
+cargo-dist-version = "0.28.0"
+ci = ["github"]
+installers = ["shell", "homebrew"]
+publish-jobs = ["homebrew"]
+tap = "ExoMonk/homebrew-tap"
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+]

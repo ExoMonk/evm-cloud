@@ -2,6 +2,9 @@
 name = "evm-cloud"
 version = "0.1.0"
 edition = "2021"
+description = "CLI for provisioning and operating EVM blockchain data infrastructure"
+homepage = "https://evm-cloud.xyz"
+repository = "https://github.com/ExoMonk/evm-cloud"
 
 [build-dependencies]
 sha2 = "0.10"
@@ -9,6 +12,7 @@ sha2 = "0.10"
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+dialoguer = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
@@ -16,3 +20,6 @@ thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 toml = "0.8"
 which = "8"
+
+[profile.dist]
+inherits = "release"

@@ -5,7 +5,7 @@ use crate::error::{CliError, Result};
 
 #[derive(Debug)]
 pub(crate) enum ProjectKind {
-    EvmCloudToml,
+    EasyToml,
     RawTerraform,
 }
 
@@ -21,16 +21,58 @@ pub(crate) fn run_checks(dir: &Path, allow_raw_terraform: bool) -> Result<Prefli
         path: dir.to_path_buf(),
     })?;
 
-    if has_evm_cloud_toml(&canonical) {
+    let has_toml = has_evm_cloud_toml(&canonical);
+    let has_explicit_root = has_explicit_tf_root(&canonical);
+    let marker_mode = read_mode_marker(&canonical)?;
+
+    if let Some(mode) = marker_mode {
+        return match mode {
+            ModeMarker::Easy => {
+                if !has_toml {
+                    Err(CliError::InvalidModeMarker {
+                        path: canonical.join(".evm-cloud/mode"),
+                        value: "easy".to_string(),
+                    })
+                } else {
+                    Ok(PreflightResult {
+                        project_kind: ProjectKind::EasyToml,
+                        resolved_root: canonical,
+                    })
+                }
+            }
+            ModeMarker::Power => {
+                if !has_explicit_root {
+                    Err(CliError::InvalidModeMarker {
+                        path: canonical.join(".evm-cloud/mode"),
+                        value: "power".to_string(),
+                    })
+                } else {
+                    Ok(PreflightResult {
+                        project_kind: ProjectKind::RawTerraform,
+                        resolved_root: canonical,
+                    })
+                }
+            }
+        };
+    }
+
+    if has_toml && has_explicit_root {
+        return Err(CliError::ModeRoutingAmbiguous {
+            dir: canonical.display().to_string(),
+            remediation: "create .evm-cloud/mode with `easy` or `power`".to_string(),
+        });
+    }
+
+    if has_explicit_root {
         return Ok(PreflightResult {
-            project_kind: ProjectKind::EvmCloudToml,
+            project_kind: ProjectKind::RawTerraform,
             resolved_root: canonical,
         });
     }
 
-    if has_explicit_tf_root(&canonical) {
+    if has_toml {
         return Ok(PreflightResult {
-            project_kind: ProjectKind::RawTerraform,
+            project_kind: ProjectKind::EasyToml,
             resolved_root: canonical,
         });
     }
@@ -66,6 +108,34 @@ pub(crate) fn run_checks(dir: &Path, allow_raw_terraform: bool) -> Result<Prefli
 
 fn has_evm_cloud_toml(path: &Path) -> bool {
     path.join("evm-cloud.toml").is_file()
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ModeMarker {
+    Easy,
+    Power,
+}
+
+fn read_mode_marker(path: &Path) -> Result<Option<ModeMarker>> {
+    let marker_path = path.join(".evm-cloud/mode");
+    if !marker_path.exists() {
+        return Ok(None);
+    }
+
+    let raw = fs::read_to_string(&marker_path).map_err(|source| CliError::Io {
+        source,
+        path: marker_path.clone(),
+    })?;
+
+    let value = raw.trim();
+    match value {
+        "easy" => Ok(Some(ModeMarker::Easy)),
+        "power" => Ok(Some(ModeMarker::Power)),
+        other => Err(CliError::InvalidModeMarker {
+            path: marker_path,
+            value: other.to_string(),
+        }),
+    }
 }
 
 fn has_explicit_tf_root(path: &Path) -> bool {
@@ -121,4 +191,67 @@ fn detect_child_roots(path: &Path) -> Result<Vec<String>> {
     }
 
     Ok(candidates)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+
+    use super::{run_checks, ProjectKind};
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let base = std::env::temp_dir().join(format!(
+            "evm-cloud-preflight-tests-{}-{}-{}",
+            name,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock before unix epoch")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&base).expect("create temp dir");
+        base
+    }
+
+    fn write(path: &Path, content: &str) {
+        fs::write(path, content).expect("write file");
+    }
+
+    #[test]
+    fn marker_power_routes_to_raw_terraform() {
+        let dir = temp_dir("marker-power");
+        fs::create_dir_all(dir.join(".evm-cloud")).expect("create marker dir");
+        write(&dir.join(".evm-cloud/mode"), "power\n");
+        write(&dir.join("main.tf"), "terraform {}\n");
+        write(&dir.join("versions.tf"), "terraform { required_version = \">= 1.14.6\" }\n");
+        write(&dir.join("evm-cloud.toml"), "schema_version = 1\n");
+
+        let result = run_checks(&dir, false).expect("preflight must succeed");
+        assert!(matches!(result.project_kind, ProjectKind::RawTerraform));
+    }
+
+    #[test]
+    fn marker_easy_routes_to_toml() {
+        let dir = temp_dir("marker-easy");
+        fs::create_dir_all(dir.join(".evm-cloud")).expect("create marker dir");
+        write(&dir.join(".evm-cloud/mode"), "easy\n");
+        write(&dir.join("evm-cloud.toml"), "schema_version = 1\n");
+        write(&dir.join("main.tf"), "terraform {}\n");
+        write(&dir.join("versions.tf"), "terraform { required_version = \">= 1.14.6\" }\n");
+
+        let result = run_checks(&dir, false).expect("preflight must succeed");
+        assert!(matches!(result.project_kind, ProjectKind::EasyToml));
+    }
+
+    #[test]
+    fn no_marker_with_toml_and_root_is_ambiguous() {
+        let dir = temp_dir("ambiguous");
+        write(&dir.join("evm-cloud.toml"), "schema_version = 1\n");
+        write(&dir.join("main.tf"), "terraform {}\n");
+        write(&dir.join("versions.tf"), "terraform { required_version = \">= 1.14.6\" }\n");
+
+        let err = run_checks(&dir, false).expect_err("preflight must fail");
+        assert!(err.to_string().contains("cannot determine project mode"));
+    }
 }

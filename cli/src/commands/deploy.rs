@@ -28,7 +28,7 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
     let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
     let project_root = preflight.resolved_root.clone();
     let terraform_dir = match preflight.project_kind {
-        ProjectKind::EvmCloudToml => {
+        ProjectKind::EasyToml => {
             output::info("Detected evm-cloud.toml project", color);
             easy_mode::prepare_workspace(&project_root, color)?
         }

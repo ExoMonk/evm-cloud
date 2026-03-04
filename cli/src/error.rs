@@ -29,6 +29,12 @@ pub(crate) enum CliError {
     #[error("raw Terraform root detected in {dir}. Pass --allow-raw-terraform to proceed or add evm-cloud.toml")]
     RawTerraformOptInRequired { dir: String },
 
+    #[error("cannot determine project mode in {dir}: both evm-cloud.toml and explicit Terraform root are present. {remediation}")]
+    ModeRoutingAmbiguous { dir: String, remediation: String },
+
+    #[error("invalid mode marker at {path}: `{value}` (expected `easy` or `power` and matching project files)")]
+    InvalidModeMarker { path: PathBuf, value: String },
+
     #[error("failed to probe terraform version: {details}")]
     TerraformVersionProbeFailed { details: String },
 
@@ -37,6 +43,9 @@ pub(crate) enum CliError {
 
     #[error("failed to parse config at {path}: {details}")]
     ConfigParse { path: PathBuf, details: String },
+
+    #[error("--non-interactive requires --config <answers.toml|evm-cloud.toml>")]
+    NonInteractiveRequiresConfig,
 
     #[error("invalid config field `{field}`: {message}")]
     ConfigValidation { field: String, message: String },
@@ -64,6 +73,9 @@ pub(crate) enum CliError {
 
     #[error("bundled script checksum mismatch for {script}")]
     BundledScriptChecksumMismatch { script: String },
+
+    #[error("managed init file already exists: {path}")]
+    InitFileExists { path: PathBuf },
 
     #[error("deploy lock already held at {path}")]
     DeployLockBusy { path: PathBuf },
