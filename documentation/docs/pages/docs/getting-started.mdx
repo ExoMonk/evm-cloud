@@ -95,7 +95,7 @@ indexer_clickhouse_password = "your-password"
 
 > **Don't have ClickHouse?** Sign up for [ClickHouse Cloud](https://clickhouse.cloud/) free tier, or use the `minimal_aws_rds` example instead (uses managed PostgreSQL, no external DB needed).
 
-### 3. Initialize and Plan
+### 3. Initialize and Preview
 
 :::code-group
 
@@ -111,7 +111,7 @@ terraform plan -var-file=minimal_clickhouse.tfvars
 
 :::
 
-Review the plan. You should see resources for:
+You should see resources for:
 - VPC, subnets, security groups
 - EC2 instance (t3.micro — AWS free tier eligible)
 - IAM role + Secrets Manager secret

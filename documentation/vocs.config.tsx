@@ -77,6 +77,7 @@ export default defineConfig({
     {
       text: "Reference",
       items: [
+        { text: "CLI Reference", link: "/docs/cli-reference" },
         { text: "Variable Reference", link: "/docs/variable-reference" },
         { text: "Outputs Reference", link: "/docs/outputs-reference" },
         { text: "Cost Estimates", link: "/docs/cost-estimates" },

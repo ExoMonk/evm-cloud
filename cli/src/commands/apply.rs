@@ -14,6 +14,8 @@ pub(crate) struct ApplyArgs {
     #[arg(short, long, default_value = ".")]
     dir: PathBuf,
     #[arg(long)]
+    dry_run: bool,
+    #[arg(long)]
     auto_approve: bool,
     #[arg(long)]
     allow_raw_terraform: bool,
@@ -34,7 +36,7 @@ pub(crate) fn run(args: ApplyArgs, color: ColorMode) -> Result<()> {
         }
     };
 
-    if !std::io::stdin().is_terminal() && !args.auto_approve {
+    if !std::io::stdin().is_terminal() && !args.auto_approve && !args.dry_run {
         return Err(CliError::Message(
             "non-interactive shell detected: re-run with --auto-approve".to_string(),
         ));
@@ -47,6 +49,13 @@ pub(crate) fn run(args: ApplyArgs, color: ColorMode) -> Result<()> {
     );
 
     runner.init(&terraform_dir, &[])?;
+
+    if args.dry_run {
+        runner.plan(&terraform_dir, &args.terraform_args)?;
+        output::info("Dry run complete (terraform plan).", color);
+        return Ok(());
+    }
+
     runner.apply(&terraform_dir, args.auto_approve, &args.terraform_args)?;
     output::info("Apply complete.", color);
     Ok(())

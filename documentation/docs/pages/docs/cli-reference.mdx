@@ -1,0 +1,84 @@
+# CLI Reference
+
+Use this page as the command reference for `evm-cloud`.
+
+For installation, see [Install CLI](/docs/install).
+
+## Global Syntax
+
+```bash
+evm-cloud [--color auto|always|never] <command> [flags]
+```
+
+## Commands
+
+### `init`
+
+Initialize Terraform and/or scaffold project files.
+
+```bash
+evm-cloud init [--dir <path>] [--mode easy|power] [--force] [--non-interactive --config <file>] [--skip-terraform-init]
+```
+
+Key behavior:
+- Scaffold-first for new directories
+- Existing project: init-only unless `--force`
+- `--config` on existing project requires `--force` (fails fast otherwise)
+- Supports both answers TOML and runtime `evm-cloud.toml` in non-interactive mode
+
+### `apply`
+
+Plan/apply infrastructure in detected project mode.
+
+```bash
+evm-cloud apply [--dir <path>] [--dry-run] [--auto-approve] [--allow-raw-terraform] [-- <terraform args>]
+```
+
+- `--dry-run` runs Terraform plan (no changes applied)
+
+### `deploy`
+
+Run workload deployer orchestration from `workload_handoff` output.
+
+```bash
+evm-cloud deploy [--dir <path>] [--module-name <name>] [--teardown] [--allow-raw-terraform] [-- <deployer args>]
+```
+
+### `destroy`
+
+Destroy infrastructure resources.
+
+```bash
+evm-cloud destroy [--dir <path>] --yes [--auto-approve] [--allow-raw-terraform] [-- <terraform args>]
+```
+
+### `status`
+
+Display project/runtime status information.
+
+```bash
+evm-cloud status [--dir <path>] [--allow-raw-terraform]
+```
+
+### `logs`
+
+Fetch/stream workload logs (where supported by deployer/runtime).
+
+```bash
+evm-cloud logs [--dir <path>] [--allow-raw-terraform] [-- <log args>]
+```
+
+## Project Modes
+
+Commands route based on marker/root detection:
+- `.evm-cloud/mode` (`easy` / `power`) is authoritative
+- Without marker:
+  - `main.tf` + `versions.tf` => raw/power path
+  - `evm-cloud.toml` => easy path
+- Both TOML + explicit root without marker => explicit error
+
+## Related Docs
+
+- [Getting Started](/docs/getting-started)
+- [Core Concepts](/docs/concepts)
+- [Troubleshooting](/docs/troubleshooting)

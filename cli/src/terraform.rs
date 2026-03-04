@@ -68,6 +68,12 @@ impl TerraformRunner {
         self.run_inherited(dir, &args)
     }
 
+    pub(crate) fn plan(&self, dir: &Path, passthrough_args: &[String]) -> Result<()> {
+        let mut args = vec!["plan".to_string()];
+        args.extend_from_slice(passthrough_args);
+        self.run_inherited(dir, &args)
+    }
+
     pub(crate) fn fmt(&self, dir: &Path) -> Result<()> {
         self.run_inherited(dir, &["fmt".to_string()])
     }
