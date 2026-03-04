@@ -16,6 +16,42 @@ Open-source data infrastructure platform for EVM blockchain data. Deploy, manage
 - **Networking** — VPC, subnets, security groups (AWS)
 - **Compute** — EC2 + Docker Compose, EKS, k3s, or bare metal
 
+## Install CLI (Standalone)
+
+Use this if you want to run `evm-cloud` from your own Terraform repository (without cloning this repo).
+
+### Option 1: Homebrew (recommended)
+
+```bash
+brew tap ExoMonk/tap
+brew install evm-cloud
+evm-cloud --help
+```
+
+### Option 2: curl installer (GitHub Releases)
+
+Install latest release:
+
+```bash
+curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/latest/download/install.sh | bash
+evm-cloud --help
+```
+
+Install a pinned version:
+
+```bash
+curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/v0.1.0/install.sh | bash -s -- v0.1.0
+```
+
+### Option 3: Source build
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/cli
+cargo install --path .
+evm-cloud --help
+```
+
 ## Quick Start
 
 ```bash
@@ -60,42 +96,6 @@ See [Choosing an Example](https://evm-cloud.xyz/docs/examples) for help picking 
 make qa          # fmt, validate, lint, security (checkov)
 make verify      # qa + plan all examples
 make test-k8s    # Kubernetes chart tests (kind)
-```
-
-## Install CLI (Standalone)
-
-Use this if you want to run `evm-cloud` from your own Terraform repository (without cloning this repo).
-
-### Option 1: Homebrew (recommended)
-
-```bash
-brew tap ExoMonk/tap
-brew install evm-cloud
-evm-cloud --help
-```
-
-### Option 2: curl installer (GitHub Releases)
-
-Install latest release:
-
-```bash
-curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/latest/download/install.sh | bash
-evm-cloud --help
-```
-
-Install a pinned version:
-
-```bash
-curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/v0.1.0/install.sh | bash -s -- v0.1.0
-```
-
-### Option 3: Source build
-
-```bash
-git clone https://github.com/ExoMonk/evm-cloud.git
-cd evm-cloud/cli
-cargo install --path .
-evm-cloud --help
 ```
 
 ## Terraform CLI Migration (CLI1.1)
