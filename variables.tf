@@ -553,6 +553,109 @@ variable "eso_chart_version" {
   default     = "0.9.13"
 }
 
+# --- Monitoring ---
+
+variable "monitoring_enabled" {
+  description = "Enable kube-prometheus-stack monitoring addon. Requires compute_engine = eks or k3s."
+  type        = bool
+  default     = false
+}
+
+variable "kube_prometheus_stack_version" {
+  description = "kube-prometheus-stack Helm chart version."
+  type        = string
+  default     = "72.6.2"
+}
+
+variable "grafana_admin_password_secret_name" {
+  description = "Existing K8s Secret name for Grafana admin password (keys: admin-user, admin-password). Empty = chart default."
+  type        = string
+  default     = ""
+}
+
+variable "alertmanager_slack_webhook_secret_name" {
+  description = "Existing K8s Secret name holding Slack webhook URL (key: webhook_url)."
+  type        = string
+  default     = ""
+}
+
+variable "alertmanager_sns_topic_arn" {
+  description = "SNS topic ARN for Alertmanager webhook routing."
+  type        = string
+  default     = ""
+}
+
+variable "alertmanager_pagerduty_routing_key_secret_name" {
+  description = "Existing K8s Secret name holding PagerDuty routing key (key: routing_key)."
+  type        = string
+  default     = ""
+}
+
+variable "alertmanager_route_target" {
+  description = "Alertmanager receiver target: slack, sns, or pagerduty."
+  type        = string
+  default     = "slack"
+
+  validation {
+    condition     = contains(["slack", "sns", "pagerduty"], var.alertmanager_route_target)
+    error_message = "alertmanager_route_target must be one of: slack, sns, pagerduty."
+  }
+}
+
+variable "alertmanager_slack_channel" {
+  description = "Slack channel name for alert delivery."
+  type        = string
+  default     = "#alerts"
+}
+
+variable "loki_enabled" {
+  description = "Deploy Loki + Promtail for log aggregation. Requires monitoring_enabled = true."
+  type        = bool
+  default     = false
+}
+
+variable "loki_chart_version" {
+  description = "Loki Helm chart version."
+  type        = string
+  default     = "6.24.0"
+}
+
+variable "promtail_chart_version" {
+  description = "Promtail Helm chart version."
+  type        = string
+  default     = "6.16.6"
+}
+
+variable "loki_persistence_enabled" {
+  description = "Enable PVC for Loki. False = logs lost on pod restart."
+  type        = bool
+  default     = false
+}
+
+variable "clickhouse_metrics_url" {
+  description = "Optional BYO ClickHouse metrics endpoint for Prometheus scraping."
+  type        = string
+  default     = ""
+}
+
+variable "grafana_ingress_enabled" {
+  description = "Expose Grafana via Ingress. Requires ingress_mode != none and grafana_hostname set."
+  type        = bool
+  default     = true
+}
+
+variable "grafana_hostname" {
+  description = "Grafana hostname for Ingress (e.g., grafana.yourdomain.com)."
+  type        = string
+  default     = ""
+}
+
+variable "ingress_class_name" {
+  description = "Ingress class name for Grafana Ingress resource."
+  type        = string
+  default     = "nginx"
+}
+
 variable "bare_metal_secrets_encryption" {
   description = "Encryption method for bare metal .env secrets: none (default) or sops_age (SOPS + age encryption at rest)."
   type        = string

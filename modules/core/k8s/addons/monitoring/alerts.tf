@@ -22,9 +22,9 @@ resource "kubernetes_manifest" "rindexer_alerts" {
           name = "rindexer.rules"
           rules = [
             {
-              alert = "RindexerHighLag"
-              expr  = "max by (network) (rindexer_blocks_behind) > 100"
-              for   = "5m"
+              alert  = "RindexerHighLag"
+              expr   = "max by (network) (rindexer_blocks_behind) > 100"
+              for    = "5m"
               labels = { severity = "warning" }
               annotations = {
                 summary     = "rindexer lag > 100 blocks on {{ $labels.network }}"
@@ -32,9 +32,9 @@ resource "kubernetes_manifest" "rindexer_alerts" {
               }
             },
             {
-              alert = "RindexerCriticalLag"
-              expr  = "max by (network) (rindexer_blocks_behind) > 1000"
-              for   = "10m"
+              alert  = "RindexerCriticalLag"
+              expr   = "max by (network) (rindexer_blocks_behind) > 1000"
+              for    = "10m"
               labels = { severity = "critical" }
               annotations = {
                 summary     = "rindexer lag > 1000 blocks on {{ $labels.network }}"
@@ -42,9 +42,9 @@ resource "kubernetes_manifest" "rindexer_alerts" {
               }
             },
             {
-              alert = "RindexerDeepReorg"
-              expr  = "rindexer_reorg_depth > 2"
-              for   = "1m"
+              alert  = "RindexerDeepReorg"
+              expr   = "rindexer_reorg_depth > 2"
+              for    = "1m"
               labels = { severity = "warning" }
               annotations = {
                 summary     = "Deep reorg (depth {{ $value }}) on {{ $labels.network }}"
@@ -52,9 +52,9 @@ resource "kubernetes_manifest" "rindexer_alerts" {
               }
             },
             {
-              alert = "RindexerFrequentReorgs"
-              expr  = "increase(rindexer_reorgs_detected_total[15m]) > 5"
-              for   = "5m"
+              alert  = "RindexerFrequentReorgs"
+              expr   = "increase(rindexer_reorgs_detected_total[15m]) > 5"
+              for    = "5m"
               labels = { severity = "warning" }
               annotations = {
                 summary     = "Frequent reorgs on {{ $labels.network }}"
@@ -62,9 +62,9 @@ resource "kubernetes_manifest" "rindexer_alerts" {
               }
             },
             {
-              alert = "RindexerRPCErrorRate"
-              expr  = "sum by (network) (rate(rindexer_rpc_requests_total{status=\"error\"}[5m])) / sum by (network) (rate(rindexer_rpc_requests_total[5m])) > 0.05 and sum by (network) (rate(rindexer_rpc_requests_total[5m])) > 0.1"
-              for   = "5m"
+              alert  = "RindexerRPCErrorRate"
+              expr   = "sum by (network) (rate(rindexer_rpc_requests_total{status=\"error\"}[5m])) / sum by (network) (rate(rindexer_rpc_requests_total[5m])) > 0.05 and sum by (network) (rate(rindexer_rpc_requests_total[5m])) > 0.1"
+              for    = "5m"
               labels = { severity = "warning" }
               annotations = {
                 summary     = "RPC error rate > 5% on {{ $labels.network }}"
@@ -72,9 +72,9 @@ resource "kubernetes_manifest" "rindexer_alerts" {
               }
             },
             {
-              alert = "RindexerDBErrors"
-              expr  = "increase(rindexer_db_operations_total{status=\"error\"}[5m]) > 0"
-              for   = "2m"
+              alert  = "RindexerDBErrors"
+              expr   = "increase(rindexer_db_operations_total{status=\"error\"}[5m]) > 0"
+              for    = "2m"
               labels = { severity = "critical" }
               annotations = {
                 summary     = "Database write errors detected"
@@ -82,9 +82,9 @@ resource "kubernetes_manifest" "rindexer_alerts" {
               }
             },
             {
-              alert = "RindexerDown"
-              expr  = "up{app_kubernetes_io_name=\"indexer\"} == 0"
-              for   = "2m"
+              alert  = "RindexerDown"
+              expr   = "up{app_kubernetes_io_name=\"indexer\"} == 0"
+              for    = "2m"
               labels = { severity = "critical" }
               annotations = {
                 summary     = "rindexer is down"

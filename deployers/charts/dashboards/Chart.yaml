@@ -1,0 +1,6 @@
+apiVersion: v2
+name: dashboards
+description: Grafana dashboards and PrometheusRule alerts for evm-cloud monitoring
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

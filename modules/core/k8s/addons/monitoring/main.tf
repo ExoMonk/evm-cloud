@@ -59,8 +59,11 @@ locals {
           },
           {
             name = "sns"
-            webhook_configs = var.alertmanager_route_target == "sns" ? [{
-              url = "https://sns.${var.aws_region}.amazonaws.com/"
+            sns_configs = var.alertmanager_route_target == "sns" ? [{
+              sigv4 = {
+                region = var.aws_region
+              }
+              topic_arn = var.alertmanager_sns_topic_arn
             }] : []
           },
           {
@@ -89,36 +92,96 @@ resource "helm_release" "kube_prometheus_stack" {
 
   # --- Prometheus resource limits ---
   # Expected cardinality: ~15-20K active series
-  set { name = "prometheus.prometheusSpec.resources.requests.memory"; value = "512Mi" }
-  set { name = "prometheus.prometheusSpec.resources.limits.memory"; value = "1Gi" }
-  set { name = "prometheus.prometheusSpec.resources.requests.cpu"; value = "250m" }
+  set {
+    name  = "prometheus.prometheusSpec.resources.requests.memory"
+    value = "512Mi"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.resources.limits.memory"
+    value = "1Gi"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.resources.requests.cpu"
+    value = "250m"
+  }
 
   # --- Grafana resource limits ---
-  set { name = "grafana.resources.requests.memory"; value = "128Mi" }
-  set { name = "grafana.resources.limits.memory"; value = "384Mi" }
-  set { name = "grafana.resources.requests.cpu"; value = "100m" }
+  set {
+    name  = "grafana.resources.requests.memory"
+    value = "128Mi"
+  }
+  set {
+    name  = "grafana.resources.limits.memory"
+    value = "384Mi"
+  }
+  set {
+    name  = "grafana.resources.requests.cpu"
+    value = "100m"
+  }
 
   # --- Retention + storage ---
-  set { name = "prometheus.prometheusSpec.retention"; value = "7d" }
-  set { name = "prometheus.prometheusSpec.retentionSize"; value = "8GB" }
-  set { name = "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.accessModes[0]"; value = "ReadWriteOnce" }
-  set { name = "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage"; value = "10Gi" }
-  set { name = "prometheus.prometheusSpec.walCompression"; value = "true" }
+  set {
+    name  = "prometheus.prometheusSpec.retention"
+    value = "7d"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.retentionSize"
+    value = "8GB"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.accessModes[0]"
+    value = "ReadWriteOnce"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage"
+    value = "10Gi"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.walCompression"
+    value = "true"
+  }
 
   # --- ServiceMonitor discovery: scrape from ALL releases, not just this one ---
-  set { name = "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues"; value = "false" }
-  set { name = "prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues"; value = "false" }
-  set { name = "prometheus.prometheusSpec.ruleSelectorNilUsesHelmValues"; value = "false" }
+  set {
+    name  = "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues"
+    value = "false"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues"
+    value = "false"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.ruleSelectorNilUsesHelmValues"
+    value = "false"
+  }
 
   # --- Grafana admin credential from existing secret ---
-  set { name = "grafana.admin.existingSecret"; value = var.grafana_admin_password_secret_name }
-  set { name = "grafana.admin.userKey"; value = "admin-user" }
-  set { name = "grafana.admin.passwordKey"; value = "admin-password" }
+  set {
+    name  = "grafana.admin.existingSecret"
+    value = var.grafana_admin_password_secret_name
+  }
+  set {
+    name  = "grafana.admin.userKey"
+    value = "admin-user"
+  }
+  set {
+    name  = "grafana.admin.passwordKey"
+    value = "admin-password"
+  }
 
   # --- Grafana dashboard sidecar ---
-  set { name = "grafana.sidecar.dashboards.enabled"; value = "true" }
-  set { name = "grafana.sidecar.dashboards.label"; value = "grafana_dashboard" }
-  set { name = "grafana.sidecar.dashboards.searchNamespace"; value = "ALL" }
+  set {
+    name  = "grafana.sidecar.dashboards.enabled"
+    value = "true"
+  }
+  set {
+    name  = "grafana.sidecar.dashboards.label"
+    value = "grafana_dashboard"
+  }
+  set {
+    name  = "grafana.sidecar.dashboards.searchNamespace"
+    value = "ALL"
+  }
 
   # --- Grafana Ingress (piggybacks on Spec 16 ingress infrastructure) ---
   dynamic "set" {
@@ -223,15 +286,42 @@ resource "helm_release" "loki" {
   atomic           = true
   timeout          = 300
 
-  set { name = "deploymentMode"; value = "SingleBinary" }
-  set { name = "singleBinary.replicas"; value = "1" }
-  set { name = "loki.commonConfig.replication_factor"; value = "1" }
-  set { name = "loki.storage.type"; value = "filesystem" }
-  set { name = "singleBinary.persistence.enabled"; value = tostring(var.loki_persistence_enabled) }
-  set { name = "singleBinary.persistence.size"; value = "10Gi" }
-  set { name = "gateway.enabled"; value = "false" }
-  set { name = "minio.enabled"; value = "false" }
-  set { name = "loki.auth_enabled"; value = "false" }
+  set {
+    name  = "deploymentMode"
+    value = "SingleBinary"
+  }
+  set {
+    name  = "singleBinary.replicas"
+    value = "1"
+  }
+  set {
+    name  = "loki.commonConfig.replication_factor"
+    value = "1"
+  }
+  set {
+    name  = "loki.storage.type"
+    value = "filesystem"
+  }
+  set {
+    name  = "singleBinary.persistence.enabled"
+    value = tostring(var.loki_persistence_enabled)
+  }
+  set {
+    name  = "singleBinary.persistence.size"
+    value = "10Gi"
+  }
+  set {
+    name  = "gateway.enabled"
+    value = "false"
+  }
+  set {
+    name  = "minio.enabled"
+    value = "false"
+  }
+  set {
+    name  = "loki.auth_enabled"
+    value = "false"
+  }
 }
 
 # --- Promtail — DaemonSet that ships container logs from every node to Loki ---
@@ -248,5 +338,8 @@ resource "helm_release" "promtail" {
   atomic           = true
   timeout          = 300
 
-  set { name = "config.clients[0].url"; value = "http://${var.project_name}-loki:3100/loki/api/v1/push" }
+  set {
+    name  = "config.clients[0].url"
+    value = "http://${var.project_name}-loki:3100/loki/api/v1/push"
+  }
 }

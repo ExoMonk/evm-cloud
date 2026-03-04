@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.projectName }}-rindexer-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  rindexer.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "title": "Blocks Behind (by network)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "max by (network) (rindexer_blocks_behind)",
+              "legendFormat": "{{`{{network}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": { "drawStyle": "line", "fillOpacity": 10 },
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 100 },
+                  { "color": "red", "value": 1000 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Events Processed / sec",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum by (network, contract) (rate(rindexer_events_processed_total[5m]))",
+              "legendFormat": "{{`{{network}}`}}/{{`{{contract}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": { "drawStyle": "line", "fillOpacity": 10 },
+              "unit": "ops"
+            }
+          }
+        },
+        {
+          "title": "RPC Error Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "expr": "sum by (network) (rate(rindexer_rpc_requests_total{status=\"error\"}[5m])) / sum by (network) (rate(rindexer_rpc_requests_total[5m]))",
+              "legendFormat": "{{`{{network}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": { "drawStyle": "line", "fillOpacity": 10 },
+              "unit": "percentunit",
+              "max": 1
+            }
+          }
+        },
+        {
+          "title": "DB Operations / sec",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "targets": [
+            {
+              "expr": "sum by (operation, status) (rate(rindexer_db_operations_total[5m]))",
+              "legendFormat": "{{`{{operation}}`}} ({{`{{status}}`}})"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": { "drawStyle": "line", "fillOpacity": 10 },
+              "unit": "ops"
+            }
+          }
+        },
+        {
+          "title": "Reorgs Detected",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "targets": [
+            {
+              "expr": "increase(rindexer_reorgs_detected_total[15m])",
+              "legendFormat": "{{`{{network}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": { "drawStyle": "bars", "fillOpacity": 50 },
+              "unit": "short"
+            }
+          }
+        },
+        {
+          "title": "Reorg Depth",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+          "targets": [
+            {
+              "expr": "max by (network) (rindexer_reorg_depth)",
+              "legendFormat": "{{`{{network}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 2 },
+                  { "color": "red", "value": 5 }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["rindexer", "indexer"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "rindexer",
+      "uid": "rindexer-overview"
+    }

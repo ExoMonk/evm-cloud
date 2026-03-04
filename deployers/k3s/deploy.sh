@@ -353,6 +353,164 @@ ISSUEREOF
   fi
 fi
 
+# --- Monitoring stack ---
+
+MONITORING_ENABLED=$(jq -r '.services.monitoring != null' "$HANDOFF_FILE")
+
+if [[ "$MONITORING_ENABLED" == "true" ]]; then
+  KUBE_PROM_VERSION=$(jq -r '.services.monitoring.kube_prometheus_stack_version // "72.6.2"' "$HANDOFF_FILE")
+  GRAFANA_ADMIN_SECRET=$(jq -r '.services.monitoring.grafana_admin_password_secret_name // empty' "$HANDOFF_FILE")
+  AM_ROUTE_TARGET=$(jq -r '.services.monitoring.alertmanager_route_target // "slack"' "$HANDOFF_FILE")
+  AM_SLACK_SECRET=$(jq -r '.services.monitoring.alertmanager_slack_webhook_secret_name // empty' "$HANDOFF_FILE")
+  AM_SLACK_CHANNEL=$(jq -r '.services.monitoring.alertmanager_slack_channel // "#alerts"' "$HANDOFF_FILE")
+  AM_SNS_ARN=$(jq -r '.services.monitoring.alertmanager_sns_topic_arn // empty' "$HANDOFF_FILE")
+  AM_PD_SECRET=$(jq -r '.services.monitoring.alertmanager_pagerduty_routing_key_secret_name // empty' "$HANDOFF_FILE")
+  LOKI_ENABLED=$(jq -r '.services.monitoring.loki_enabled // false' "$HANDOFF_FILE")
+  LOKI_VERSION=$(jq -r '.services.monitoring.loki_chart_version // "6.24.0"' "$HANDOFF_FILE")
+  PROMTAIL_VERSION=$(jq -r '.services.monitoring.promtail_chart_version // "6.16.6"' "$HANDOFF_FILE")
+  LOKI_PERSISTENCE=$(jq -r '.services.monitoring.loki_persistence_enabled // false' "$HANDOFF_FILE")
+  CH_METRICS_URL=$(jq -r '.services.monitoring.clickhouse_metrics_url // empty' "$HANDOFF_FILE")
+  GRAFANA_INGRESS=$(jq -r '.services.monitoring.grafana_ingress_enabled // true' "$HANDOFF_FILE")
+  GRAFANA_HOSTNAME=$(jq -r '.services.monitoring.grafana_hostname // empty' "$HANDOFF_FILE")
+  GRAFANA_INGRESS_CLASS=$(jq -r '.services.monitoring.ingress_class_name // "nginx"' "$HANDOFF_FILE")
+
+  # Memory gate: skip monitoring on small nodes unless forced
+  if [[ "${FORCE_MONITORING:-}" != "true" ]]; then
+    ALLOC_MEM_KB=$(kubectl get nodes -o jsonpath='{.items[0].status.allocatable.memory}' 2>/dev/null | sed 's/Ki//')
+    ALLOC_MEM_GB=$((ALLOC_MEM_KB / 1048576))
+    if [[ "$ALLOC_MEM_GB" -lt 6 ]]; then
+      echo "WARNING: Node has <6GB allocatable memory (${ALLOC_MEM_GB}GB). Skipping monitoring." >&2
+      echo "  Set FORCE_MONITORING=true to override." >&2
+      MONITORING_ENABLED="false"
+    fi
+  fi
+fi
+
+if [[ "$MONITORING_ENABLED" == "true" ]]; then
+  echo "[evm-cloud] Installing kube-prometheus-stack (v${KUBE_PROM_VERSION})..."
+  kubectl create namespace monitoring 2>/dev/null || true
+
+  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
+  helm repo update prometheus-community
+
+  PROM_ARGS=(
+    --namespace monitoring
+    --version "$KUBE_PROM_VERSION"
+    --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
+    --set prometheus.prometheusSpec.retention=7d
+    --set prometheus.prometheusSpec.resources.requests.cpu=200m
+    --set prometheus.prometheusSpec.resources.requests.memory=512Mi
+    --set prometheus.prometheusSpec.resources.limits.memory=1Gi
+    --set grafana.sidecar.dashboards.enabled=true
+    --set grafana.sidecar.dashboards.searchNamespace=ALL
+    --set grafana.resources.requests.cpu=100m
+    --set grafana.resources.requests.memory=128Mi
+    --set grafana.resources.limits.memory=256Mi
+  )
+
+  # Grafana admin secret
+  if [[ -n "$GRAFANA_ADMIN_SECRET" ]]; then
+    PROM_ARGS+=(--set grafana.admin.existingSecret="$GRAFANA_ADMIN_SECRET")
+  fi
+
+  # Grafana ingress
+  if [[ "$GRAFANA_INGRESS" == "true" && -n "$GRAFANA_HOSTNAME" ]]; then
+    PROM_ARGS+=(
+      --set grafana.ingress.enabled=true
+      --set grafana.ingress.ingressClassName="$GRAFANA_INGRESS_CLASS"
+      --set "grafana.ingress.hosts[0]=$GRAFANA_HOSTNAME"
+    )
+    # TLS for Grafana ingress
+    if [[ "$INGRESS_MODE" == "ingress_nginx" ]]; then
+      PROM_ARGS+=(
+        --set "grafana.ingress.tls[0].secretName=grafana-tls"
+        --set "grafana.ingress.tls[0].hosts[0]=$GRAFANA_HOSTNAME"
+        --set "grafana.ingress.annotations.cert-manager\\.io/cluster-issuer=${ISSUER_NAME:-letsencrypt-prod}"
+      )
+    elif [[ "$INGRESS_MODE" == "cloudflare" ]]; then
+      PROM_ARGS+=(
+        --set "grafana.ingress.tls[0].secretName=cloudflare-origin-tls"
+        --set "grafana.ingress.tls[0].hosts[0]=$GRAFANA_HOSTNAME"
+      )
+    fi
+  fi
+
+  # Loki datasource in Grafana
+  if [[ "$LOKI_ENABLED" == "true" ]]; then
+    PROM_ARGS+=(
+      --set "grafana.additionalDataSources[0].name=Loki"
+      --set "grafana.additionalDataSources[0].type=loki"
+      --set "grafana.additionalDataSources[0].url=http://loki.monitoring.svc:3100"
+      --set "grafana.additionalDataSources[0].access=proxy"
+    )
+  fi
+
+  # Alertmanager routing
+  if [[ "$AM_ROUTE_TARGET" == "slack" && -n "$AM_SLACK_SECRET" ]]; then
+    PROM_ARGS+=(
+      --set alertmanager.config.route.receiver=slack
+      --set alertmanager.config.route.routes[0].match.severity=critical
+      --set alertmanager.config.route.routes[0].receiver=slack
+    )
+  fi
+
+  # ClickHouse BYO scrape
+  if [[ -n "$CH_METRICS_URL" ]]; then
+    PROM_ARGS+=(
+      --set "prometheus.prometheusSpec.additionalScrapeConfigs[0].job_name=clickhouse"
+      --set "prometheus.prometheusSpec.additionalScrapeConfigs[0].static_configs[0].targets[0]=$CH_METRICS_URL"
+    )
+  fi
+
+  helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+    "${PROM_ARGS[@]}" \
+    --atomic --timeout 600s
+  echo "[evm-cloud] kube-prometheus-stack installed."
+
+  # Optional: Loki + Promtail
+  if [[ "$LOKI_ENABLED" == "true" ]]; then
+    echo "[evm-cloud] Installing Loki (v${LOKI_VERSION})..."
+    helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
+    helm repo update grafana
+
+    LOKI_ARGS=(
+      --namespace monitoring
+      --version "$LOKI_VERSION"
+      --set deploymentMode=SingleBinary
+      --set loki.auth_enabled=false
+      --set singleBinary.replicas=1
+      --set loki.commonConfig.replication_factor=1
+      --set loki.storage.type=filesystem
+      --set singleBinary.persistence.enabled="$LOKI_PERSISTENCE"
+      --set read.replicas=0
+      --set write.replicas=0
+      --set backend.replicas=0
+    )
+
+    helm upgrade --install loki grafana/loki \
+      "${LOKI_ARGS[@]}" \
+      --atomic --timeout 300s
+    echo "[evm-cloud] Loki installed."
+
+    echo "[evm-cloud] Installing Promtail (v${PROMTAIL_VERSION})..."
+    helm upgrade --install promtail grafana/promtail \
+      --namespace monitoring \
+      --version "$PROMTAIL_VERSION" \
+      --set "config.clients[0].url=http://loki.monitoring.svc:3100/loki/api/v1/push" \
+      --atomic --timeout 300s
+    echo "[evm-cloud] Promtail installed."
+  fi
+
+  # Deploy dashboards + alert rules chart
+  echo "[evm-cloud] Deploying dashboards and alert rules..."
+  helm upgrade --install "${PROJECT}-dashboards" "${CHARTS_DIR}/dashboards/" \
+    --namespace monitoring \
+    --set projectName="$PROJECT" \
+    --set monitoringRelease=monitoring \
+    --timeout 120s
+  echo "[evm-cloud] Dashboards deployed."
+fi
+
 # --- Deploy workloads ---
 
 RPC_PROXY_ENABLED=$(jq -r '.services.rpc_proxy != null' "$HANDOFF_FILE")

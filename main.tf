@@ -168,6 +168,21 @@ resource "terraform_data" "provider_guardrails" {
       error_message = "bare_metal_secrets_encryption=sops_age is not yet implemented. Use secrets_mode=external with ESO for bare_metal k3s secret management."
     }
 
+    precondition {
+      condition     = !(var.monitoring_enabled && !contains(["eks", "k3s"], var.compute_engine))
+      error_message = "monitoring_enabled requires compute_engine = eks or k3s."
+    }
+
+    precondition {
+      condition     = !(var.monitoring_enabled && var.grafana_ingress_enabled && var.grafana_hostname == "")
+      error_message = "grafana_hostname is required when monitoring_enabled and grafana_ingress_enabled are both true."
+    }
+
+    precondition {
+      condition     = !(var.loki_enabled && !var.monitoring_enabled)
+      error_message = "loki_enabled requires monitoring_enabled = true."
+    }
+
   }
 }
 
@@ -265,6 +280,24 @@ module "provider_aws" {
   external_secret_store_name = var.external_secret_store_name
   external_secret_key        = var.external_secret_key
   eso_chart_version          = var.eso_chart_version
+
+  # Monitoring
+  monitoring_enabled                             = var.monitoring_enabled
+  kube_prometheus_stack_version                  = var.kube_prometheus_stack_version
+  grafana_admin_password_secret_name             = var.grafana_admin_password_secret_name
+  alertmanager_slack_webhook_secret_name         = var.alertmanager_slack_webhook_secret_name
+  alertmanager_sns_topic_arn                     = var.alertmanager_sns_topic_arn
+  alertmanager_pagerduty_routing_key_secret_name = var.alertmanager_pagerduty_routing_key_secret_name
+  alertmanager_route_target                      = var.alertmanager_route_target
+  alertmanager_slack_channel                     = var.alertmanager_slack_channel
+  loki_enabled                                   = var.loki_enabled
+  loki_chart_version                             = var.loki_chart_version
+  promtail_chart_version                         = var.promtail_chart_version
+  loki_persistence_enabled                       = var.loki_persistence_enabled
+  clickhouse_metrics_url                         = var.clickhouse_metrics_url
+  grafana_ingress_enabled                        = var.grafana_ingress_enabled
+  grafana_hostname                               = var.grafana_hostname
+  ingress_class_name                             = var.ingress_class_name
 }
 
 module "provider_bare_metal" {
@@ -330,4 +363,22 @@ module "provider_bare_metal" {
   external_secret_store_name = var.external_secret_store_name
   external_secret_key        = var.external_secret_key
   eso_chart_version          = var.eso_chart_version
+
+  # Monitoring
+  monitoring_enabled                             = var.monitoring_enabled
+  kube_prometheus_stack_version                  = var.kube_prometheus_stack_version
+  grafana_admin_password_secret_name             = var.grafana_admin_password_secret_name
+  alertmanager_slack_webhook_secret_name         = var.alertmanager_slack_webhook_secret_name
+  alertmanager_sns_topic_arn                     = var.alertmanager_sns_topic_arn
+  alertmanager_pagerduty_routing_key_secret_name = var.alertmanager_pagerduty_routing_key_secret_name
+  alertmanager_route_target                      = var.alertmanager_route_target
+  alertmanager_slack_channel                     = var.alertmanager_slack_channel
+  loki_enabled                                   = var.loki_enabled
+  loki_chart_version                             = var.loki_chart_version
+  promtail_chart_version                         = var.promtail_chart_version
+  loki_persistence_enabled                       = var.loki_persistence_enabled
+  clickhouse_metrics_url                         = var.clickhouse_metrics_url
+  grafana_ingress_enabled                        = var.grafana_ingress_enabled
+  grafana_hostname                               = var.grafana_hostname
+  ingress_class_name                             = var.ingress_class_name
 }
