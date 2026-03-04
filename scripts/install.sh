@@ -9,11 +9,11 @@ usage() {
 Install evm-cloud CLI from GitHub Releases.
 
 Usage:
-  scripts/install.sh [VERSION]
+  install.sh [VERSION]
 
 Examples:
-  scripts/install.sh               # installs latest release
-  scripts/install.sh v0.1.0        # installs specific tag
+  install.sh               # installs latest release
+  install.sh v0.1.0        # installs specific tag
 
 Environment variables:
   INSTALL_DIR=/custom/path/bin     # optional install location
@@ -122,7 +122,7 @@ if [ -w "$INSTALL_PATH" ]; then
   cp "$TMP_DIR/$BINARY_NAME" "$INSTALL_PATH/$BINARY_NAME"
 else
   echo "Install directory not writable: $INSTALL_PATH" >&2
-  echo "Retry with: sudo INSTALL_DIR=/usr/local/bin scripts/install.sh ${VERSION}" >&2
+  echo "Retry with: sudo INSTALL_DIR=/usr/local/bin bash -s -- ${VERSION}" >&2
   exit 1
 fi
 

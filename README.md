@@ -66,15 +66,36 @@ make test-k8s    # Kubernetes chart tests (kind)
 
 Use this if you want to run `evm-cloud` from your own Terraform repository (without cloning this repo).
 
+### Option 1: Homebrew (recommended)
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ExoMonk/evm-cloud/main/scripts/install.sh | bash
+brew tap ExoMonk/tap
+brew install evm-cloud
 evm-cloud --help
 ```
 
-Install a specific version:
+### Option 2: curl installer (GitHub Releases)
+
+Install latest release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ExoMonk/evm-cloud/main/scripts/install.sh | bash -s -- v0.1.0
+curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/latest/download/install.sh | bash
+evm-cloud --help
+```
+
+Install a pinned version:
+
+```bash
+curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/v0.1.0/install.sh | bash -s -- v0.1.0
+```
+
+### Option 3: Source build
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/cli
+cargo install --path .
+evm-cloud --help
 ```
 
 ## Terraform CLI Migration (CLI1.1)
