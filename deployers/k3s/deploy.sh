@@ -345,11 +345,16 @@ ISSUEREOF
     fi
 
     echo "[evm-cloud] Creating Cloudflare origin TLS secret..."
-    kubectl create secret tls cloudflare-origin-tls \
+    CF_TLS_YAML=$(kubectl create secret tls cloudflare-origin-tls \
       --cert=<(echo "$CF_ORIGIN_CERT") \
       --key=<(echo "$CF_ORIGIN_KEY") \
-      --dry-run=client -o yaml | kubectl apply -f -
-    echo "[evm-cloud] Cloudflare origin TLS secret created."
+      --dry-run=client -o yaml)
+    # Apply to default namespace (for eRPC ingress)
+    echo "$CF_TLS_YAML" | kubectl apply -f -
+    # Apply to monitoring namespace (for Grafana ingress)
+    kubectl create namespace monitoring 2>/dev/null || true
+    echo "$CF_TLS_YAML" | kubectl apply -n monitoring -f -
+    echo "[evm-cloud] Cloudflare origin TLS secret created (default + monitoring)."
   fi
 fi
 
@@ -421,6 +426,7 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
       --set grafana.ingress.enabled=true
       --set grafana.ingress.ingressClassName="$GRAFANA_INGRESS_CLASS"
       --set "grafana.ingress.hosts[0]=$GRAFANA_HOSTNAME"
+      --set "grafana.\"grafana\\.ini\".server.root_url=https://$GRAFANA_HOSTNAME"
     )
     # TLS for Grafana ingress
     if [[ "$INGRESS_MODE" == "ingress_nginx" ]]; then

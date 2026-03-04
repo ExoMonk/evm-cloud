@@ -206,6 +206,13 @@ resource "helm_release" "kube_prometheus_stack" {
       value = var.ingress_class_name
     }
   }
+  dynamic "set" {
+    for_each = var.grafana_ingress_enabled && var.grafana_hostname != "" ? [1] : []
+    content {
+      name  = "grafana.grafana\\.ini.server.root_url"
+      value = "https://${var.grafana_hostname}"
+    }
+  }
 
   # --- Loki datasource (if Loki enabled) ---
   dynamic "set" {
