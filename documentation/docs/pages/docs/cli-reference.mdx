@@ -17,7 +17,7 @@ evm-cloud [--color auto|always|never] <command> [flags]
 Initialize Terraform and/or scaffold project files.
 
 ```bash
-evm-cloud init [--dir <path>] [--mode easy|power] [--force] [--non-interactive --config <file>] [--skip-terraform-init]
+evm-cloud init [--dir <path>] [--example <name>] [--list-examples] [--mode easy|power] [--force] [--non-interactive --config <file>] [--skip-terraform-init]
 ```
 
 Key behavior:
@@ -25,6 +25,8 @@ Key behavior:
 - Existing project: init-only unless `--force`
 - `--config` on existing project requires `--force` (fails fast otherwise)
 - Supports both answers TOML and runtime `evm-cloud.toml` in non-interactive mode
+- `--example <name>` bootstraps from repository `examples/` before init
+- `--list-examples` prints canonical example names and aliases
 
 ### `apply`
 

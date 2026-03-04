@@ -1,0 +1,226 @@
+# Local Dev Stack
+
+Boot a complete evm-cloud pipeline on your laptop using [kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker).
+
+---
+
+## What this unlocks
+
+- **Contract development** against a real indexer — deploy to Anvil, see events in ClickHouse
+- **Config iteration** without cloud costs — tune rindexer.yaml, see results locally
+- **Integration testing** before deploying to k3s/EC2/EKS
+
+---
+
+## Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                     kind cluster (local)                         │
+│                                                                  │
+│  ┌──────────┐     ┌──────────┐     ┌──────────┐                │
+│  │  Anvil   │────►│  eRPC    │────►│ rindexer │                │
+│  │ :8545    │     │ :4000    │     │ :18080   │                │
+│  │ (sim)    │     │ (proxy)  │     │ (indexer)│                │
+│  └──────────┘     └──────────┘     └─────┬────┘                │
+│                                          │                      │
+│                                    ┌─────▼─────┐               │
+│                                    │ ClickHouse │               │
+│                                    │ :8123      │               │
+│                                    └────────────┘               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+All services are exposed via NodePort — no `kubectl port-forward` needed. Endpoints persist through laptop sleep.
+
+---
+
+## Requirements
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) with **4GB+ memory** allocated
+- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/)
+- [Helm](https://helm.sh/docs/intro/install/)
+
+---
+
+## Quick start
+
+```bash
+# Boot the stack (~2 minutes)
+./local/up.sh
+
+# Check all services
+./local/status.sh
+
+# Tear down
+./local/down.sh
+```
+
+Or via Make targets:
+
+```bash
+make local-up
+make local-status
+make local-down
+```
+
+---
+
+## Endpoints
+
+| Service    | URL                        | Purpose                     |
+|------------|----------------------------|-----------------------------|
+| Anvil      | `http://localhost:8545`    | EVM simulator (JSON-RPC)    |
+| eRPC       | `http://localhost:4000`    | RPC proxy (same as prod)    |
+| ClickHouse | `http://localhost:8123`    | Query indexed data (HTTP)   |
+| rindexer   | `http://localhost:18080`   | Indexer metrics             |
+| Grafana    | `http://localhost:3000`    | Dashboards (if monitoring)  |
+
+---
+
+## Fork mode
+
+Index real mainnet contracts locally by forking chain state into Anvil:
+
+```bash
+./local/up.sh --anvil-fork https://eth.llamarpc.com
+```
+
+Anvil serves real mainnet state with local block production. rindexer indexes real contracts.
+
+:::warning
+In fork mode, set `start_block` in `local/config/rindexer.yaml` close to the fork block number. Historical `eth_getLogs` requests are proxied to the fork RPC, which may rate-limit or timeout on large ranges.
+:::
+
+---
+
+## Contract deploy hook
+
+Run a script after the stack boots:
+
+```bash
+./local/up.sh --post-deploy ./my-deploy.sh
+```
+
+The script receives environment variables:
+
+```bash
+ANVIL_RPC_URL=http://localhost:8545
+ERPC_URL=http://localhost:4000
+CLICKHOUSE_URL=http://localhost:8123
+CHAIN_ID=31337
+```
+
+Example workflow:
+
+```bash
+#!/usr/bin/env bash
+# Deploy contract
+forge script script/Deploy.s.sol --rpc-url $ANVIL_RPC_URL --broadcast
+
+# Update rindexer config with deployed address
+# Then re-run: ./local/up.sh (idempotent Helm upgrade)
+```
+
+---
+
+## Resource profiles
+
+### `default` — laptop-friendly (~2.5Gi total)
+
+For basic contract development. Fits on 8GB+ laptops with other apps running.
+
+| Service    | CPU Req | Memory Req | CPU Limit | Memory Limit |
+|------------|---------|------------|-----------|--------------|
+| Anvil      | 100m    | 128Mi      | 500m      | 256Mi        |
+| eRPC       | 100m    | 128Mi      | 250m      | 256Mi        |
+| ClickHouse | 200m    | 512Mi      | 500m      | 1Gi          |
+| rindexer   | 200m    | 256Mi      | 500m      | 512Mi        |
+
+### `heavy` — fork mode (~8Gi total)
+
+For fork-mode Anvil with large state. Requires Docker Desktop with 8GB+ memory.
+
+```bash
+./local/up.sh --profile heavy --anvil-fork https://eth.llamarpc.com
+```
+
+---
+
+## Data persistence
+
+By default, data is **ephemeral** — lost on `./local/down.sh`, including rindexer progress tables. This means a full re-index from `start_block` on each restart.
+
+For persistent sessions:
+
+```bash
+./local/up.sh --persist
+```
+
+Data is stored in `~/.evm-cloud/local-data/`. To reset:
+
+```bash
+./local/reset.sh
+```
+
+:::note
+Persistent data does not survive Docker Desktop VM resets on macOS (kind runs inside the VM).
+:::
+
+---
+
+## Config changes
+
+Edit files in `local/config/`:
+- `erpc.yaml` — eRPC proxy config
+- `rindexer.yaml` — indexer config (add contracts here)
+
+Then re-run `./local/up.sh`. Helm performs an idempotent upgrade — no tear-down needed.
+
+---
+
+## All options
+
+```bash
+./local/up.sh [OPTIONS]
+
+  --profile <name>     Resource profile: default, heavy (default: default)
+  --persist            Persistent ClickHouse data across restarts
+  --force              Force-recreate cluster even if it exists
+  --with-monitoring    Deploy Prometheus + Grafana
+  --anvil-fork <url>   Fork mainnet/testnet state from RPC URL
+  --post-deploy <sh>   Script to run after stack is healthy
+```
+
+---
+
+## Troubleshooting
+
+### Port conflicts
+
+`up.sh` checks if ports 8545, 4000, 8123, 18080 are already bound and reports which one conflicts. Free the port and retry.
+
+### Docker memory
+
+Increase in Docker Desktop → Settings → Resources → Memory. Minimum 4GB for default profile, 8GB for heavy.
+
+### rindexer CrashLoop
+
+Usually means it can't connect to ClickHouse. Check logs:
+
+```bash
+kubectl logs deploy/local-indexer --context kind-evm-cloud-local
+```
+
+### Cluster unreachable
+
+NodePort mappings survive laptop sleep. If the cluster is gone (Docker restart), run `./local/up.sh` — it recreates automatically.
+
+---
+
+## Related pages
+
+- **[Getting Started](../getting-started.mdx)** — Full deployment guide
+- **[Observability](./observability.mdx)** — Monitoring with Prometheus + Grafana
+- **[Architecture](../architecture.mdx)** — System design overview
