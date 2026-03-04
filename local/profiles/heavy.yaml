@@ -1,0 +1,8 @@
+# Heavy profile — for fork mode and large contract sets (~8Gi total cluster memory)
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi

@@ -1,0 +1,27 @@
+image:
+  repository: ghcr.io/foundry-rs/foundry
+  tag: v1.0.0
+  pullPolicy: IfNotPresent
+
+service:
+  type: NodePort
+  port: 8545
+  nodePort: 30545
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+anvil:
+  blockTime: 2
+  accounts: 10
+  balance: 10000
+  # Fork mode: set forkUrl to fork mainnet/testnet state
+  forkUrl: ""
+
+nameOverride: ""
+fullnameOverride: ""

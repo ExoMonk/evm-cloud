@@ -1,19 +1,19 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "indexer.fullname" . }}
+  name: {{ include "anvil.fullname" . }}
   labels:
-    app.kubernetes.io/name: {{ include "indexer.name" . }}
+    app.kubernetes.io/name: {{ include "anvil.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   type: {{ .Values.service.type }}
   selector:
-    app.kubernetes.io/name: {{ include "indexer.name" . }}
+    app.kubernetes.io/name: {{ include "anvil.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
   ports:
-    - name: metrics
+    - name: rpc
       port: {{ .Values.service.port }}
-      targetPort: metrics
+      targetPort: rpc
       protocol: TCP
       {{- if .Values.service.nodePort }}
       nodePort: {{ .Values.service.nodePort }}

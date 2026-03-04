@@ -1,0 +1,20 @@
+logLevel: debug
+server:
+  listenV4: true
+  httpHostV4: 0.0.0.0
+  httpPort: 4000
+projects:
+  - id: local
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 31337
+    networkDefaults:
+      failsafe:
+        retry:
+          maxAttempts: 3
+          delay: 500ms
+    upstreams:
+      - id: anvil
+        endpoint: http://local-anvil:8545
+        type: evm

@@ -14,6 +14,10 @@ resources:
     cpu: "1"
     memory: 2Gi
 
+service:
+  type: ClusterIP
+  port: 8080
+
 podAnnotations: {}
 nodeSelector: {}
 tolerations: []

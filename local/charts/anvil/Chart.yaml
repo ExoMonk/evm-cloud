@@ -1,0 +1,5 @@
+apiVersion: v2
+name: anvil
+description: Foundry Anvil EVM simulator for local development
+version: 0.1.0
+appVersion: "v1.0.0"

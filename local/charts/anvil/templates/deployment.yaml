@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "anvil.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "anvil.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "anvil.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "anvil.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: anvil
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["anvil"]
+          args:
+            - "--host=0.0.0.0"
+            - "--port=8545"
+            - "--block-time={{ .Values.anvil.blockTime }}"
+            - "--accounts={{ .Values.anvil.accounts }}"
+            - "--balance={{ .Values.anvil.balance }}"
+            {{- if .Values.anvil.forkUrl }}
+            - "--fork-url={{ .Values.anvil.forkUrl }}"
+            {{- end }}
+          ports:
+            - name: rpc
+              containerPort: 8545
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: 8545
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8545
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
