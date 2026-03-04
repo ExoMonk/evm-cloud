@@ -9,6 +9,7 @@ specs
 # .tfstate files
 *.tfstate
 *.tfstate.*
+plan.tfplan
 
 # Crash log files
 crash.log
@@ -29,3 +30,4 @@ tests/kind/.test-deployer
 node_modules
 package-lock.json
 dist
+cli/target/
