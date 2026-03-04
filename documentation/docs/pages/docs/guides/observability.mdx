@@ -94,6 +94,8 @@ Three dashboards are auto-provisioned as ConfigMaps with the `grafana_dashboard:
 
 ### rindexer
 
+![rindexer Grafana dashboard — blocks behind, events/sec, RPC errors, DB ops, reorgs](/grafana_1.png)
+
 | Panel | Metric | What to watch |
 |-------|--------|---------------|
 | Blocks Behind | `rindexer_blocks_behind` | Should trend toward 0 after initial sync |
@@ -105,6 +107,8 @@ Three dashboards are auto-provisioned as ConfigMaps with the `grafana_dashboard:
 
 ### eRPC
 
+![eRPC Grafana dashboard — request rate, error rate, upstream latency p99, cache hit rate](/grafana_2.png)
+
 | Panel | Metric | What to watch |
 |-------|--------|---------------|
 | Request Rate | `erpc_requests_total` | Inbound RPC traffic by network |
@@ -114,6 +118,8 @@ Three dashboards are auto-provisioned as ConfigMaps with the `grafana_dashboard:
 | Upstream Health | `erpc_upstream_healthy` | Binary health per upstream provider |
 
 ### Infrastructure
+
+![Infrastructure Grafana dashboard — network I/O, disk usage, pod restarts, node CPU](/grafana_3.png)
 
 | Panel | Metric | What to watch |
 |-------|--------|---------------|
