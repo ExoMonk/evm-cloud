@@ -1,8 +1,10 @@
 mod codegen;
 mod commands;
 mod config;
+mod deployer;
 mod easy_mode;
 mod error;
+mod handoff;
 mod output;
 mod preflight;
 mod terraform;

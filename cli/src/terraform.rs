@@ -77,10 +77,53 @@ impl TerraformRunner {
         self.run_inherited(dir, &args)
     }
 
-    #[allow(dead_code)]
     pub(crate) fn output_json(&self, dir: &Path) -> Result<Value> {
+        self.output_json_internal(dir, &["output", "-json"])
+    }
+
+    pub(crate) fn output_named_json(&self, dir: &Path, output_name: &str) -> Result<Value> {
         let output = Command::new(&self.binary_path)
-            .args(["output", "-json"])
+            .args(["output", "-json", output_name])
+            .current_dir(dir)
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|err| CliError::Other(err.into()))?;
+
+        if output.status.success() {
+            let parsed = serde_json::from_slice::<Value>(&output.stdout)?;
+            return Ok(parsed);
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains(&format!("Output \"{}\" not found", output_name)) {
+            return Err(CliError::TerraformOutputMissing {
+                output: output_name.to_string(),
+            });
+        }
+
+        if let Some(code) = output.status.code() {
+            return Err(CliError::TerraformFailed { code });
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            Err(CliError::TerraformSignaled {
+                signal: output.status.signal(),
+            })
+        }
+
+        #[cfg(not(unix))]
+        {
+            Err(CliError::TerraformSignaled { signal: None })
+        }
+    }
+
+    fn output_json_internal(&self, dir: &Path, args: &[&str]) -> Result<Value> {
+        let output = Command::new(&self.binary_path)
+            .args(args)
             .current_dir(dir)
             .stdin(Stdio::inherit())
             .stdout(Stdio::piped())

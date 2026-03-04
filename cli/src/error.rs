@@ -14,6 +14,9 @@ pub(crate) enum CliError {
     #[error("terraform process terminated by signal {signal:?}")]
     TerraformSignaled { signal: Option<i32> },
 
+    #[error("terraform output `{output}` not found in state")]
+    TerraformOutputMissing { output: String },
+
     #[error("no evm-cloud.toml or *.tf files found in {dir}")]
     NoProjectDetected { dir: String },
 
@@ -40,6 +43,36 @@ pub(crate) enum CliError {
 
     #[error("unsupported schema_version={found}. This CLI supports schema_version=1")]
     UnsupportedSchemaVersion { found: u32 },
+
+    #[error("missing terraform output `workload_handoff` (module: {module}). Try `terraform output -json workload_handoff` or pass --module-name")]
+    HandoffMissing { module: String },
+
+    #[error("invalid handoff field `{field}`: {details}")]
+    HandoffInvalid { field: String, details: String },
+
+    #[error("unsupported handoff version `{found}`. Expected `{expected}`. Upgrade the CLI or regenerate handoff output")]
+    HandoffVersionUnsupported { found: String, expected: String },
+
+    #[error("unsupported compute_engine `{compute_engine}` for deploy orchestration. Supported in CLI1.3: ec2, docker_compose, k3s")]
+    DeployerUnsupportedEngine { compute_engine: String },
+
+    #[error("failed to write bundled script at {path}: {source}")]
+    BundledScriptWrite {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+
+    #[error("bundled script checksum mismatch for {script}")]
+    BundledScriptChecksumMismatch { script: String },
+
+    #[error("deploy lock already held at {path}")]
+    DeployLockBusy { path: PathBuf },
+
+    #[error("deployer process failed with exit code {code}")]
+    DeployerFailed { code: i32 },
+
+    #[error("deployer process terminated by signal {signal:?}")]
+    DeployerSignaled { signal: Option<i32> },
 
     #[error("{0}")]
     Message(String),
