@@ -125,7 +125,7 @@ The CLI handles kubeconfig extraction and deploy orchestration automatically:
 ```bash
 evm-cloud deploy              # deploy workloads
 evm-cloud kubectl get pods    # kubectl with auto-resolved kubeconfig
-evm-cloud deploy --teardown   # remove workloads
+evm-cloud destroy --yes       # teardown workloads + infrastructure
 ```
 
 ### Extract individual fields

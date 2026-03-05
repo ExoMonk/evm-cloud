@@ -4,21 +4,15 @@ import { LocalDevCliShowcase } from '../../../components/LocalDevCliShowcase'
 
 Boot a complete evm-cloud pipeline on your laptop using [kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker).
 
----
-
 ## What this unlocks
 
 - **Contract development** against a real indexer — deploy to Anvil, see events in ClickHouse
 - **Config iteration** without cloud costs — tune rindexer.yaml, see results locally
 - **Integration testing** before deploying to k3s/EC2/EKS
 
----
-
 ## CLI Preview
 
 <LocalDevCliShowcase />
-
----
 
 ## Architecture
 
@@ -41,16 +35,12 @@ Boot a complete evm-cloud pipeline on your laptop using [kind](https://kind.sigs
 
 All services are exposed via NodePort — no `kubectl port-forward` needed. Endpoints persist through laptop sleep.
 
----
-
 ## Requirements
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) with **4GB+ memory** allocated
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
 - [Helm](https://helm.sh/docs/intro/install/)
-
----
 
 ## Quick start
 
@@ -73,8 +63,6 @@ make local-status
 make local-down
 ```
 
----
-
 ## Endpoints
 
 | Service    | URL                        | Purpose                     |
@@ -83,8 +71,6 @@ make local-down
 | eRPC       | `http://localhost:4000`    | RPC proxy (same as prod)    |
 | ClickHouse | `http://localhost:8123`    | Query indexed data (HTTP)   |
 | rindexer   | `http://localhost:18080`   | Indexer metrics             |
-
----
 
 ## Fork mode (default)
 
@@ -152,8 +138,6 @@ forge script script/Deploy.s.sol --rpc-url $ANVIL_RPC_URL --broadcast
 # evm-cloud local up (idempotent Helm upgrade)
 ```
 
----
-
 ## Resource profiles
 
 ### `default` — laptop-friendly (~2.5Gi total)
@@ -175,8 +159,6 @@ For fork-mode Anvil with large state. Requires Docker Desktop with 8GB+ memory.
 evm-cloud local up --profile heavy --rpc https://eth.llamarpc.com
 ```
 
----
-
 ## Data persistence
 
 By default, data is **ephemeral** — lost on `evm-cloud local down`, including rindexer progress tables. This means a full re-index from `start_block` on each restart.
@@ -197,8 +179,6 @@ evm-cloud local reset
 Persistent data does not survive Docker Desktop VM resets on macOS (kind runs inside the VM).
 :::
 
----
-
 ## Config
 
 Provide your own `rindexer.yaml` to index custom contracts:
@@ -210,8 +190,6 @@ evm-cloud local up --config-dir ./config
 Place ABI files in an `abis/` directory next to the config file. If no config is provided, a starter config with a placeholder contract is generated automatically.
 
 Re-running `evm-cloud local up` performs an idempotent Helm upgrade — no tear-down needed.
-
----
 
 ## All options
 

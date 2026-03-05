@@ -31,7 +31,7 @@ const columns: Column[] = [
       { label: "EC2 t3.micro", sub: "Docker host" },
       { label: "IAM Role + Secrets Manager", sub: "Runtime secret delivery" },
       { label: "Docker Compose Stack", sub: "Rendered on /opt/evm-cloud" },
-      { label: "Command: evm-cloud apply", sub: "Creates infra + starts containers" },
+      { label: "Command: evm-cloud deploy", sub: "Creates infra + starts containers" },
     ],
   },
   {

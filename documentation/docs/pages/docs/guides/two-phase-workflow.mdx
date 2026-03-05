@@ -37,7 +37,7 @@ Separating into two phases resolves this. Phase 1 creates the cluster and output
 ```bash [CLI]
 cd examples/minimal_aws_k3s_byo_clickhouse
 evm-cloud init
-evm-cloud apply
+evm-cloud deploy
 ```
 
 ```bash [Terraform]
@@ -144,7 +144,7 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 
 ```bash [CLI]
 evm-cloud init
-evm-cloud apply
+evm-cloud deploy
 ```
 
 ```bash [Terraform]
@@ -159,7 +159,7 @@ terraform apply -var-file=minimal_k3s.tfvars
 :::code-group
 
 ```bash [CLI]
-evm-cloud deploy
+evm-cloud deploy --only app
 ```
 
 ```bash [Deployer]
@@ -192,7 +192,7 @@ Always remove workloads before destroying infrastructure. This ensures Helm rele
 :::code-group
 
 ```bash [CLI]
-evm-cloud deploy --teardown
+evm-cloud destroy --yes
 ```
 
 ```bash [Deployer]
@@ -259,7 +259,7 @@ The same two-phase pattern applies to EKS with `workload_mode = "external"`. The
 :::code-group
 
 ```bash [CLI]
-evm-cloud apply
+evm-cloud deploy
 ```
 
 ```bash [Terraform]

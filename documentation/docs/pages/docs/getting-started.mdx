@@ -19,7 +19,7 @@ Deploy an EVM blockchain indexer on AWS in under 10 minutes. This guide uses the
 
 **Fast path:**
 - Configure variables and secrets (`secrets.auto.tfvars` + `minimal_clickhouse.tfvars`)
-- Deploy with `evm-cloud apply` (or raw Terraform)
+- Deploy with `evm-cloud deploy` (or raw Terraform)
 - Verify containers are running on the EC2 host
 
 ### CLI Preview
@@ -115,7 +115,7 @@ indexer_clickhouse_password = "your-password"
 
 ```bash [CLI]
 evm-cloud init
-evm-cloud apply --dry-run
+evm-cloud deploy --dry-run
 ```
 
 ```bash [Terraform]
@@ -125,7 +125,7 @@ terraform plan -var-file=minimal_clickhouse.tfvars
 
 :::
 
-`evm-cloud apply --dry-run` prints a concise summary and writes full Terraform plan details to `.evm-cloud/logs/terraform-plan-<timestamp>.log`.
+`evm-cloud deploy --dry-run` prints a concise summary and writes full Terraform plan details to `.evm-cloud/logs/terraform-plan-<timestamp>.log`.
 
 Plan output includes resources for:
 - VPC, subnets, security groups
@@ -133,12 +133,12 @@ Plan output includes resources for:
 - IAM role + Secrets Manager secret
 - Docker Compose services (eRPC + rindexer)
 
-### 4. Apply
+### 4. Deploy
 
 :::code-group
 
 ```bash [CLI]
-evm-cloud apply
+evm-cloud deploy
 ```
 
 ```bash [Terraform]
@@ -147,7 +147,7 @@ terraform apply -var-file=minimal_clickhouse.tfvars
 
 :::
 
-`evm-cloud apply` prompts `Apply these changes? (y/N)` in interactive shells. In CI/non-interactive shells, use `evm-cloud apply --auto-approve`.
+`evm-cloud deploy` prompts `Apply these changes? (y/N)` in interactive shells. In CI/non-interactive shells, use `evm-cloud deploy --auto-approve`.
 
 This takes 3-5 minutes. Terraform will:
 1. Create a VPC with public subnets
@@ -157,7 +157,7 @@ This takes 3-5 minutes. Terraform will:
 
 ### 5. Verify
 
-After `evm-cloud apply` completes, the CLI prints a post-deploy summary with the instance IP and SSH command. Use the IP from that output:
+After `evm-cloud deploy` completes, the CLI prints a post-deploy summary with the instance IP and SSH command. Use the IP from that output:
 
 ```bash
 # SSH into the instance (IP shown in post-deploy summary)

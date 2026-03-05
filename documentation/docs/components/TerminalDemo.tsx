@@ -12,16 +12,15 @@ const INTERACTIVE_LINES: DemoLine[] = [
   { kind: "cmd", text: "evm-cloud init" },
   { kind: "headlineBlue", text: "🏰 ✅ Project initialized" },
   { kind: "blank", text: "" },
-  { kind: "cmd", text: "evm-cloud apply" },
-  { kind: "headlineBlue", text: "🏰 ⚒️ Preparing apply for sandboxx" },
+  { kind: "cmd", text: "evm-cloud deploy" },
+  { kind: "headlineBlue", text: "🏰 ⚒️ Deploying sandboxx" },
+  { kind: "default", text: "   ▸ Phase 1/2 — Deploying Infrastructure" },
+  { kind: "default", text: "     ✓ Ran terraform plan" },
+  { kind: "default", text: "     ✔ Apply these changes? (y/N) · y" },
   { kind: "default", text: "     ✓ Ran terraform apply" },
   { kind: "default", text: "     ✓ VPC + networking" },
   { kind: "default", text: "     ✓ k3s cluster (2 nodes)" },
-  { kind: "headlineBlue", text: "🏰 ✅ Infrastructure deployed - 2m 1s" },
-  { kind: "default", text: "      👉🏻 Server       ubuntu@<>" },
-  { kind: "blank", text: "" },
-  { kind: "cmd", text: "evm-cloud deploy" },
-  { kind: "headlineBlue", text: "🏰 ⚒️ Deploying stack for sandbox" },
+  { kind: "default", text: "   ▸ Phase 2/2 — Deploying Workload" },
   { kind: "default", text: "     🛟 ClusterSecretStore: evm-cloud-k3s-prod-aws-sm" },
   { kind: "default", text: "     ✔ Cloudflare origin TLS secret created" },
   { kind: "default", text: "     ✔ kube-prometheus-stack" },
@@ -29,7 +28,7 @@ const INTERACTIVE_LINES: DemoLine[] = [
   { kind: "default", text: "     🛟 eRPC: evm-cloud-k3s-prod-erpc" },
   { kind: "default", text: "     🛟 rindexer #1: evm-cloud-k3s-prod-indexer" },
   { kind: "default", text: "     🛟 rindexer #2: evm-cloud-k3s-prod-backfill" },
-  { kind: "headlineBlue", text: "🏰 ✅ Stack deployed - 1m 11s" },
+  { kind: "headlineBlue", text: "🏰 ✅ Deploy complete - 3m 12s" },
   { kind: "default", text: "      👉🏻 Server       ubuntu@<>" },
   { kind: "default", text: "      👉🏻 Grafana      https://grafana.evm-cloud.xyz" },
   { kind: "default", text: "      👉🏻 Status       evm-cloud status" },
@@ -46,16 +45,13 @@ const CI_LINES: DemoLine[] = [
   { kind: "cmd", text: "evm-cloud init" },
   { kind: "headlineBlue", text: "🏰 ✅ Project initialized" },
   { kind: "blank", text: "" },
-  { kind: "cmd", text: "evm-cloud apply --auto-approve" },
-  { kind: "headlineBlue", text: "🏰 ⚒️ Preparing apply for sandbox" },
+  { kind: "cmd", text: "evm-cloud deploy --auto-approve" },
+  { kind: "headlineBlue", text: "🏰 ⚒️ Deploying sandbox" },
+  { kind: "default", text: "   ▸ Phase 1/2 — Deploying Infrastructure" },
   { kind: "default", text: "     ✓ Ran terraform apply" },
   { kind: "default", text: "     ✓ VPC + networking" },
   { kind: "default", text: "     ✓ k3s cluster (2 nodes)" },
-  { kind: "headlineBlue", text: "🏰 ✅ Infrastructure deployed - 1m 58s" },
-  { kind: "default", text: "      👉🏻 Server       ubuntu@<>" },
-  { kind: "blank", text: "" },
-  { kind: "cmd", text: "evm-cloud deploy" },
-  { kind: "headlineBlue", text: "🏰 ⚒️ Deploying stack for sandbox" },
+  { kind: "default", text: "   ▸ Phase 2/2 — Deploying Workload" },
   { kind: "default", text: "     🛟 ClusterSecretStore: evm-cloud-k3s-prod-aws-sm" },
   { kind: "default", text: "     ✔ Cloudflare origin TLS secret created" },
   { kind: "default", text: "     ✔ kube-prometheus-stack" },
@@ -63,7 +59,7 @@ const CI_LINES: DemoLine[] = [
   { kind: "default", text: "     🛟 eRPC: evm-cloud-k3s-prod-erpc" },
   { kind: "default", text: "     🛟 rindexer #1: evm-cloud-k3s-prod-indexer" },
   { kind: "default", text: "     🛟 rindexer #2: evm-cloud-k3s-prod-backfill" },
-  { kind: "headlineBlue", text: "🏰 ✅ Stack deployed - 1m 8s" },
+  { kind: "headlineBlue", text: "🏰 ✅ Deploy complete - 3m 6s" },
   { kind: "default", text: "      👉🏻 Server       ubuntu@<>" },
   { kind: "default", text: "      👉🏻 Grafana      https://grafana.evm-cloud.xyz" },
   { kind: "default", text: "      👉🏻 Status       evm-cloud status" },
@@ -170,17 +166,37 @@ const s = {
   },
 } as const;
 
+type InfraNode = {
+  id: string;
+  label: string;
+  icon: string;
+  desc: string;
+};
+
+const INFRA_NODES: InfraNode[] = [
+  { id: "vpc",     label: "VPC",     icon: "🌐", desc: "Networking + SGs" },
+  { id: "k3s",     label: "k3s",     icon: "⚡", desc: "2-node cluster" },
+  { id: "secrets", label: "Secrets", icon: "🔐", desc: "AWS Secrets Manager" },
+];
+
+const WORKLOAD_NODES: InfraNode[] = [
+  { id: "monitoring", label: "Monitoring", icon: "📊", desc: "Prometheus + Grafana" },
+  { id: "erpc",       label: "eRPC",       icon: "🔀", desc: "RPC failover proxy" },
+  { id: "rindexer",   label: "rindexer",   icon: "🦀", desc: "EVM event indexer" },
+];
+
+const ALL_NODES = [...INFRA_NODES, ...WORKLOAD_NODES];
+
+/* Line index at which each node lights up (visibleLines > threshold) */
+const NODE_THRESHOLDS: Record<Mode, Record<string, number>> = {
+  interactive: { vpc: 9, k3s: 10, secrets: 12, monitoring: 14, erpc: 16, rindexer: 17 },
+  ci:          { vpc: 7, k3s: 8,  secrets: 10, monitoring: 12, erpc: 14, rindexer: 15 },
+};
+
 const TYPING_SPEED = 23;
 const LINE_STAGGER = 145;
 const COMMAND_PAUSE = 360;
 const RESTART_DELAY = 4500;
-
-const STAGE_LINE_INDEX = {
-  init: 1,
-  apply: 5,
-  deploy: 13,
-  destroy: 27,
-} as const;
 
 function lineColor(kind: LineKind): string {
   switch (kind) {
@@ -215,11 +231,22 @@ export function TerminalDemo() {
   );
 
   const progressPct = Math.min(100, Math.round((visibleLines / lines.length) * 100));
+
+  const activeNodeIds = useMemo(() => {
+    const thresholds = NODE_THRESHOLDS[mode];
+    return new Set(
+      ALL_NODES.filter((n) => visibleLines > (thresholds[n.id] ?? Infinity)).map((n) => n.id)
+    );
+  }, [mode, visibleLines]);
+
+  /* Stage flags for the status cards */
+  const stageThresholds = { interactive: { init: 1, infra: 5, workload: 11, destroy: 25 }, ci: { init: 1, infra: 5, workload: 9, destroy: 19 } } as const;
+  const stage = stageThresholds[mode];
   const status = {
-    init: visibleLines > STAGE_LINE_INDEX.init,
-    apply: visibleLines > STAGE_LINE_INDEX.apply,
-    deploy: visibleLines > STAGE_LINE_INDEX.deploy,
-    destroy: visibleLines > (mode === "interactive" ? STAGE_LINE_INDEX.destroy : 20),
+    init: visibleLines > stage.init,
+    infra: visibleLines > stage.infra,
+    workload: visibleLines > stage.workload,
+    destroy: visibleLines > stage.destroy,
   };
 
   useEffect(() => {
@@ -347,7 +374,7 @@ export function TerminalDemo() {
         @keyframes pulse-demo { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,.5); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
         @keyframes line-in { from { opacity: .2; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes shine-in { from { opacity: .4; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
-      `}</style>
+`}</style>
       <div
         style={{
           display: "grid",
@@ -412,38 +439,67 @@ export function TerminalDemo() {
             <div style={{ color: "#cbd5e1", fontSize: "12px", fontWeight: 600, letterSpacing: ".03em", textTransform: "uppercase" }}>
               Live Stack Status
             </div>
-            {[
-              { label: "Init complete", on: status.init },
-              { label: "Infra applied", on: status.apply },
-              { label: "Stack deployed", on: status.deploy },
-              { label: "Destroy verified", on: status.destroy },
-            ].map((item) => (
-              <div
-                key={item.label}
-                style={{
-                  border: "1px solid #334155",
-                  borderRadius: "10px",
-                  padding: "10px 11px",
-                  background: item.on ? "linear-gradient(90deg, rgba(34,197,94,.18), rgba(34,197,94,.06))" : "rgba(15,23,42,.55)",
-                  color: item.on ? "#86efac" : "#94a3b8",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "10px",
-                  transition: "all 180ms ease",
-                }}
-              >
-                <span style={{ fontSize: "13px" }}>{item.label}</span>
-                <span
+            {([
+              { label: "Init complete", on: status.init, nodes: null },
+              { label: "Infra deployed", on: status.infra, nodes: INFRA_NODES },
+              { label: "Workload deployed", on: status.workload, nodes: WORKLOAD_NODES },
+              { label: "Destroy verified", on: status.destroy, nodes: null },
+            ] as const).map((item) => (
+              <div key={item.label}>
+                <div
                   style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "999px",
-                    background: item.on ? "#22c55e" : "#475569",
-                    boxShadow: item.on ? "0 0 10px rgba(34,197,94,.9)" : "none",
+                    border: "1px solid #334155",
+                    borderRadius: "10px",
+                    padding: "10px 11px",
+                    background: item.on ? "linear-gradient(90deg, rgba(34,197,94,.18), rgba(34,197,94,.06))" : "rgba(15,23,42,.55)",
+                    color: item.on ? "#86efac" : "#94a3b8",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "10px",
                     transition: "all 180ms ease",
                   }}
-                />
+                >
+                  <span style={{ fontSize: "13px" }}>{item.label}</span>
+                  <span
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "999px",
+                      background: item.on ? "#22c55e" : "#475569",
+                      boxShadow: item.on ? "0 0 10px rgba(34,197,94,.9)" : "none",
+                      transition: "all 180ms ease",
+                    }}
+                  />
+                </div>
+                {item.nodes && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", padding: "5px 0 0 8px" }}>
+                    {item.nodes.map((node) => {
+                      const on = activeNodeIds.has(node.id);
+                      return (
+                        <span
+                          key={node.id}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            padding: "2px 6px",
+                            borderRadius: "5px",
+                            fontSize: "10px",
+                            border: `1px solid ${on ? "#22c55e25" : "#1e293b"}`,
+                            background: on ? "rgba(34,197,94,0.06)" : "transparent",
+                            color: on ? "#86efac" : "#475569",
+                            opacity: on ? 1 : 0.45,
+                            transition: "all 250ms ease",
+                          }}
+                        >
+                          <span style={{ fontSize: "9px" }}>{node.icon}</span>
+                          {node.label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))}
 

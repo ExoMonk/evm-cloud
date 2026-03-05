@@ -220,9 +220,9 @@ See [Secrets Management](./secrets-management.mdx) for the full secrets lifecycl
 Always remove workloads before destroying infrastructure:
 
 ```bash
-# Step 1: Remove workloads
-evm-cloud deploy --teardown
-# or: terraform output -json workload_handoff | ./deployers/k3s/teardown.sh /dev/stdin
+# Remove workloads + destroy infrastructure
+evm-cloud destroy --yes
+# or manually: terraform output -json workload_handoff | ./deployers/k3s/teardown.sh /dev/stdin
 ```
 
 :::code-group

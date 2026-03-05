@@ -24,11 +24,12 @@ evm-cloud deploy      # provisions infra + deploys workloads
 
 ```
 [Your contracts + ABIs]
-  -> evm-cloud apply
+  -> evm-cloud deploy
     -> VPC + networking (security groups, subnets)
     -> Compute (EC2, EKS, k3s, or bare metal)
     -> eRPC (multi-upstream RPC proxy, failover, caching)
     -> rindexer (EVM event indexer, no-code YAML config)
+    -> Webhooks (real-time decoded events → your API, sub-5ms)
     -> Database (PostgreSQL, ClickHouse — managed or BYO)
     -> Secrets management (AWS Secrets Manager, inline, or ESO)
     -> Monitoring (Prometheus + Grafana)
@@ -54,7 +55,7 @@ brew install ExoMonk/tap/evm-cloud
 evm-cloud init
 
 # Deploy everything
-evm-cloud apply
+evm-cloud deploy
 
 # Tear down when done
 evm-cloud destroy --yes
@@ -122,11 +123,11 @@ cargo install --path .
 evm-cloud is a modular Terraform platform with a Rust CLI orchestrator. The CLI wraps Terraform + deployer scripts into a unified workflow.
 
 ```
-evm-cloud init → scaffolds Terraform config from evm-cloud.toml
-evm-cloud apply → terraform apply + workload deployment
-evm-cloud deploy → re-deploy workloads without re-running Terraform
+evm-cloud init    → scaffolds Terraform config from evm-cloud.toml
+evm-cloud deploy  → provisions infra + deploys workloads (unified)
+evm-cloud apply   → terraform apply only (infra layer)
 evm-cloud destroy → teardown everything
-evm-cloud local → local dev stack (kind + Anvil)
+evm-cloud local   → local dev stack (kind + Anvil)
 ```
 
 11 Terraform modules, 4 compute engines (EC2, EKS, k3s, bare metal), 2 database backends, secrets management, monitoring, and TLS — all composable.

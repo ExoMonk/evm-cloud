@@ -323,7 +323,7 @@ The Terraform `kubernetes` and `helm` providers need a kubeconfig to connect to 
 
 ### The Solution
 
-**Phase 1: Infrastructure** — `evm-cloud apply` (or `terraform apply`)
+**Phase 1: Infrastructure** — `evm-cloud deploy` (or `terraform apply`)
 
 Provisions compute (EC2 with k3s installed, or EKS cluster), networking, database, and outputs the `workload_handoff`.
 
@@ -332,7 +332,7 @@ Provisions compute (EC2 with k3s installed, or EKS cluster), networking, databas
 ```bash [CLI]
 cd examples/k3s_rds
 evm-cloud init
-evm-cloud apply
+evm-cloud deploy
 ```
 
 ```bash [Terraform]
@@ -343,14 +343,14 @@ terraform apply
 
 :::
 
-**Phase 2: Workloads** — `evm-cloud deploy`
+**Phase 2: Workloads** — `evm-cloud deploy --only app`
 
 Uses the kubeconfig from Phase 1 to deploy Helm charts onto the cluster.
 
 :::code-group
 
 ```bash [CLI]
-evm-cloud deploy
+evm-cloud deploy --only app
 ```
 
 ```bash [Terraform]
@@ -368,18 +368,11 @@ Reverse order. Remove workloads before destroying infrastructure:
 :::code-group
 
 ```bash [CLI]
-# Phase 2 teardown
-evm-cloud deploy --teardown
-
-# Phase 1 teardown
 evm-cloud destroy --yes
 ```
 
 ```bash [Terraform]
-# Phase 2 teardown
 terraform output -json workload_handoff | deployers/k3s/teardown.sh /dev/stdin
-
-# Phase 1 teardown
 terraform destroy
 ```
 

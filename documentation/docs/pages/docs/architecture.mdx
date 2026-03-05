@@ -45,6 +45,7 @@ The actual containers and configuration that run on top of infrastructure.
 |-----------|--------------------|
 | **eRPC** | RPC proxy container with your `erpc.yaml` config |
 | **rindexer** | Indexer container with your `rindexer.yaml` + ABI files |
+| **Webhooks** | Real-time event streaming to your API via rindexer's built-in webhook/stream support. Add a `streams` section to your `rindexer.yaml` to push decoded events to any HTTP endpoint in sub-5ms. |
 | **Config injection** | YAML/ABI files delivered to containers via bind mounts, ConfigMaps, or Secrets Manager |
 
 ### Workload Modes

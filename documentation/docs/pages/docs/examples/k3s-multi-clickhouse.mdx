@@ -83,8 +83,8 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 
 ```bash [CLI]
 evm-cloud init
-evm-cloud apply
-# CI/non-interactive: evm-cloud apply --auto-approve
+evm-cloud deploy
+# CI/non-interactive: evm-cloud deploy --auto-approve
 ```
 
 ```bash [Terraform]
@@ -104,7 +104,7 @@ evm-cloud kubectl get nodes -o wide
 
 ```bash [CLI]
 # Phase 2: Deploy all workloads
-evm-cloud deploy
+evm-cloud deploy --only app
 ```
 
 ```bash [Deployer]
@@ -125,8 +125,7 @@ terraform output -json workload_handoff | \
 :::code-group
 
 ```bash [CLI]
-# Teardown (reverse order)
-evm-cloud deploy --teardown
+# Teardown
 evm-cloud destroy --yes
 ```
 

@@ -83,8 +83,8 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 ```bash [CLI]
 # Phase 1: Provision EC2 + k3s
 evm-cloud init
-evm-cloud apply
-# CI/non-interactive: evm-cloud apply --auto-approve
+evm-cloud deploy
+# CI/non-interactive: evm-cloud deploy --auto-approve
 ```
 
 ```bash [Terraform]
@@ -100,7 +100,7 @@ terraform apply plan.tfplan
 
 ```bash [CLI]
 # Phase 2: Deploy workloads + ingress
-evm-cloud deploy
+evm-cloud deploy --only app
 ```
 
 ```bash [Deployer]
@@ -113,7 +113,7 @@ terraform output -json workload_handoff | \
 
 ### 4. Point DNS
 
-After `evm-cloud apply`, the CLI prints the instance IP in the post-deploy summary. Use that IP to create a Cloudflare DNS record.
+After `evm-cloud deploy`, the CLI prints the instance IP in the post-deploy summary. Use that IP to create a Cloudflare DNS record.
 
 In Cloudflare DNS, add an **A record**:
 
@@ -185,7 +185,6 @@ k3s_instance_type = "t3.medium"  # 2 vCPU, 4GB (~$30/mo)
 :::code-group
 
 ```bash [CLI]
-evm-cloud deploy --teardown
 evm-cloud destroy --yes
 # CI/non-interactive: evm-cloud destroy --yes --auto-approve
 ```

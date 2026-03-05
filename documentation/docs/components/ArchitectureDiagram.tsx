@@ -90,7 +90,7 @@ const layers: Layer[] = [
       { id: "erpc", label: "eRPC Proxy", sub: "Failover · Caching" },
       {
         id: "indexer",
-        label: "rindexer",
+        label: "🦀rindexer",
         sub: "No-code or Rust",
         branches: [
           { label: "events", targets: ["streaming"] },
@@ -111,7 +111,7 @@ const layers: Layer[] = [
       { id: "kafka", label: "Kafka", optional: true },
       { id: "sns", label: "SNS/SQS", optional: true },
       { id: "cdc", label: "CDC", optional: true },
-      { id: "webhooks", label: "Webhooks", optional: true },
+      { id: "webhooks", label: "🪝 Webhooks" },
     ],
   },
   {

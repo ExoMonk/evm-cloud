@@ -29,9 +29,32 @@ Key behavior:
 - `--list-examples` prints canonical example names and aliases
 - `--allow-raw-terraform` is required in raw Terraform roots without easy-mode markers
 
+### `deploy`
+
+Provision infrastructure **and** deploy workloads in a single pipeline. This is the primary command for going from zero to running infrastructure.
+
+```bash
+evm-cloud deploy [--dir <path>] [--dry-run] [--auto-approve] [--only infra|app] [--tf-args <args>] [--deploy-timeout <secs>] [--module-name <name>] [--allow-raw-terraform] [--json] [-- <deployer args>]
+```
+
+- **Full pipeline** (default): terraform init → plan → confirm → apply → parse handoff → invoke deployer
+- `--dry-run` runs Terraform plan only (no apply, no deployer)
+- `--auto-approve` skips interactive confirmation (required for non-interactive shells)
+- `--only infra` runs terraform only (skip workload deployer)
+- `--only app` runs deployer only (reads existing terraform state)
+- `--tf-args` passes extra arguments to terraform (repeatable, e.g. `--tf-args='-target=module.x'`)
+- `--deploy-timeout` optional outer timeout (seconds) for the deployer phase
+- `--json` outputs raw handoff JSON and suppresses pretty output (for CI pipelines)
+- `--module-name` overrides the Terraform output module name (default: `evm_cloud`)
+- Streams real-time deploy progress with phase labels and status icons (✔ for confirmations, 🛟 for k3s workloads, ⛴️ for Docker workloads)
+
+Flag conflicts:
+- `--only app` + `--dry-run` / `--auto-approve` / `--tf-args` → error (these control terraform)
+- If terraform succeeds but deployer fails, prints a recovery hint: `evm-cloud deploy --only app`
+
 ### `apply`
 
-Plan/apply infrastructure in detected project mode.
+Terraform plan/apply only — escape hatch when you need raw terraform control without workload deployment.
 
 ```bash
 evm-cloud apply [--dir <path>] [--dry-run] [--auto-approve] [--allow-raw-terraform] [--json] [-- <terraform args>]
@@ -43,18 +66,9 @@ evm-cloud apply [--dir <path>] [--dry-run] [--auto-approve] [--allow-raw-terrafo
 - Non-interactive shells require `--auto-approve`
 - Terraform output is captured for concise UX; detailed output is written to `.evm-cloud/logs/`
 
-### `deploy`
-
-Run workload deployer orchestration from `workload_handoff` output.
-
-```bash
-evm-cloud deploy [--dir <path>] [--module-name <name>] [--teardown] [--allow-raw-terraform] [--json] [-- <deployer args>]
-```
-
-- `--teardown` runs workload teardown (reverse of deploy) instead of deploy
-- `--json` outputs raw handoff JSON and suppresses pretty output
-- `--module-name` overrides the Terraform output module name (default: `evm_cloud`)
-- Streams real-time deploy progress with status icons (✔ for confirmations, 🛟 for k3s workloads, ⛴️ for Docker workloads)
+:::tip
+For most workflows, use `evm-cloud deploy` instead — it runs terraform **and** deploys workloads in one step. Use `apply` only when you need terraform-only control.
+:::
 
 ### `destroy`
 

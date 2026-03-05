@@ -38,8 +38,7 @@ terraform destroy -var-file=your.tfvars
 
 **Prevention:** Always tear down workloads before destroying infrastructure for K8s deployments:
 ```bash
-evm-cloud deploy --teardown   # or: terraform output -json workload_handoff | ./deployers/k3s/teardown.sh /dev/stdin
-evm-cloud destroy --yes       # or: terraform destroy -var-file=your.tfvars
+evm-cloud destroy --yes       # or: terraform output -json workload_handoff | ./deployers/k3s/teardown.sh /dev/stdin && terraform destroy -var-file=your.tfvars
 ```
 
 ### Secrets Manager: "already scheduled for deletion"
