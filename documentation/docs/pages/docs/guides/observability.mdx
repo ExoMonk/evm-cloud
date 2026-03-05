@@ -195,6 +195,10 @@ ingress_class_name = "nginx"  # default
 
 This works with both `cloudflare` and `ingress_nginx` ingress modes. Point your DNS record at the cluster's ingress controller.
 
+### Default credentials
+
+When no custom secret is configured, Grafana uses the kube-prometheus-stack chart defaults: **`admin` / `prom-operator`**. The post-deploy summary shows the Grafana URL with a credentials hint.
+
 ### Custom admin password
 
 Create a K8s Secret before deployment:

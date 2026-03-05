@@ -18,7 +18,7 @@ Full AWS stack. Terraform creates and manages:
 
 ```hcl
 module "evm_cloud" {
-  source = "github.com/evm-cloud/evm-cloud"
+  source = "git::https://github.com/ExoMonk/evm-cloud.git"
 
   infrastructure_provider = "aws"   # default, can omit
   compute_engine          = "ec2"
@@ -36,13 +36,13 @@ Any VPS with SSH access and Docker installed. No cloud services. Terraform conne
 
 ```hcl
 module "evm_cloud" {
-  source = "github.com/evm-cloud/evm-cloud"
+  source = "git::https://github.com/ExoMonk/evm-cloud.git"
 
   infrastructure_provider = "bare_metal"
   compute_engine          = "docker_compose"
 
   bare_metal_host     = "203.0.113.10"
-  bare_metal_ssh_key  = file("~/.ssh/id_ed25519")
+  bare_metal_ssh_private_key_path = "~/.ssh/id_ed25519"
   bare_metal_ssh_user = "deploy"
   # ...
 }
@@ -341,38 +341,43 @@ terraform apply
 
 :::
 
-**Phase 2: Workloads** — deployer script
+**Phase 2: Workloads** — `evm-cloud deploy`
 
 Uses the kubeconfig from Phase 1 to deploy Helm charts onto the cluster.
 
-```bash
-cd deployers/k3s
-./deploy.sh ../../examples/k3s_rds
+:::code-group
+
+```bash [CLI]
+evm-cloud deploy
 ```
 
-The deployer script reads `workload_handoff` from the Terraform state, extracts the kubeconfig, and runs `helm upgrade --install` for each service.
+```bash [Terraform]
+terraform output -json workload_handoff | deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
+
+:::
+
+The CLI reads `workload_handoff` from the Terraform state, extracts the kubeconfig, and runs `helm upgrade --install` for each service.
 
 ### Teardown
 
 Reverse order. Remove workloads before destroying infrastructure:
 
-```bash
-# Phase 2 teardown
-cd deployers/k3s
-./teardown.sh ../../examples/k3s_rds
-```
-
 :::code-group
 
 ```bash [CLI]
+# Phase 2 teardown
+evm-cloud deploy --teardown
+
 # Phase 1 teardown
-cd examples/k3s_rds
 evm-cloud destroy --yes
 ```
 
 ```bash [Terraform]
+# Phase 2 teardown
+terraform output -json workload_handoff | deployers/k3s/teardown.sh /dev/stdin
+
 # Phase 1 teardown
-cd examples/k3s_rds
 terraform destroy
 ```
 

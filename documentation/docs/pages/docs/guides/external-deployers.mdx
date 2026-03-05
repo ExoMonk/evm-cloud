@@ -14,7 +14,7 @@ Set `workload_mode = "external"` when:
 
 ```hcl
 module "evm_cloud" {
-  source = "github.com/evm-cloud/evm-cloud"
+  source = "git::https://github.com/ExoMonk/evm-cloud.git"
 
   workload_mode = "external"
   compute_engine = "eks"

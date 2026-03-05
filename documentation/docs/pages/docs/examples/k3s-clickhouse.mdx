@@ -73,11 +73,19 @@ terraform apply
 
 :::
 
-```bash
+:::code-group
+
+```bash [CLI]
 # Phase 2: Deploy workloads
-terraform output -json workload_handoff  # contains kubeconfig + connection details
-# Use the output to configure kubectl and deploy via Helm
+evm-cloud deploy
 ```
+
+```bash [Deployer]
+# Phase 2: Deploy workloads
+terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
+
+:::
 
 ## Key Variables
 

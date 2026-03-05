@@ -100,18 +100,31 @@ KUBECONFIG=$(mktemp)
 terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > "$KUBECONFIG"
 kubectl --kubeconfig="$KUBECONFIG" get nodes --show-labels
 # Should show: server + backfill worker with evm-cloud/role=indexer label
+```
 
+:::code-group
+
+```bash [CLI]
+# Phase 2: Deploy all workloads
+evm-cloud deploy
+```
+
+```bash [Deployer]
 # Phase 2: Deploy workloads
 terraform output -json workload_handoff | \
   ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config --instance indexer
-# Deploy backfill on demand (runs on worker spot node, exits on completion):
+# Deploy backfill on demand (runs on worker spot node, exits on completion).
+# Use workload_type = "job" in indexer_instances for backfill workloads:
 terraform output -json workload_handoff | \
   ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config --instance backfill --job
 # Deploy everything at once (eRPC + live + backfill):
 terraform output -json workload_handoff | \
   ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
 
+:::
 
+```bash
 # Teardown (reverse order, shutting down all pods)
 terraform output -json workload_handoff | \
 ./../../deployers/k3s/teardown.sh /dev/stdin
@@ -144,6 +157,7 @@ See the [Observability Guide](../guides/observability) for full setup and dashbo
 | `k3s_ssh_private_key_path` | string | - | Path to SSH private key for provisioner |
 | `k3s_version` | string | `v1.30.4+k3s1` | k3s release version |
 | `k3s_api_allowed_cidrs` | list(string) | - | CIDRs allowed to reach k3s API (port 6443) |
+| `indexer_instances` | list(object) | - | Indexer workloads: name, config_key, node_role, workload_type |
 
 ### Worker Node Configuration
 

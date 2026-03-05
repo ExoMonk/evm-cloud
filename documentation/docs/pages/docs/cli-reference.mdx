@@ -17,7 +17,7 @@ evm-cloud [--color auto|always|never] <command> [flags]
 Initialize Terraform and/or scaffold project files.
 
 ```bash
-evm-cloud init [--dir <path>] [--example <name>] [--list-examples] [--mode easy|power] [--force] [--allow-raw-terraform] [--non-interactive --config <file>] [--skip-terraform-init]
+evm-cloud init [--dir <path>] [--example <name>] [--list-examples] [--mode easy|power] [--force] [--allow-raw-terraform] [--non-interactive --config <file>] [--skip-terraform-init] [-- <terraform args>]
 ```
 
 Key behavior:
@@ -34,10 +34,11 @@ Key behavior:
 Plan/apply infrastructure in detected project mode.
 
 ```bash
-evm-cloud apply [--dir <path>] [--dry-run] [--auto-approve] [--allow-raw-terraform] [-- <terraform args>]
+evm-cloud apply [--dir <path>] [--dry-run] [--auto-approve] [--allow-raw-terraform] [--json] [-- <terraform args>]
 ```
 
 - `--dry-run` runs Terraform plan (no changes applied)
+- `--json` outputs raw handoff JSON and suppresses pretty output (for CI pipelines)
 - Interactive mode prompts: `Apply these changes? (y/N)`
 - Non-interactive shells require `--auto-approve`
 - Terraform output is captured for concise UX; detailed output is written to `.evm-cloud/logs/`
@@ -47,8 +48,13 @@ evm-cloud apply [--dir <path>] [--dry-run] [--auto-approve] [--allow-raw-terrafo
 Run workload deployer orchestration from `workload_handoff` output.
 
 ```bash
-evm-cloud deploy [--dir <path>] [--module-name <name>] [--teardown] [--allow-raw-terraform] [-- <deployer args>]
+evm-cloud deploy [--dir <path>] [--module-name <name>] [--teardown] [--allow-raw-terraform] [--json] [-- <deployer args>]
 ```
+
+- `--teardown` runs workload teardown (reverse of deploy) instead of deploy
+- `--json` outputs raw handoff JSON and suppresses pretty output
+- `--module-name` overrides the Terraform output module name (default: `evm_cloud`)
+- Streams real-time deploy progress with status icons (✔ for confirmations, 🛟 for k3s workloads, ⛴️ for Docker workloads)
 
 ### `destroy`
 
@@ -77,6 +83,72 @@ evm-cloud logs
 ```
 
 Current behavior: prints `logs command not yet implemented`.
+
+### `kubectl`
+
+Run kubectl commands against the deployed cluster with automatic kubeconfig resolution.
+
+```bash
+evm-cloud kubectl [--dir <path>] [--kubeconfig <path>] [-- <kubectl args>]
+```
+
+- Auto-resolves kubeconfig from Terraform state (k3s base64 decode, EKS `update-kubeconfig`)
+- Falls back to `kubeconfig.yaml` or `.evm-cloud/kubeconfig.yaml` if present
+- `--kubeconfig` overrides auto-resolution
+
+```bash
+# Examples
+evm-cloud kubectl -- get pods -n evm-cloud
+evm-cloud kubectl -- logs -n evm-cloud -l app=rindexer -f
+evm-cloud kubectl --dir ./my-project -- get nodes -o wide
+```
+
+### `local`
+
+Manage a local dev stack (kind cluster with Anvil, eRPC, ClickHouse, and rindexer).
+
+```bash
+evm-cloud local <up|down|status|reset> [OPTIONS]
+```
+
+Subcommands:
+- `up` — Start the local stack
+- `down` — Tear down the local stack
+- `status` — Show stack status
+- `reset` — Tear down, clean data, and restart
+
+Options for `up` and `reset`:
+- `--rpc <url>` — RPC URL for Anvil fork (default: Ethereum mainnet)
+- `--fresh` — No fork, use chain_id 31337
+- `--persist` — Persist ClickHouse data across restarts
+- `--force` — Force-recreate cluster even if it exists
+- `--profile <name>` — Resource profile: `default` or `heavy`
+- `--config <path>` — Path to `rindexer.yaml` or directory containing it
+- `--post-deploy <script>` — Script to run after stack is healthy
+
+See [Local Dev Stack guide](./guides/local-dev.mdx) for full usage.
+
+## Init Wizard
+
+When running `evm-cloud init` interactively (without `--config` or `--example`), the wizard prompts for:
+
+| Step | Question | Options | Default |
+|------|----------|---------|---------|
+| 1 | Integration mode | `easy`, `power` | `easy` |
+| 2 | Project name | free text | `evm-cloud-demo` |
+| 3 | Infrastructure provider | `aws`, `bare_metal` | `aws` |
+| 4 | Compute engine | AWS: `ec2`, `eks`, `k3s`; Bare metal: `k3s`, `docker_compose` | `ec2` / `k3s` |
+| 5 | AWS region (AWS only) | free text | `us-east-1` |
+| 6 | Database profile | `byodb_clickhouse`, `byodb_postgres`, `managed_rds`, `managed_clickhouse` | `byodb_clickhouse` |
+| 7 | Chains | multi-select: `ethereum`, `polygon`, `arbitrum`, `base`, `optimism`, `hyperliquid` | — |
+| 8 | RPC endpoint per chain | URL per selected chain | — |
+| 9 | Indexer config | `generate starter rindexer.yaml`, `use existing path` | generate |
+| 10 | Generate eRPC config | yes / no | yes |
+| 11 | Instance type (AWS only) | free text | `t3.micro` (easy) / `t3.small` (power) |
+
+After answering, the wizard generates `evm-cloud.toml` (easy mode) or Terraform files (power mode), runs `terraform init`, `terraform fmt`, and `terraform validate`.
+
+For non-interactive use (CI), provide answers via `--config <answers.toml>` with `--non-interactive`.
 
 ## Project Modes
 

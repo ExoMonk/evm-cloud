@@ -118,11 +118,22 @@ terraform apply -var-file=bare_metal_k3s.tfvars
 
 :::
 
-```bash
+:::code-group
+
+```bash [CLI]
+# Phase 2: Deploy workloads
+evm-cloud deploy
+```
+
+```bash [Deployer]
 # Phase 2: Deploy workloads
 terraform output -json workload_handoff | \
   ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
+```
 
+:::
+
+```bash
 # Verify
 export KUBECONFIG=$(terraform output -json workload_handoff | \
   jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > /tmp/k3s-kubeconfig && echo /tmp/k3s-kubeconfig)
@@ -137,6 +148,8 @@ kubectl get pods -A
 | `bare_metal_ssh_private_key_path` | string | - | SSH private key for provisioning (sensitive) |
 | `indexer_postgres_url` | string | - | PostgreSQL connection string (sensitive) |
 | `k3s_version` | string | `v1.30.4+k3s1` | Pinned k3s version |
+| `bare_metal_ssh_user` | string | `"ubuntu"` | SSH user for the VPS |
+| `bare_metal_ssh_port` | number | `22` | SSH port |
 
 ## When to Use This
 

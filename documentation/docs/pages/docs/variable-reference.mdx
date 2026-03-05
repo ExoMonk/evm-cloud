@@ -9,7 +9,7 @@ These are the variables that most affect your deployment's cost, performance, an
 | Variable | Impact | Default | What It Controls |
 |----------|--------|---------|-----------------|
 | `compute_engine` | Architecture | `ec2` | Entire deployment model: EC2+Docker, EKS, k3s, or bare metal |
-| `ec2_instance_type` / `k3s_instance_type` | Cost + Performance | `t3.medium` | Instance size — biggest cost driver |
+| `ec2_instance_type` / `k3s_instance_type` | Cost + Performance | `t3.small` | Instance size — biggest cost driver |
 | `ec2_indexer_mem_limit` | Performance | `2g` | How much RAM rindexer can use (increase for large indexing jobs) |
 | `workload_mode` | Workflow | `terraform` | Whether Terraform or external tools manage workloads |
 | `postgres_instance_class` | Cost | `db.t4g.micro` | RDS instance size (when using managed Postgres) |
@@ -79,7 +79,7 @@ Required when `compute_engine = "ec2"`.
 |----------|------|---------|-----------|-------------|
 | `ssh_public_key` | `string` | `""` | Yes | SSH public key content for the EC2 key pair. Required for EC2 and k3s. |
 | `ec2_ssh_private_key_path` | `string` | `""` | No | Path to SSH private key for config updates. Required when `workload_mode = "terraform"`. |
-| `ec2_instance_type` | `string` | `"t3.medium"` | No | EC2 instance type. See [sizing guide](#instance-sizing) below. |
+| `ec2_instance_type` | `string` | `"t3.small"` | No | EC2 instance type. See [sizing guide](#instance-sizing) below. |
 | `ec2_rpc_proxy_mem_limit` | `string` | `"1g"` | No | Docker memory limit for eRPC container. |
 | `ec2_indexer_mem_limit` | `string` | `"2g"` | No | Docker memory limit for rindexer container. |
 | `ec2_secret_recovery_window_in_days` | `number` | `7` | No | Secrets Manager deletion window. Set to `0` for dev (immediate delete). |
@@ -92,7 +92,7 @@ Required when `compute_engine = "k3s"`.
 
 | Variable | Type | Default | Sensitive | Description |
 |----------|------|---------|-----------|-------------|
-| `k3s_instance_type` | `string` | `"t3.medium"` | No | EC2 instance type for the k3s host. |
+| `k3s_instance_type` | `string` | `"t3.small"` | No | EC2 instance type for the k3s host. |
 | `k3s_version` | `string` | `"v1.30.4+k3s1"` | No | Pinned k3s version. |
 | `k3s_ssh_private_key_path` | `string` | `""` | Yes | Path to SSH private key for host provisioning. |
 | `k3s_api_allowed_cidrs` | `list(string)` | `[]` | No | CIDRs allowed to access k3s API (port 6443). Defaults to VPC CIDR. **Add your IP for Terraform provisioning.** |
@@ -115,7 +115,7 @@ k3s_worker_nodes = [
 |-------|------|---------|-------------|
 | `name` | `string` | (required) | Unique name for the worker node. |
 | `role` | `string` | `"general"` | Node label `evm-cloud/role=<value>`. Values: `indexer`, `database`, `evm-node`, `monitoring`, `general`. |
-| `instance_type` | `string` | `"t3.medium"` | EC2 instance type for this worker. |
+| `instance_type` | `string` | `"t3.small"` | EC2 instance type for this worker. |
 | `use_spot` | `bool` | `false` | Use a spot instance (~70% cheaper). Recommended for interruptible workloads like backfill indexers. |
 | `host` | `string` | (auto) | For bare_metal provider: the worker's IP/hostname. For AWS: auto-provisioned. |
 
@@ -139,6 +139,7 @@ Enable with `postgres_enabled = true` and `indexer_storage_backend = "postgres"`
 | `postgres_backup_retention` | `number` | `7` | Backup retention in days. |
 | `postgres_manage_master_user_password` | `bool` | `true` | Let AWS manage the master password via Secrets Manager. Set to `false` with `postgres_master_password` for explicit control. See [Secrets Management guide](./guides/secrets-management.mdx#rds-password-management). |
 | `postgres_master_password` | `string` | `null` | Explicit master password for RDS. Required when `postgres_manage_master_user_password = false`. |
+| `postgres_force_ssl` | `bool` | `false` | Require SSL for all RDS connections. Set to `false` for clients with broken TLS (e.g. rindexer < 0.37). |
 
 ---
 
@@ -175,7 +176,8 @@ eRPC aggregates multiple upstream RPC endpoints with automatic failover, caching
 | `indexer_image` | `string` | `"ghcr.io/joshstevens19/rindexer:latest"` | Container image. |
 | `indexer_rpc_url` | `string` | `""` | RPC endpoint URL. Auto-resolves to eRPC internal URL when both are enabled. |
 | `indexer_storage_backend` | `string` | `"postgres"` | Storage: `postgres` (managed RDS) or `clickhouse` (BYODB). |
-| `rindexer_config_yaml` | `string` | `""` | Full rindexer.yaml content. Use `${RPC_URL}` and `${DATABASE_URL}` for runtime interpolation. |
+| `rindexer_config_yaml` | `string` | `""` | Full rindexer.yaml content. Use `$${RPC_URL}` and `$${DATABASE_URL}` for runtime interpolation (double `$$` is Terraform's escape for literal `${}`). |
+| `indexer_postgres_url` | `string` | `""` | PostgreSQL connection string (e.g. `postgres://user:pass@host:5432/db`). Used for `bare_metal` + `postgres` deployments. |
 | `rindexer_abis` | `map(string)` | `{}` | ABI files: `{ "ERC20.json" = file("abis/ERC20.json") }`. |
 | `indexer_instances` | `list(object)` | `[]` | Multiple indexer instances with independent configs. Each becomes a separate Helm release. See below. |
 
@@ -197,14 +199,20 @@ indexer_instances = [
 | `name` | `string` | (required) | Instance name. Becomes Helm release `<project>-<name>`. |
 | `config_key` | `string` | (none) | Subdirectory in config bundle for this instance's `rindexer.yaml`. If unset, uses the root config. |
 | `node_role` | `string` | (none) | Pin to nodes with `evm-cloud/role=<value>` label via `nodeSelector`. |
+| `workload_type` | `string` | `"deployment"` | Kubernetes workload type: `"deployment"` (default, long-running) or `"job"` (one-shot backfill, exits on completion). |
 
 When `indexer_instances = []` (default), a single indexer release is deployed — backward compatible.
 
-For one-shot backfill indexers that should exit on completion (not restart), use the `--job` flag at deploy time:
+For one-shot backfill indexers, set `workload_type = "job"` in the instance definition:
 
-```bash
-deploy.sh handoff.json --config-dir ./config --instance backfill --job
+```hcl
+indexer_instances = [
+  { name = "indexer", node_role = "server" },
+  { name = "backfill", config_key = "backfill", node_role = "indexer", workload_type = "job" },
+]
 ```
+
+The `"job"` workload type renders a Kubernetes Job instead of a Deployment — the pod runs to completion and does not restart.
 
 ---
 
@@ -280,10 +288,10 @@ Observability stack powered by kube-prometheus-stack. Requires `compute_engine =
 | `grafana_hostname` | `string` | `""` | No | Grafana hostname for Ingress (e.g., `grafana.yourdomain.com`). |
 | `ingress_class_name` | `string` | `"nginx"` | No | Ingress class name for the Grafana Ingress resource. |
 | `alertmanager_route_target` | `string` | `"slack"` | No | Alertmanager receiver target: `slack`, `sns`, or `pagerduty`. |
-| `alertmanager_slack_webhook_secret_name` | `string` | `""` | Yes | Existing K8s Secret name holding Slack webhook URL (key: `webhook_url`). |
+| `alertmanager_slack_webhook_secret_name` | `string` | `""` | No | Existing K8s Secret name holding Slack webhook URL (key: `webhook_url`). |
 | `alertmanager_slack_channel` | `string` | `"#alerts"` | No | Slack channel name for alert delivery. |
 | `alertmanager_sns_topic_arn` | `string` | `""` | No | SNS topic ARN for Alertmanager routing. |
-| `alertmanager_pagerduty_routing_key_secret_name` | `string` | `""` | Yes | Existing K8s Secret name holding PagerDuty routing key (key: `routing_key`). |
+| `alertmanager_pagerduty_routing_key_secret_name` | `string` | `""` | No | Existing K8s Secret name holding PagerDuty routing key (key: `routing_key`). |
 | `loki_enabled` | `bool` | `false` | No | Deploy Loki + Promtail for log aggregation. Requires `monitoring_enabled = true`. |
 | `loki_chart_version` | `string` | `"6.24.0"` | No | Loki Helm chart version. |
 | `promtail_chart_version` | `string` | `"6.16.6"` | No | Promtail Helm chart version. |
@@ -328,6 +336,7 @@ Required when `infrastructure_provider = "bare_metal"`.
 | `bare_metal_ssh_port` | `number` | `22` | SSH port. |
 | `bare_metal_rpc_proxy_mem_limit` | `string` | `"1g"` | Docker memory limit for eRPC. |
 | `bare_metal_indexer_mem_limit` | `string` | `"2g"` | Docker memory limit for rindexer. |
+| `bare_metal_secrets_encryption` | `string` | `"none"` | Encryption for bare metal `.env` secrets: `none` (default) or `sops_age` (SOPS + age encryption at rest). |
 
 ---
 
@@ -339,7 +348,7 @@ Required when `infrastructure_provider = "bare_metal"`.
 |----------|------|-----|-------------|----------|
 | `t3.micro` | 2 | 1 GB | ~$8 | Testing only (eRPC barely fits) |
 | `t3.small` | 2 | 2 GB | ~$16 | Light dev (1 small indexer) |
-| `t3.medium` | 2 | 4 GB | ~$33 | **Default.** Fits eRPC (1G) + rindexer (2G) + OS |
+| `t3.medium` | 2 | 4 GB | ~$33 | Fits eRPC (1G) + rindexer (2G) + OS. Recommended for production. |
 | `t3.large` | 2 | 8 GB | ~$67 | Heavy indexing, multiple contracts |
 | `t3.xlarge` | 4 | 16 GB | ~$133 | Large-scale backfills |
 

@@ -13,7 +13,6 @@ Production-grade Kubernetes deployment on AWS EKS. Runs eRPC and rindexer as Kub
 │       └── writes to ────────────────────────────→ ClickHouse (external)
 │                                              │
 │  K8s Secrets (CH creds, RPC URL)             │
-│  ECS cluster (service orchestration)         │
 └──────────────────────────────────────────────┘
 ```
 
@@ -21,7 +20,6 @@ Production-grade Kubernetes deployment on AWS EKS. Runs eRPC and rindexer as Kub
 
 - VPC with public/private subnets, NAT Gateway, security groups
 - EKS cluster with managed control plane (~$73/mo)
-- ECS cluster for service orchestration
 - eRPC deployment -- RPC proxy with failover and caching
 - rindexer deployment -- EVM event indexer
 - Kubernetes Secrets for ClickHouse credentials

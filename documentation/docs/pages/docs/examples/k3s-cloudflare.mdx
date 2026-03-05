@@ -99,10 +99,21 @@ terraform apply plan.tfplan
 ```bash
 # Extract handoff
 terraform output -json workload_handoff > handoff.json
+```
 
+:::code-group
+
+```bash [CLI]
+# Phase 2: Deploy workloads + ingress
+evm-cloud deploy
+```
+
+```bash [Deployer]
 # Phase 2: Deploy workloads + ingress
 ../../deployers/k3s/deploy.sh handoff.json --config-dir ./config
 ```
+
+:::
 
 ### 4. Point DNS
 

@@ -94,9 +94,17 @@ terraform output -json workload_handoff
 
 The deployer script reads the handoff, extracts the kubeconfig, renders Helm values, and deploys workloads onto the cluster.
 
-```bash
+:::code-group
+
+```bash [CLI]
+evm-cloud deploy
+```
+
+```bash [Deployer]
 terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
 ```
+
+:::
 
 What the deployer does:
 
@@ -148,9 +156,17 @@ terraform apply -var-file=minimal_k3s.tfvars
 
 ### 3. Phase 2 -- Deploy Workloads
 
-```bash
+:::code-group
+
+```bash [CLI]
+evm-cloud deploy
+```
+
+```bash [Deployer]
 terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
 ```
+
+:::
 
 ### 4. Verify
 
@@ -177,9 +193,17 @@ Always remove workloads before destroying infrastructure. This ensures Helm rele
 
 ### 1. Remove Workloads (Phase 2)
 
-```bash
+:::code-group
+
+```bash [CLI]
+evm-cloud deploy --teardown
+```
+
+```bash [Deployer]
 ./../../deployers/k3s/teardown.sh handoff.json
 ```
+
+:::
 
 Or if you did not save the handoff to a file:
 

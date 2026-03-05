@@ -66,20 +66,20 @@ variable "workload_mode" {
 ```hcl
 output "workload_handoff" {
   value = {
+    version        = "v1"
+    mode           = var.workload_mode
+    compute_engine = var.compute_engine
+    project_name   = var.project_name
     runtime = {
-      ec2 = { public_ip, private_ip, ssh_user, ssh_key_name }
-      eks = { cluster_name, cluster_endpoint, kubeconfig_cmd }
-      k3s = { kubeconfig, node_ip }
+      ec2        = { public_ip, host_address, ssh_user }
+      eks        = { cluster_name, cluster_endpoint, oidc_provider_arn }
+      k3s        = { host_ip, kubeconfig_base64 }
+      bare_metal = { host_address }
     }
-    database = {
-      host, port, username, password_secret_arn, database_name
-    }
-    networking = {
-      vpc_id, private_subnet_ids, security_group_ids
-    }
-    config = {
-      erpc_config_path, rindexer_config_path, abi_dir_path
-    }
+    services = { rpc_proxy = { ... }, indexer = { ... }, monitoring = { ... } }
+    data     = { backend, clickhouse = { ... }, postgres = { ... } }
+    secrets  = { mode, ... }
+    ingress  = { mode, erpc_hostname, ... }
   }
 }
 ```

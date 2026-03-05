@@ -2,7 +2,7 @@ import { DeployDiagram } from '../../components/DeployDiagram'
 
 # EVM Cloud
 
-Open-source infrastructure platform for EVM blockchain data. Deploy, manage, and scale a complete data stack — RPC proxies, event indexers, databases, networking, and monitoring — on AWS, GCP, or bare metal with a single command.
+Open-source infrastructure platform for EVM blockchain data. Deploy, manage, and scale a complete data stack — RPC proxies, event indexers, databases, networking, and monitoring — on AWS or bare metal with a single command.
 
 ## What It Deploys
 
@@ -40,7 +40,7 @@ Open-source infrastructure platform for EVM blockchain data. Deploy, manage, and
 - **[Architecture](./architecture.mdx)** — How the modules fit together
 - **[Core Concepts](./concepts.mdx)** — Providers, compute engines, workload modes
 - **[Variable Reference](./variable-reference.mdx)** — All configuration options
-- **[Examples](./examples/index.mdx)** — 7 ready-to-use deployment examples
+- **[Examples](./examples/index.mdx)** — 9 ready-to-use deployment examples
 - **[Guides](./guides/secrets-management.mdx)** — Secrets, config updates, production checklist
 - **[Cost Estimates](./cost-estimates.mdx)** — What each deployment pattern costs
 - **[Troubleshooting](./troubleshooting.mdx)** — Common issues and fixes
@@ -59,7 +59,7 @@ evm-cloud/
     charts/                            # Shared Helm charts (rpc-proxy, indexer)
     k3s/                               # k3s Helm deployer scripts
     eks/                               # EKS deployer + ArgoCD manifests
-  examples/                            # 7 runnable examples
+  examples/                            # 9 runnable examples
   tests/                               # LocalStack harness + kind K8s tests
   runbooks/                            # Operational guides
   documentation/                         # This documentation (Vocs)

@@ -40,11 +40,11 @@ terraform apply
 | Secrets Management | ✅ Shipped | AWS Secrets Manager, K8s secrets, env-file |
 | External Mode | ✅ Shipped | Separate infra and workload lifecycles |
 | Managed ClickHouse | 🔨 Building | Self-hosted ClickHouse with auto-provisioning |
-| Monitoring | 🔨 Building | Grafana + Prometheus dashboards and alerting |
+| Monitoring | ✅ Shipped | Grafana + Prometheus dashboards and alerting |
 | Ingress / TLS | ✅ Shipped | Cloudflare, Caddy (Let's Encrypt), or ingress-nginx + cert-manager |
 | K8s Test Suite | 🔨 Building | kind-based chart validation and connectivity tests |
 | GCP Provider | 📋 Planned | GCE, GKE, Cloud SQL — same interface as AWS |
-| EVM Cloud CLI | 📋 Planned | `init`, `deploy`, `status`, `logs`, `scale` |
+| EVM Cloud CLI | ✅ Shipped | `init`, `apply`, `deploy`, `destroy`, `kubectl`, `local`, `status`, `logs` |
 | Deployment Presets | 📋 Planned | One-variable sizing profiles (dev/prod/analytics) |
 | Bare Metal v2 | 📋 Planned | Docker Swarm, Ansible, automated backups |
 | Event Streaming | 📋 Planned | Kafka, SNS/SQS, CDC fan-out |
@@ -160,7 +160,7 @@ compute_engine          = "gce_docker"
 
 ### EVM Cloud CLI
 
-> **Future vision (not yet implemented):** The commands below describe planned UX, not current CLI behavior.
+> **Mostly implemented:** `init`, `apply`, `deploy`, `destroy`, `kubectl`, and `local` are shipped. Only `status` and `logs` are placeholders for future implementation.
 
 ```bash
 # Scaffold a new project

@@ -139,7 +139,7 @@ sudo k3s kubectl -n kube-system logs -l k8s-app=kube-dns --tail=20
 # If you see "connection refused" to 127.0.0.53 — it's systemd-resolved
 ```
 
-**Fix:** evm-cloud v12+ handles both automatically:
+**Fix:** evm-cloud v0.0.1-alpha3+ handles both automatically:
 - Sets `resolv-conf: /run/systemd/resolve/resolv.conf` in k3s config
 - Uses non-conflicting CIDRs: `10.244.0.0/16` (pods) and `10.245.0.0/16` (services)
 
@@ -161,7 +161,7 @@ sudo systemctl start k3s
 
 **Cause:** Ubuntu's `/bin/sh` is `dash`, which doesn't support `set -o pipefail`.
 
-**Fix:** This is fixed in evm-cloud v12+. The provisioner uses `set -eu` (POSIX-compatible). If you're on an older version, update the k3s-bootstrap module.
+**Fix:** This is fixed in evm-cloud v0.0.1-alpha3+. The provisioner uses `set -eu` (POSIX-compatible). If you're on an older version, update the k3s-bootstrap module.
 
 ### kubectl: "connection to server was refused"
 
