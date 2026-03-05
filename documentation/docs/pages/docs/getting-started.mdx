@@ -20,11 +20,18 @@ Deploy an EVM blockchain indexer on AWS in under 10 minutes. This guide uses the
 **Fast path:**
 - Configure variables and secrets (`secrets.auto.tfvars` + `minimal_clickhouse.tfvars`)
 - Deploy with `evm-cloud apply` (or raw Terraform)
-- Verify with `terraform output -json workload_handoff` + `docker compose ps` on the EC2 host
+- Verify containers are running on the EC2 host
 
 ### CLI Preview
 
 <GettingStartedCliShowcase />
+
+:::tip[Key Terms]
+- **eRPC** — Open-source RPC proxy that aggregates multiple blockchain RPC endpoints with failover, caching, and load balancing
+- **rindexer** — EVM event indexer that reads on-chain data and stores it in your database (ClickHouse or PostgreSQL)
+- **BYODB** — Bring Your Own Database: you provide an existing database endpoint (e.g. ClickHouse Cloud), evm-cloud connects to it
+- **cloud-init** — EC2 startup script that installs Docker and configures the instance on first boot
+:::
 
 ## Prerequisites
 
@@ -91,15 +98,16 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 Edit `secrets.auto.tfvars` with your values:
 
 ```hcl
-# SSH key (the public key content, not the path)
-ssh_public_key = "ssh-ed25519 AAAA... your-email"
+# SSH keys
+ssh_public_key              = "ssh-ed25519 AAAA... your-email"
+ec2_ssh_private_key_path    = "~/.ssh/evm-cloud"
 
 # ClickHouse connection (from ClickHouse Cloud or your own instance)
 indexer_clickhouse_url      = "https://your-instance.clickhouse.cloud:8443"
 indexer_clickhouse_password = "your-password"
 ```
 
-> **Don't have ClickHouse?** Sign up for [ClickHouse Cloud](https://clickhouse.cloud/) free tier, or use the `minimal_aws_rds` example instead (uses managed PostgreSQL, no external DB needed).
+> **Don't have ClickHouse?** Sign up for [ClickHouse Cloud](https://clickhouse.cloud/) free tier — create a service, copy the HTTPS endpoint (e.g. `https://abc123.us-east-1.aws.clickhouse.cloud:8443`) and the password. Or use the `minimal_aws_rds` example instead (uses managed PostgreSQL, no external DB needed).
 
 ### 3. Initialize and Preview
 
@@ -149,18 +157,23 @@ This takes 3-5 minutes. Terraform will:
 
 ### 5. Verify
 
-```bash
-# Get the instance IP
-terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip'
+After `evm-cloud apply` completes, the CLI prints a post-deploy summary with the instance IP and SSH command. Use the IP from that output:
 
-# SSH into the instance
-ssh -i ~/.ssh/evm-cloud ubuntu@<public-ip>
+```bash
+# SSH into the instance (IP shown in post-deploy summary)
+ssh -i ~/.ssh/evm-cloud ec2-user@<public-ip>
 
 # Check containers are running
 sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps
 ```
 
 You should see `erpc` and `rindexer` containers in `running` state.
+
+```bash
+# Verify data is flowing — check rindexer logs
+sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs rindexer --tail=20
+# Look for "Indexed block ..." or "Stored N events" messages
+```
 
 ### 6. Teardown
 

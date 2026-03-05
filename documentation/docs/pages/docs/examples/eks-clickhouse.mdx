@@ -19,7 +19,7 @@ Production-grade Kubernetes deployment on AWS EKS. Runs eRPC and rindexer as Kub
 ## What Gets Deployed
 
 - VPC with public/private subnets, NAT Gateway, security groups
-- EKS cluster with managed control plane (~$73/mo)
+- EKS cluster with managed control plane (~$73/mo) + NAT Gateway (~$32-45/mo)
 - eRPC deployment -- RPC proxy with failover and caching
 - rindexer deployment -- EVM event indexer
 - Kubernetes Secrets for ClickHouse credentials
@@ -62,9 +62,8 @@ terraform apply
 :::
 
 ```bash
-# Configure kubectl
-aws eks update-kubeconfig --name <cluster-name> --region us-east-1
-kubectl get pods
+# Verify pods
+evm-cloud kubectl get pods -n evm-cloud
 ```
 
 ## Key Variables

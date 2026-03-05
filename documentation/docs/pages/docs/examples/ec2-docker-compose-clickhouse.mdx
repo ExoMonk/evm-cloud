@@ -66,9 +66,8 @@ terraform apply -var-file=minimal_clickhouse.tfvars
 :::
 
 ```bash
-# Verify
-terraform output -json workload_handoff | jq -r '.runtime.ec2.public_ip'
-ssh -i ~/.ssh/evm-cloud ubuntu@<public-ip> 'sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps'
+# Verify (IP shown in post-deploy summary)
+ssh -i ~/.ssh/evm-cloud ec2-user@<public-ip> 'sudo docker compose -f /opt/evm-cloud/docker-compose.yml ps'
 ```
 
 ## Key Variables

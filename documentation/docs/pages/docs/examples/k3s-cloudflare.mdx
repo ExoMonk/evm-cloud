@@ -96,11 +96,6 @@ terraform apply plan.tfplan
 
 :::
 
-```bash
-# Extract handoff
-terraform output -json workload_handoff > handoff.json
-```
-
 :::code-group
 
 ```bash [CLI]
@@ -110,18 +105,15 @@ evm-cloud deploy
 
 ```bash [Deployer]
 # Phase 2: Deploy workloads + ingress
-../../deployers/k3s/deploy.sh handoff.json --config-dir ./config
+terraform output -json workload_handoff | \
+  ../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
 ```
 
 :::
 
 ### 4. Point DNS
 
-Get the EC2 IP and create a Cloudflare DNS record:
-
-```bash
-terraform output -json workload_handoff | jq -r '.runtime.k3s.host_ip'
-```
+After `evm-cloud apply`, the CLI prints the instance IP in the post-deploy summary. Use that IP to create a Cloudflare DNS record.
 
 In Cloudflare DNS, add an **A record**:
 
@@ -190,18 +182,16 @@ k3s_instance_type = "t3.medium"  # 2 vCPU, 4GB (~$30/mo)
 
 ## Teardown
 
-```bash
-../../deployers/k3s/teardown.sh handoff.json
-```
-
 :::code-group
 
 ```bash [CLI]
+evm-cloud deploy --teardown
 evm-cloud destroy --yes
 # CI/non-interactive: evm-cloud destroy --yes --auto-approve
 ```
 
 ```bash [Terraform]
+terraform output -json workload_handoff | ../../deployers/k3s/teardown.sh /dev/stdin
 terraform destroy -var-file=cloudflare_k3s.tfvars
 ```
 

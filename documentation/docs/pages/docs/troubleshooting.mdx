@@ -36,10 +36,10 @@ aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$VPC_ID" \
 terraform destroy -var-file=your.tfvars
 ```
 
-**Prevention:** Always run the teardown script before `terraform destroy` for K8s deployments:
+**Prevention:** Always tear down workloads before destroying infrastructure for K8s deployments:
 ```bash
-./deployers/k3s/teardown.sh handoff.json   # or Helm uninstall for EKS
-terraform destroy -var-file=your.tfvars
+evm-cloud deploy --teardown   # or: terraform output -json workload_handoff | ./deployers/k3s/teardown.sh /dev/stdin
+evm-cloud destroy --yes       # or: terraform destroy -var-file=your.tfvars
 ```
 
 ### Secrets Manager: "already scheduled for deletion"
@@ -58,6 +58,23 @@ terraform apply -var-file=your.tfvars
 ```
 
 **Prevention:** Set `ec2_secret_recovery_window_in_days = 0` for dev environments.
+
+### Terraform version mismatch: ">= 1.14.6"
+
+**Symptom:** `terraform init` fails with "Unsupported Terraform Core version" or the version constraint `>= 1.14.6` looks wrong.
+
+**Cause:** evm-cloud targets [OpenTofu](https://opentofu.org/), which uses version numbers >= 1.6. HashiCorp Terraform uses 1.x versions (currently ~1.9). The constraint `>= 1.14.6` is valid for OpenTofu but not for HashiCorp Terraform.
+
+**Fix:** Install OpenTofu >= 1.14.6:
+```bash
+# macOS
+brew install opentofu
+
+# Linux
+curl -fsSL https://get.opentofu.org/install-opentofu.sh | bash
+```
+
+Then use `tofu` instead of `terraform`, or alias it. The evm-cloud CLI handles this automatically.
 
 ---
 
@@ -115,8 +132,12 @@ psql -h <rds-endpoint> -U rindexer -d rindexer -c "SELECT 1"
 
 **Cause:** The handoff JSON was consumed by a previous pipe read (stdin exhaustion) or is empty.
 
-**Fix:** Write the handoff to a file instead of piping:
+**Fix:** Use the CLI or write the handoff to a file instead of piping:
 ```bash
+# Preferred: use the CLI
+evm-cloud deploy
+
+# Or write to file to avoid stdin exhaustion
 terraform output -json workload_handoff > handoff.json
 chmod 0600 handoff.json
 ./deployers/k3s/deploy.sh handoff.json --config-dir ./config

@@ -36,8 +36,7 @@ const layers: Layer[] = [
       {
         id: "cli",
         label: "evm-cloud CLI",
-        sub: "init · deploy · status · logs · scale",
-        optional: true,
+        sub: "init · apply · deploy · destroy · kubectl · local",
       },
     ],
   },

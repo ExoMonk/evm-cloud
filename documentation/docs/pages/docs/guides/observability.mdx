@@ -237,7 +237,7 @@ The k3s deployer (`deploy.sh`) checks allocatable memory before installing the m
 To force installation on small nodes:
 
 ```bash
-FORCE_MONITORING=true ./deployers/k3s/deploy.sh handoff.json
+FORCE_MONITORING=true terraform output -json workload_handoff | ./deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
 ```
 
 ---
@@ -247,7 +247,7 @@ FORCE_MONITORING=true ./deployers/k3s/deploy.sh handoff.json
 After deployment, check that all monitoring pods are running:
 
 ```bash
-kubectl get pods -n monitoring
+evm-cloud kubectl get pods -n monitoring
 ```
 
 Expected pods:
@@ -263,7 +263,7 @@ Access Grafana:
 
 ```bash
 # Via port-forward (no ingress)
-kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+evm-cloud kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
 
 # Via ingress
 curl https://grafana.yourdomain.com/api/health

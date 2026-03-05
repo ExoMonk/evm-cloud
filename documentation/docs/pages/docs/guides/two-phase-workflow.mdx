@@ -171,16 +171,12 @@ terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/s
 ### 4. Verify
 
 ```bash
-# Extract kubeconfig
-KUBECONFIG=$(mktemp)
-terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > "$KUBECONFIG"
-
 # Check pods are running
-kubectl --kubeconfig="$KUBECONFIG" get pods
+evm-cloud kubectl get pods -n evm-cloud
 
 # Check logs
-kubectl --kubeconfig="$KUBECONFIG" logs -l app=rindexer --tail=50
-kubectl --kubeconfig="$KUBECONFIG" logs -l app=erpc --tail=50
+evm-cloud kubectl logs -n evm-cloud -l app=rindexer --tail=50
+evm-cloud kubectl logs -n evm-cloud -l app=erpc --tail=50
 ```
 
 You should see both `erpc` and `rindexer` pods in `Running` state.
@@ -200,7 +196,7 @@ evm-cloud deploy --teardown
 ```
 
 ```bash [Deployer]
-./../../deployers/k3s/teardown.sh handoff.json
+terraform output -json workload_handoff | ./../../deployers/k3s/teardown.sh /dev/stdin
 ```
 
 :::
@@ -238,9 +234,17 @@ To update configuration after initial deployment (new contracts, changed RPC end
 1. Edit your config files in the `config/` directory
 2. Re-run the deployer:
 
-```bash
+:::code-group
+
+```bash [CLI]
+evm-cloud deploy
+```
+
+```bash [Deployer]
 terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/stdin --config-dir ./config
 ```
+
+:::
 
 This runs `helm upgrade`, which is idempotent. Only changed values trigger pod restarts. Unchanged services remain running without interruption.
 

@@ -96,9 +96,7 @@ terraform apply -var-file=k3s_multinode.tfvars
 
 ```bash
 # Verify nodes
-KUBECONFIG=$(mktemp)
-terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > "$KUBECONFIG"
-kubectl --kubeconfig="$KUBECONFIG" get nodes --show-labels
+evm-cloud kubectl get nodes -o wide
 # Should show: server + backfill worker with evm-cloud/role=indexer label
 ```
 
@@ -124,11 +122,22 @@ terraform output -json workload_handoff | \
 
 :::
 
-```bash
+:::code-group
+
+```bash [CLI]
+# Teardown (reverse order)
+evm-cloud deploy --teardown
+evm-cloud destroy --yes
+```
+
+```bash [Deployer]
 # Teardown (reverse order, shutting down all pods)
 terraform output -json workload_handoff | \
-./../../deployers/k3s/teardown.sh /dev/stdin
+  ./../../deployers/k3s/teardown.sh /dev/stdin
+terraform destroy -var-file=k3s_multinode.tfvars
 ```
+
+:::
 
 ## Monitoring
 

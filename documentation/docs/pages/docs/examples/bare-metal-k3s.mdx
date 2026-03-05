@@ -135,9 +135,7 @@ terraform output -json workload_handoff | \
 
 ```bash
 # Verify
-export KUBECONFIG=$(terraform output -json workload_handoff | \
-  jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > /tmp/k3s-kubeconfig && echo /tmp/k3s-kubeconfig)
-kubectl get pods -A
+evm-cloud kubectl get pods -n evm-cloud
 ```
 
 ## Key Variables

@@ -12,24 +12,31 @@ const INTERACTIVE_LINES: DemoLine[] = [
   { kind: "cmd", text: "evm-cloud init" },
   { kind: "headlineBlue", text: "🏰 ✅ Project initialized" },
   { kind: "blank", text: "" },
-  { kind: "cmd", text: "evm-cloud apply --dry-run" },
-  { kind: "default", text: "     ✓ Ran terraform plan" },
-  { kind: "headlineBlue", text: "🏖️ ✅ Dry run complete - 9s" },
-  { kind: "default", text: "      👉🏻 Logs: .evm-cloud/logs/terraform-plan-<ts>.log" },
-  { kind: "default", text: "      👉🏻 Output: .evm-cloud/logs/terraform-output-<ts>.json" },
-  { kind: "blank", text: "" },
   { kind: "cmd", text: "evm-cloud apply" },
-  { kind: "default", text: "     ✓ Ran terraform plan" },
-  { kind: "default", text: "     ✔ Apply these changes? (y/N) · yes" },
-  { kind: "spinner", text: "     🔄 Terraforming......" },
+  { kind: "headlineBlue", text: "🏰 ⚒️ Preparing apply for sandboxx" },
   { kind: "default", text: "     ✓ Ran terraform apply" },
-  { kind: "headlineBlue", text: "🏰 ✅ Infrastructure deployed - 3m 12s" },
-  { kind: "default", text: "      👉🏻 Logs: .evm-cloud/logs/terraform-apply-<ts>.log" },
-  { kind: "default", text: "      👉🏻 Output: .evm-cloud/logs/terraform-output-<ts>.json" },
+  { kind: "default", text: "     ✓ VPC + networking" },
+  { kind: "default", text: "     ✓ k3s cluster (2 nodes)" },
+  { kind: "headlineBlue", text: "🏰 ✅ Infrastructure deployed - 2m 1s" },
+  { kind: "default", text: "      👉🏻 Server       ubuntu@<>" },
+  { kind: "blank", text: "" },
+  { kind: "cmd", text: "evm-cloud deploy" },
+  { kind: "headlineBlue", text: "🏰 ⚒️ Deploying stack for sandbox" },
+  { kind: "default", text: "     🛟 ClusterSecretStore: evm-cloud-k3s-prod-aws-sm" },
+  { kind: "default", text: "     ✔ Cloudflare origin TLS secret created" },
+  { kind: "default", text: "     ✔ kube-prometheus-stack" },
+  { kind: "default", text: "     🛟 Dashboards deployed" },
+  { kind: "default", text: "     🛟 eRPC: evm-cloud-k3s-prod-erpc" },
+  { kind: "default", text: "     🛟 rindexer #1: evm-cloud-k3s-prod-indexer" },
+  { kind: "default", text: "     🛟 rindexer #2: evm-cloud-k3s-prod-backfill" },
+  { kind: "headlineBlue", text: "🏰 ✅ Stack deployed - 1m 11s" },
+  { kind: "default", text: "      👉🏻 Server       ubuntu@<>" },
+  { kind: "default", text: "      👉🏻 Grafana      https://grafana.evm-cloud.xyz" },
+  { kind: "default", text: "      👉🏻 Status       evm-cloud status" },
   { kind: "blank", text: "" },
   { kind: "cmd", text: "evm-cloud destroy --yes" },
-  { kind: "warn", text: "     🚧 running destroy in interactive mode" },
-  { kind: "default", text: "     ✔ Destroy infrastructure? (y/N) · yes" },
+  { kind: "default", text: "     🛟 Pods tore down" },
+  { kind: "default", text: "     ✔ Destroy infrastructure? (y/N) · y" },
   { kind: "spinner", text: "     🔄 Terraforming......" },
   { kind: "default", text: "     ✓ Ran terraform destroy" },
   { kind: "headlineRed", text: "🏰 🚀 Destroy complete - 55s" },
@@ -40,15 +47,29 @@ const CI_LINES: DemoLine[] = [
   { kind: "headlineBlue", text: "🏰 ✅ Project initialized" },
   { kind: "blank", text: "" },
   { kind: "cmd", text: "evm-cloud apply --auto-approve" },
-  { kind: "default", text: "     ✓ Ran terraform plan" },
-  { kind: "spinner", text: "     🔄 Terraforming......" },
+  { kind: "headlineBlue", text: "🏰 ⚒️ Preparing apply for sandbox" },
   { kind: "default", text: "     ✓ Ran terraform apply" },
-  { kind: "headlineBlue", text: "🏰 ✅ Infrastructure deployed - 3m 05s" },
-  { kind: "default", text: "      👉🏻 Logs: .evm-cloud/logs/terraform-apply-<ts>.log" },
-  { kind: "default", text: "      👉🏻 Output: .evm-cloud/logs/terraform-output-<ts>.json" },
+  { kind: "default", text: "     ✓ VPC + networking" },
+  { kind: "default", text: "     ✓ k3s cluster (2 nodes)" },
+  { kind: "headlineBlue", text: "🏰 ✅ Infrastructure deployed - 1m 58s" },
+  { kind: "default", text: "      👉🏻 Server       ubuntu@<>" },
+  { kind: "blank", text: "" },
+  { kind: "cmd", text: "evm-cloud deploy" },
+  { kind: "headlineBlue", text: "🏰 ⚒️ Deploying stack for sandbox" },
+  { kind: "default", text: "     🛟 ClusterSecretStore: evm-cloud-k3s-prod-aws-sm" },
+  { kind: "default", text: "     ✔ Cloudflare origin TLS secret created" },
+  { kind: "default", text: "     ✔ kube-prometheus-stack" },
+  { kind: "default", text: "     🛟 Dashboards deployed" },
+  { kind: "default", text: "     🛟 eRPC: evm-cloud-k3s-prod-erpc" },
+  { kind: "default", text: "     🛟 rindexer #1: evm-cloud-k3s-prod-indexer" },
+  { kind: "default", text: "     🛟 rindexer #2: evm-cloud-k3s-prod-backfill" },
+  { kind: "headlineBlue", text: "🏰 ✅ Stack deployed - 1m 8s" },
+  { kind: "default", text: "      👉🏻 Server       ubuntu@<>" },
+  { kind: "default", text: "      👉🏻 Grafana      https://grafana.evm-cloud.xyz" },
+  { kind: "default", text: "      👉🏻 Status       evm-cloud status" },
   { kind: "blank", text: "" },
   { kind: "cmd", text: "evm-cloud destroy --yes --auto-approve" },
-  { kind: "warn", text: "     🚧 running destroy in non-interactive mode" },
+  { kind: "default", text: "     🛟 Pods tore down" },
   { kind: "spinner", text: "     🔄 Terraforming......" },
   { kind: "default", text: "     ✓ Ran terraform destroy" },
   { kind: "headlineRed", text: "🏰 🚀 Destroy complete - 48s" },
@@ -61,6 +82,7 @@ const s = {
     marginTop: "24px",
     marginBottom: "28px",
     width: "min(92vw, 1040px)",
+    textAlign: "left" as const,
   },
   terminal: {
     width: "100%",
@@ -122,13 +144,15 @@ const s = {
   }),
   body: {
     padding: "20px 22px",
-    minHeight: "410px",
+    minHeight: "680px",
     fontSize: "14px",
     lineHeight: 1.65,
+    textAlign: "left" as const,
   },
   line: {
     whiteSpace: "pre-wrap" as const,
     minHeight: "1.45em",
+    textAlign: "left" as const,
   },
   prompt: {
     color: "#8b949e",
@@ -146,16 +170,16 @@ const s = {
   },
 } as const;
 
-const TYPING_SPEED = 26;
+const TYPING_SPEED = 23;
 const LINE_STAGGER = 145;
-const COMMAND_PAUSE = 340;
-const RESTART_DELAY = 4200;
+const COMMAND_PAUSE = 360;
+const RESTART_DELAY = 4500;
 
 const STAGE_LINE_INDEX = {
   init: 1,
-  dryRun: 5,
-  apply: 14,
-  destroy: 23,
+  apply: 5,
+  deploy: 13,
+  destroy: 27,
 } as const;
 
 function lineColor(kind: LineKind): string {
@@ -193,9 +217,9 @@ export function TerminalDemo() {
   const progressPct = Math.min(100, Math.round((visibleLines / lines.length) * 100));
   const status = {
     init: visibleLines > STAGE_LINE_INDEX.init,
-    dryRun: visibleLines > STAGE_LINE_INDEX.dryRun,
     apply: visibleLines > STAGE_LINE_INDEX.apply,
-    destroy: visibleLines > (mode === "interactive" ? STAGE_LINE_INDEX.destroy : 15),
+    deploy: visibleLines > STAGE_LINE_INDEX.deploy,
+    destroy: visibleLines > (mode === "interactive" ? STAGE_LINE_INDEX.destroy : 20),
   };
 
   useEffect(() => {
@@ -390,8 +414,8 @@ export function TerminalDemo() {
             </div>
             {[
               { label: "Init complete", on: status.init },
-              { label: "Plan validated", on: status.dryRun },
               { label: "Infra applied", on: status.apply },
+              { label: "Stack deployed", on: status.deploy },
               { label: "Destroy verified", on: status.destroy },
             ].map((item) => (
               <div

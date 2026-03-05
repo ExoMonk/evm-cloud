@@ -11,9 +11,11 @@ The `infrastructure_provider` variable determines what cloud platform (or lack t
 Full AWS stack. Terraform creates and manages:
 - VPC with public/private subnets
 - Compute (EC2, EKS, or k3s on EC2)
-- Database (RDS PostgreSQL or BYODB ClickHouse)
+- Database (RDS PostgreSQL or BYODB ClickHouse) — *BYODB = Bring Your Own Database: you provide an existing database endpoint, evm-cloud connects to it*
 - Secrets Manager for credentials
 - IAM roles with least-privilege policies
+
+> **Cost note:** EKS deployments with private subnets include a NAT Gateway (~$32-45/mo). This is in addition to the EKS control plane fee (~$73/mo). See [Cost Estimates](./cost-estimates.mdx) for full breakdowns.
 - Security groups with tight ingress rules
 
 ```hcl

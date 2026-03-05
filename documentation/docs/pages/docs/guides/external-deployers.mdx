@@ -118,14 +118,21 @@ Then on the deploy machine:
 
 > **Warning:** `handoff.json` contains database passwords and potentially a full kubeconfig. Treat it as a credential. Do not commit it to version control. Delete it after use. See [Secrets Management](./secrets-management.mdx) for production handling.
 
+### Use evm-cloud CLI (simplest)
+
+The CLI handles kubeconfig extraction and deploy orchestration automatically:
+
+```bash
+evm-cloud deploy              # deploy workloads
+evm-cloud kubectl get pods    # kubectl with auto-resolved kubeconfig
+evm-cloud deploy --teardown   # remove workloads
+```
+
 ### Extract individual fields
 
 For custom pipelines, extract specific values with `jq`:
 
 ```bash
-# Get kubeconfig for kubectl
-terraform output -json workload_handoff | jq -r '.runtime.k3s.kubeconfig_base64' | base64 -d > /tmp/kubeconfig
-
 # Get database connection string
 DB_HOST=$(terraform output -json workload_handoff | jq -r '.data.host')
 DB_PASS=$(terraform output -json workload_handoff | jq -r '.data.password')

@@ -48,14 +48,14 @@ evm-cloud --version
 
 ## Prerequisites
 
-The CLI wraps Terraform — you'll also need:
+The CLI wraps OpenTofu (Terraform-compatible) — you'll also need:
 
 | Tool | Version | Install |
 |------|---------|---------|
-| **Terraform** | >= 1.14.6 | [terraform.io/downloads](https://developer.hashicorp.com/terraform/downloads) |
+| **OpenTofu** | >= 1.14.6 | [opentofu.org/docs/intro/install](https://opentofu.org/docs/intro/install/) |
 | **AWS CLI** | v2 | [docs.aws.amazon.com/cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
 
-If your project `versions.tf` requires a higher Terraform version, use that higher version.
+> **Note:** evm-cloud uses [OpenTofu](https://opentofu.org/), an open-source fork of Terraform. The version constraint `>= 1.14.6` targets OpenTofu versioning (not HashiCorp Terraform). All `terraform` commands in this documentation work with `tofu` as a drop-in replacement.
 
 ## What's Next
 
