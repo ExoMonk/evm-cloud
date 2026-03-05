@@ -47,7 +47,7 @@ variable "k3s_api_allowed_cidrs" {
 variable "k3s_instance_type" {
   description = "EC2 instance type for k3s host"
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "k3s_version" {

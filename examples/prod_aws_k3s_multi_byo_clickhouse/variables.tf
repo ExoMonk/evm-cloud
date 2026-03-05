@@ -47,7 +47,7 @@ variable "k3s_api_allowed_cidrs" {
 variable "k3s_instance_type" {
   description = "EC2 instance type for k3s host"
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "k3s_version" {
@@ -61,12 +61,12 @@ variable "k3s_worker_nodes" {
   type = list(object({
     name          = string
     role          = optional(string, "general")
-    instance_type = optional(string, "t3.medium")
+    instance_type = optional(string, "t3.small")
     use_spot      = optional(bool, false)
     host          = optional(string)
   }))
   default = [
-    { name = "backfill", role = "indexer", instance_type = "t3.medium", use_spot = true },
+    { name = "backfill", role = "indexer", instance_type = "t3.small", use_spot = true },
   ]
 }
 
@@ -154,13 +154,14 @@ variable "ec2_secret_recovery_window_in_days" {
 variable "indexer_instances" {
   description = "Indexer instances. Each becomes a separate Helm release with optional per-instance config."
   type = list(object({
-    name       = string
-    config_key = optional(string)
-    node_role  = optional(string)
+    name          = string
+    config_key    = optional(string)
+    node_role     = optional(string)
+    workload_type = optional(string) # "deployment" (default) or "job" (one-shot backfill)
   }))
   default = [
-    { name = "indexer" },                                                  # live: runs on server, uses config/rindexer.yaml
-    { name = "backfill", config_key = "backfill", node_role = "indexer" }, # backfill: runs on worker, uses config/backfill/rindexer.yaml
+    { name = "indexer" },                                                                              # live: runs on server, uses config/rindexer.yaml
+    { name = "backfill", config_key = "backfill", node_role = "indexer", workload_type = "job" },      # backfill: runs on worker as k8s Job
   ]
 }
 

@@ -24,7 +24,7 @@ indexer_enabled   = true
 # config/backfill/rindexer.yaml → backfill indexer (config_key = "backfill")
 indexer_instances = [
   { name = "indexer", node_role = "server" },
-  { name = "backfill", config_key = "backfill", node_role = "indexer" },
+  { name = "backfill", config_key = "backfill", node_role = "indexer", workload_type = "job" },
 ]
 
 # ClickHouse BYODB

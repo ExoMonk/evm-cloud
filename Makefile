@@ -5,7 +5,7 @@ LOCALSTACK_ENDPOINT ?= http://localhost:4566
 
 LOCAL_ENV = AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_SESSION_TOKEN=test AWS_REGION=$(AWS_REGION) AWS_ENDPOINT_URL=$(LOCALSTACK_ENDPOINT)
 
-.PHONY: fmt-check validate lint security qa plan verify up down test-k8s test-e2e-k8s docs docs-dev cli-build cli-check evm-cloud local-up local-down local-status local-reset
+.PHONY: fmt-check validate lint security qa plan verify up down test-k8s test-e2e-k8s docs docs-dev cli-build cli-check evm-cloud local local-up local-down local-status local-reset
 
 # --- QA ---
 
@@ -26,11 +26,28 @@ qa: fmt-check validate lint security
 
 # --- LocalStack lifecycle ---
 
+# Support `make local <up|down|status|reset>` without accidentally invoking
+# LocalStack's `up` / `down` targets.
+local:
+	@subcmd="$(word 2,$(MAKECMDGOALS))"; \
+	case "$$subcmd" in \
+	  up) $(MAKE) local-up ARGS="$(ARGS)" ;; \
+	  down) $(MAKE) local-down ;; \
+	  status) $(MAKE) local-status ;; \
+	  reset) $(MAKE) local-reset ARGS="$(ARGS)" ;; \
+	  "") echo "Usage: make local <up|down|status|reset> [ARGS='...']"; exit 1 ;; \
+	  *) echo "Unknown local subcommand: $$subcmd"; exit 1 ;; \
+	esac
+
 up:
-	docker compose -f $(LOCALSTACK_COMPOSE_FILE) up -d --wait
+	@if [ "$(firstword $(MAKECMDGOALS))" = "local" ]; then :; else \
+		docker compose -f $(LOCALSTACK_COMPOSE_FILE) up -d --wait > /dev/null; \
+	fi
 
 down:
-	docker compose -f $(LOCALSTACK_COMPOSE_FILE) down
+	@if [ "$(firstword $(MAKECMDGOALS))" = "local" ]; then :; else \
+		docker compose -f $(LOCALSTACK_COMPOSE_FILE) down > /dev/null; \
+	fi
 
 # --- Plan an example against LocalStack ---
 # Usage: make plan EXAMPLE=minimal_rds

@@ -84,6 +84,7 @@ cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Phase 1: Provision EC2 + k3s
 evm-cloud init
 evm-cloud apply
+# CI/non-interactive: evm-cloud apply --auto-approve
 ```
 
 ```bash [Terraform]
@@ -186,6 +187,7 @@ k3s_instance_type = "t3.medium"  # 2 vCPU, 4GB (~$30/mo)
 
 ```bash [CLI]
 evm-cloud destroy --yes
+# CI/non-interactive: evm-cloud destroy --yes --auto-approve
 ```
 
 ```bash [Terraform]

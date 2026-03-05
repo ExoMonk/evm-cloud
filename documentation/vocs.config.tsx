@@ -86,6 +86,7 @@ export default defineConfig({
     {
       text: "Guides",
       items: [
+        { text: "Local Dev Stack", link: "/docs/guides/local-dev" },
         {
           text: "TLS & Ingress",
           link: "/docs/guides/tls-ingress",
@@ -102,7 +103,6 @@ export default defineConfig({
           text: "External Deployers",
           link: "/docs/guides/external-deployers",
         },
-        { text: "Local Dev Stack", link: "/docs/guides/local-dev" },
         { text: "Observability", link: "/docs/guides/observability" },
         { text: "Config Updates", link: "/docs/guides/config-updates" },
         {
