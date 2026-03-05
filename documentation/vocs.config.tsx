@@ -37,6 +37,10 @@ export default defineConfig({
       link: "/docs/getting-started",
     },
     {
+      text: "Use Cases",
+      link: "/docs/use-cases",
+    },
+    {
       text: "Install CLI",
       link: "/docs/install",
     },

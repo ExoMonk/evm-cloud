@@ -1,0 +1,78 @@
+# Use Cases
+
+Real-world scenarios where evm-cloud replaces weeks of custom DevOps with a single `evm-cloud deploy`.
+
+## DeFi Analytics
+
+**For:** Data teams, protocol analysts, quant researchers
+
+**Stack:** ClickHouse + rindexer + eRPC
+
+Index decoded swap, liquidity, and lending events across any EVM chain into ClickHouse for sub-second analytical queries. Backfill historical data and stream live events in parallel.
+
+**Why evm-cloud:** No need to stitch together an RPC provider, a custom indexer, and a data warehouse. One config file, one deploy command. Query 1.2M decoded events in 28ms.
+
+**Recommended pattern:** [EC2 + Docker + ClickHouse](/docs/examples/ec2-docker-compose-clickhouse) for small teams, [k3s multi-node](/docs/examples/k3s-multi-clickhouse) for production workloads with separate backfill and live workers.
+
+
+## Protocol Monitoring
+
+**For:** Protocol teams, security teams, on-chain ops
+
+**Stack:** Prometheus + Grafana + rindexer + webhooks
+
+Monitor contract events in real-time. Get decoded events pushed to your API via webhook in sub-5ms — no polling, no subgraph delays. Set up Grafana alerts on indexer lag, missed events, or custom thresholds.
+
+**Why evm-cloud:** Built-in observability (Prometheus + Grafana) and webhook streaming out of the box. Add a `streams` section to your `rindexer.yaml` and your API starts receiving decoded events immediately.
+
+**Recommended pattern:** [k3s + ClickHouse](/docs/examples/k3s-clickhouse) for lightweight K8s with monitoring, or [Prod k3s multi-node](/docs/examples/k3s-multi-clickhouse) for full observability stack with Secrets Manager.
+
+
+## NFT & Marketplace Indexing
+
+**For:** NFT platforms, marketplace builders, collection analytics
+
+**Stack:** PostgreSQL + rindexer
+
+Index marketplace events (listings, sales, transfers, bids) without managed services. Store decoded events in PostgreSQL for relational queries — ownership histories, floor price tracking, collection stats.
+
+**Why evm-cloud:** Starts at ~$5/mo on bare metal. No vendor fees, no API rate limits. Your data, your queries, your uptime.
+
+**Recommended pattern:** [Bare Metal + ClickHouse](/docs/examples/bare-metal-clickhouse) for lowest cost, [EC2 + Docker + RDS](/docs/examples/ec2-docker-compose-rds) for managed PostgreSQL with zero-ops database.
+
+
+## Multi-Chain Data Pipeline
+
+**For:** Data engineers, cross-chain analytics platforms, aggregators
+
+**Stack:** k3s multi-node + ClickHouse
+
+Run indexers for multiple EVM chains from a single deployment. Each chain gets its own rindexer instance with dedicated eRPC upstreams. ClickHouse handles the unified query layer across all chains.
+
+**Why evm-cloud:** One `evm-cloud.toml` config, any number of chains. Backfill and live indexing run in parallel on separate k3s workers. Add a new chain by updating the config and redeploying.
+
+**Recommended pattern:** [Prod k3s multi-node + ClickHouse](/docs/examples/k3s-multi-clickhouse) with spot workers for backfill nodes.
+
+
+## On-Chain App Backend
+
+**For:** Solo builders, indie hackers, dApp teams
+
+**Stack:** EC2 + Docker Compose + webhooks
+
+Your app receives decoded blockchain events via webhook: no polling, no subgraph, no managed service dependency. Build a backend that reacts to on-chain events in real-time: update user balances, trigger notifications, sync state.
+
+**Why evm-cloud:** Deploy the full indexing backend in 3 minutes. Your app just implements a webhook endpoint. rindexer handles decoding, filtering, and delivery.
+
+**Recommended pattern:** [EC2 + Docker + ClickHouse](/docs/examples/ec2-docker-compose-clickhouse) for simplest setup, [Bare Metal](/docs/examples/bare-metal-clickhouse) if you already have a VPS.
+
+## Getting Started
+
+Pick the use case closest to yours, follow the recommended pattern link, and run:
+
+```bash
+evm-cloud init     # interactive wizard configures your stack
+evm-cloud deploy   # provisions infra + deploys workloads
+```
+
+See [Choosing an Example](/docs/examples) for a full comparison of all deployment patterns.
