@@ -76,11 +76,11 @@ ssh-keygen -t ed25519 -C "evm-cloud" -f ~/.ssh/evm-cloud
 
 We'll use the `minimal_aws_byo_clickhouse` example — EC2 instance running eRPC + rindexer with an external ClickHouse database.
 
-### 1. Clone and Navigate
+### 1. Initialize the example
 
 ```bash
-git clone https://github.com/ExoMonk/evm-cloud.git
-cd evm-cloud/examples/minimal_aws_byo_clickhouse
+mkdir base_example && cd base_example
+evm-cloud init --example ec2_clickhouse 
 ```
 
 Optional: list available presets from repo examples:
@@ -109,17 +109,15 @@ indexer_clickhouse_password = "your-password"
 
 > **Don't have ClickHouse?** Sign up for [ClickHouse Cloud](https://clickhouse.cloud/) free tier — create a service, copy the HTTPS endpoint (e.g. `https://abc123.us-east-1.aws.clickhouse.cloud:8443`) and the password. Or use the `minimal_aws_rds` example instead (uses managed PostgreSQL, no external DB needed).
 
-### 3. Initialize and Preview
+### 3. Preview
 
 :::code-group
 
 ```bash [CLI]
-evm-cloud init
 evm-cloud deploy --dry-run
 ```
 
 ```bash [Terraform]
-terraform init
 terraform plan -var-file=minimal_clickhouse.tfvars
 ```
 

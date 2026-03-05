@@ -16,7 +16,7 @@ type DemoLine = {
 };
 
 const INTERACTIVE_LINES: DemoLine[] = [
-  { kind: "cmd", text: "evm-cloud init" },
+  { kind: "cmd", text: "evm-cloud init --example ec2_clickhouse" },
   { kind: "default", text: "     ✓ Terraform project ready" },
   { kind: "headlineBlue", text: "   🏰 ✅ Project initialized" },
   { kind: "blank", text: "" },
