@@ -222,6 +222,7 @@ dependencies = [
  "base64",
  "clap",
  "dialoguer",
+ "libc",
  "serde",
  "serde_json",
  "sha2",

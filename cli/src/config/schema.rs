@@ -30,6 +30,8 @@ pub(crate) struct ComputeConfig {
     pub(crate) engine: ComputeEngine,
     #[serde(default)]
     pub(crate) instance_type: Option<String>,
+    #[serde(default)]
+    pub(crate) workload_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

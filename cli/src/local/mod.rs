@@ -34,9 +34,14 @@ pub(crate) enum LocalCommand {
 
 #[derive(Args)]
 pub(crate) struct UpArgs {
-    /// RPC URL for Anvil to fork from (default: Ethereum mainnet via publicnode)
+    /// RPC URL for Anvil to fork from (default: Ethereum mainnet via publicnode).
+    /// With --mainnet: used as the direct RPC upstream (no Anvil).
     #[arg(long)]
     rpc: Option<String>,
+
+    /// Mainnet mode: skip Anvil, point eRPC directly at --rpc URL
+    #[arg(long)]
+    mainnet: bool,
 
     /// Fresh mode: no fork, chain_id=31337
     #[arg(long)]
@@ -54,9 +59,9 @@ pub(crate) struct UpArgs {
     #[arg(long, value_enum, default_value_t = Profile::Default)]
     profile: Profile,
 
-    /// Path to rindexer.yaml or config directory containing rindexer.yaml + abis/
+    /// Path to config directory containing rindexer.yaml + abis/, or direct path to rindexer.yaml
     #[arg(long)]
-    config: Option<PathBuf>,
+    config_dir: Option<PathBuf>,
 
     /// Script to run after stack is healthy
     #[arg(long)]
@@ -71,9 +76,14 @@ pub(crate) struct StatusArgs;
 
 #[derive(Args)]
 pub(crate) struct ResetArgs {
-    /// RPC URL for Anvil to fork from
+    /// RPC URL for Anvil to fork from.
+    /// With --mainnet: used as the direct RPC upstream (no Anvil).
     #[arg(long)]
     rpc: Option<String>,
+
+    /// Mainnet mode: skip Anvil, point eRPC directly at --rpc URL
+    #[arg(long)]
+    mainnet: bool,
 
     /// Fresh mode: no fork, chain_id=31337
     #[arg(long)]
@@ -91,9 +101,9 @@ pub(crate) struct ResetArgs {
     #[arg(long, value_enum, default_value_t = Profile::Default)]
     profile: Profile,
 
-    /// Path to rindexer.yaml or config directory containing rindexer.yaml + abis/
+    /// Path to config directory containing rindexer.yaml + abis/, or direct path to rindexer.yaml
     #[arg(long)]
-    config: Option<PathBuf>,
+    config_dir: Option<PathBuf>,
 
     /// Script to run after stack is healthy
     #[arg(long)]
@@ -111,14 +121,24 @@ pub(crate) fn run(cmd: LocalCommand, color: ColorMode) -> Result<()> {
 
 fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
     let started = Instant::now();
+    let mainnet = args.mainnet;
+
+    // Validate flag combos
+    if mainnet && args.fresh {
+        return Err(CliError::ToolFailed {
+            tool: "local".into(),
+            details: "--mainnet and --fresh are mutually exclusive".into(),
+        });
+    }
+
     output::headline("🏰 ⚒️ Starting local dev stack", color);
 
-    // Determine fork URL and chain ID
-    let (fork_url, chain_id) = resolve_fork_mode(&args.rpc, args.fresh, color)?;
+    // Determine RPC mode and chain ID
+    let (fork_url, chain_id) = resolve_fork_mode(&args.rpc, args.fresh, mainnet, color)?;
 
     // Load or generate rindexer config
     let (rindexer_yaml, abis) = resolve_rindexer_config(
-        args.config.as_deref(),
+        args.config_dir.as_deref(),
         args.fresh,
         chain_id,
         color,
@@ -149,16 +169,27 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
     })?;
     output::checkline("ClickHouse ready — localhost:8123", color);
 
-    output::with_spinner("Deploying Anvil", color, || {
-        deploy::deploy_anvil(fork_url.as_deref(), &profile_res.anvil, color)
-    })?;
-    output::checkline("Anvil ready — localhost:8545", color);
+    if mainnet {
+        // Mainnet mode: no Anvil — eRPC points directly at the user's RPC
+        let rpc_url = fork_url.as_deref().expect("mainnet mode requires rpc url");
+        let erpc_values =
+            config::generate_erpc_values_mainnet(chain_id, rpc_url, &profile_res.erpc);
+        output::with_spinner("Deploying eRPC", color, || {
+            deploy::deploy_erpc(&erpc_values, color)
+        })?;
+        output::checkline("eRPC ready — localhost:4000", color);
+    } else {
+        output::with_spinner("Deploying Anvil", color, || {
+            deploy::deploy_anvil(fork_url.as_deref(), &profile_res.anvil, color)
+        })?;
+        output::checkline("Anvil ready — localhost:8545", color);
 
-    let erpc_values = config::generate_erpc_values(chain_id, &profile_res.erpc);
-    output::with_spinner("Deploying eRPC", color, || {
-        deploy::deploy_erpc(&erpc_values, color)
-    })?;
-    output::checkline("eRPC ready — localhost:4000", color);
+        let erpc_values = config::generate_erpc_values(chain_id, &profile_res.erpc);
+        output::with_spinner("Deploying eRPC", color, || {
+            deploy::deploy_erpc(&erpc_values, color)
+        })?;
+        output::checkline("eRPC ready — localhost:4000", color);
+    }
 
     let indexer_values =
         config::generate_indexer_values(&rindexer_yaml, &abis, chain_id, &profile_res.indexer);
@@ -169,9 +200,11 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
 
     // Health checks
     let mut all_healthy = true;
-    if health::wait_for_anvil(30).is_err() {
-        output::warn("Anvil health check timed out", color);
-        all_healthy = false;
+    if !mainnet {
+        if health::wait_for_anvil(30).is_err() {
+            output::warn("Anvil health check timed out", color);
+            all_healthy = false;
+        }
     }
     if health::wait_for_http("http://localhost:4000", 30).is_err() {
         output::warn("eRPC health check timed out", color);
@@ -199,7 +232,7 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
         ),
         color,
     );
-    print_summary(fork_url.as_deref(), chain_id, color);
+    print_summary(fork_url.as_deref(), chain_id, mainnet, color);
 
     Ok(())
 }
@@ -278,11 +311,12 @@ fn run_reset(args: ResetArgs, color: ColorMode) -> Result<()> {
     run_up(
         UpArgs {
             rpc: args.rpc,
+            mainnet: args.mainnet,
             fresh: args.fresh,
             persist: args.persist,
             force: true,
             profile: args.profile,
-            config: args.config,
+            config_dir: args.config_dir,
             post_deploy: args.post_deploy,
         },
         color,
@@ -292,6 +326,7 @@ fn run_reset(args: ResetArgs, color: ColorMode) -> Result<()> {
 fn resolve_fork_mode(
     rpc: &Option<String>,
     fresh: bool,
+    mainnet: bool,
     color: ColorMode,
 ) -> Result<(Option<String>, u64)> {
     if fresh {
@@ -299,15 +334,20 @@ fn resolve_fork_mode(
         return Ok((None, 31337));
     }
 
-    let fork_url = rpc
+    let rpc_url = rpc
         .clone()
         .unwrap_or_else(|| config::DEFAULT_FORK_RPC.to_string());
 
-    output::subline(&format!("Probing chain ID from {fork_url}..."), color);
-    let chain_id = health::probe_chain_id(&fork_url)?;
-    output::subline(&format!("Fork mode — chain_id={chain_id}"), color);
+    output::subline(&format!("Probing chain ID from {rpc_url}..."), color);
+    let chain_id = health::probe_chain_id(&rpc_url)?;
 
-    Ok((Some(fork_url), chain_id))
+    if mainnet {
+        output::subline(&format!("Mainnet mode — chain_id={chain_id}, no Anvil"), color);
+    } else {
+        output::subline(&format!("Fork mode — chain_id={chain_id}"), color);
+    }
+
+    Ok((Some(rpc_url), chain_id))
 }
 
 fn resolve_rindexer_config(
@@ -364,17 +404,25 @@ fn run_post_deploy(script: &std::path::Path, chain_id: u64, color: ColorMode) ->
     Ok(())
 }
 
-fn print_summary(fork_url: Option<&str>, chain_id: u64, color: ColorMode) {
-    eprintln!("     👉🏻 Anvil         http://localhost:8545");
+fn print_summary(fork_url: Option<&str>, chain_id: u64, mainnet: bool, color: ColorMode) {
+    if !mainnet {
+        eprintln!("     👉🏻 Anvil         http://localhost:8545");
+    }
     eprintln!("     👉🏻 eRPC          http://localhost:4000");
     eprintln!("     👉🏻 ClickHouse    http://localhost:8123");
     eprintln!("     👉🏻 rindexer      http://localhost:18080");
-    if let Some(url) = fork_url {
+    if mainnet {
+        if let Some(url) = fork_url {
+            output::subline(&format!("Chain ID: {chain_id} (mainnet via {url})"), color);
+        }
+    } else if let Some(url) = fork_url {
         output::subline(&format!("Chain ID: {chain_id} (fork from {url})"), color);
     } else {
         output::subline(&format!("Chain ID: {chain_id} (Anvil fresh)"), color);
     }
-    eprintln!("     👉🏻 Deploy:    forge create src/MyContract.sol:MyContract --rpc-url http://localhost:8545");
+    if !mainnet {
+        eprintln!("     👉🏻 Deploy:    forge create src/MyContract.sol:MyContract --rpc-url http://localhost:8545");
+    }
     eprintln!("     👉🏻 Query CH:  curl 'http://localhost:8123/?user=default&password=local-dev' -d 'SHOW TABLES'");
     eprintln!("     👉🏻 Status:    evm-cloud local status");
     eprintln!("     👉🏻 Tear down: evm-cloud local down");

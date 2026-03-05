@@ -59,7 +59,9 @@ pub(crate) fn generate_main_tf(config: &EvmCloudConfig, project_root: &Path) -> 
         module_lines.push("  indexer_postgres_url    = var.indexer_postgres_url".to_string());
     } else {
         module_lines.push("  indexer_clickhouse_url      = var.indexer_clickhouse_url".to_string());
+        module_lines.push("  indexer_clickhouse_user     = var.indexer_clickhouse_user".to_string());
         module_lines.push("  indexer_clickhouse_password = var.indexer_clickhouse_password".to_string());
+        module_lines.push("  indexer_clickhouse_db       = var.indexer_clickhouse_db".to_string());
     }
 
     // Indexer / RPC
@@ -127,7 +129,9 @@ pub(crate) fn generate_variables_tf(config: &EvmCloudConfig, project_root: &Path
         var_decls.push(var_decl_sensitive("indexer_postgres_url"));
     } else {
         var_decls.push(var_decl_sensitive("indexer_clickhouse_url"));
+        var_decls.push(var_decl_default("indexer_clickhouse_user", "string", "default"));
         var_decls.push(var_decl_sensitive("indexer_clickhouse_password"));
+        var_decls.push(var_decl_default("indexer_clickhouse_db", "string", "rindexer"));
     }
 
     var_decls.push(var_decl("rpc_proxy_enabled", "bool"));

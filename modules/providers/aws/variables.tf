@@ -318,7 +318,7 @@ variable "indexer_clickhouse_password" {
 variable "indexer_clickhouse_db" {
   description = "ClickHouse database name."
   type        = string
-  default     = "default"
+  default     = "rindexer"
 }
 
 # --- Config injection ---

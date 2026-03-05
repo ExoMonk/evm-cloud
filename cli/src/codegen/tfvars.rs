@@ -39,8 +39,13 @@ struct TerraformVars {
     indexer_storage_backend: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     postgres_enabled: Option<bool>,
-    // NOTE: indexer_postgres_url and indexer_clickhouse_url are intentionally omitted.
-    // They are sensitive and must be provided via secrets.auto.tfvars.
+    // NOTE: indexer_postgres_url, indexer_clickhouse_url, and indexer_clickhouse_password
+    // are intentionally omitted. They are sensitive and must be provided via secrets.auto.tfvars.
+    // ClickHouse non-sensitive defaults
+    #[serde(skip_serializing_if = "Option::is_none")]
+    indexer_clickhouse_user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    indexer_clickhouse_db: Option<String>,
     // Indexer / RPC
     indexer_enabled: bool,
     rpc_proxy_enabled: bool,
@@ -70,10 +75,14 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
     let is_bare_metal = config.database.provider == "bare_metal";
     let is_postgres = config.database.storage_backend == "postgres";
     let engine = config.compute.engine.as_str();
-    let workload_mode = match engine {
-        "k3s" | "eks" => "external",
-        _ => "terraform",
-    };
+    let workload_mode = config
+        .compute
+        .workload_mode
+        .as_deref()
+        .unwrap_or(match engine {
+            "k3s" | "eks" => "external",
+            _ => "terraform",
+        });
 
     let vars = TerraformVars {
         project_name: config.project.name.clone(),
@@ -93,6 +102,8 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
         // Database / storage
         indexer_storage_backend: config.database.storage_backend.clone(),
         postgres_enabled: if is_postgres { Some(true) } else { None },
+        indexer_clickhouse_user: if !is_postgres { Some("default".to_string()) } else { None },
+        indexer_clickhouse_db: if !is_postgres { Some("rindexer".to_string()) } else { None },
         // Indexer / RPC
         indexer_enabled: true,
         rpc_proxy_enabled: !erpc_yaml.is_empty(),

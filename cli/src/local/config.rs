@@ -145,6 +145,54 @@ config:
     )
 }
 
+pub(crate) fn generate_erpc_values_mainnet(
+    chain_id: u64,
+    rpc_url: &str,
+    res: &ResourceSet,
+) -> String {
+    format!(
+        r#"fullnameOverride: local-erpc
+service:
+  type: NodePort
+  nodePort: 30400
+  port: 4000
+resources:
+  requests:
+    cpu: {cpu_req}
+    memory: {mem_req}
+  limits:
+    cpu: {cpu_lim}
+    memory: {mem_lim}
+config:
+  erpcYaml: |
+    logLevel: debug
+    server:
+      listenV4: true
+      httpHostV4: 0.0.0.0
+      httpPort: 4000
+    projects:
+      - id: local
+        networks:
+          - architecture: evm
+            evm:
+              chainId: {chain_id}
+        networkDefaults:
+          failsafe:
+            retry:
+              maxAttempts: 3
+              delay: 500ms
+        upstreams:
+          - id: mainnet-rpc
+            endpoint: {rpc_url}
+            type: evm
+"#,
+        cpu_req = res.cpu_req,
+        mem_req = res.mem_req,
+        cpu_lim = res.cpu_lim,
+        mem_lim = res.mem_lim,
+    )
+}
+
 pub(crate) fn generate_indexer_values(
     rindexer_yaml: &str,
     abis: &[(String, String)],

@@ -231,7 +231,9 @@ pub(crate) fn render_main_tf(answers: &InitAnswers) -> String {
         lines.push("  indexer_postgres_url    = var.indexer_postgres_url".to_string());
     } else {
         lines.push("  indexer_clickhouse_url      = var.indexer_clickhouse_url".to_string());
+        lines.push("  indexer_clickhouse_user     = var.indexer_clickhouse_user".to_string());
         lines.push("  indexer_clickhouse_password = var.indexer_clickhouse_password".to_string());
+        lines.push("  indexer_clickhouse_db       = var.indexer_clickhouse_db".to_string());
     }
 
     // Indexer / RPC
@@ -306,7 +308,9 @@ pub(crate) fn render_variables_tf(answers: &InitAnswers) -> String {
         blocks.push(tf_var_sensitive("indexer_postgres_url"));
     } else {
         blocks.push(tf_var_sensitive("indexer_clickhouse_url"));
+        blocks.push(tf_var("indexer_clickhouse_user", "string", "default"));
         blocks.push(tf_var_sensitive("indexer_clickhouse_password"));
+        blocks.push(tf_var("indexer_clickhouse_db", "string", "rindexer"));
     }
 
     // Indexer / RPC
@@ -342,6 +346,9 @@ fn infer_secrets_mode(answers: &InitAnswers) -> String {
 }
 
 fn infer_workload_mode(answers: &InitAnswers) -> String {
+    if let Some(ref wm) = answers.workload_mode {
+        return wm.clone();
+    }
     match answers.compute_engine.as_str() {
         "k3s" | "eks" => "external".to_string(),
         _ => "terraform".to_string(),
@@ -461,6 +468,70 @@ fn map_database_profile(profile: DatabaseProfile) -> (&'static str, &'static str
         DatabaseProfile::ManagedRds => ("managed", "aws"),
         DatabaseProfile::ManagedClickhouse => ("managed", "aws"),
     }
+}
+
+pub(crate) fn render_docker_compose_yml(answers: &InitAnswers) -> String {
+    let has_erpc = answers.generate_erpc_config;
+    let mut lines = vec!["services:".to_string()];
+
+    if has_erpc {
+        lines.extend([
+            "  erpc:".to_string(),
+            "    image: ghcr.io/erpc/erpc:latest".to_string(),
+            "    container_name: erpc".to_string(),
+            "    restart: unless-stopped".to_string(),
+            "    ports:".to_string(),
+            "      - \"4000:4000\"".to_string(),
+            "    volumes:".to_string(),
+            "      - /opt/evm-cloud/config/erpc.yaml:/config/erpc.yaml:ro".to_string(),
+            "    command: [\"/erpc-server\", \"--config\", \"/config/erpc.yaml\"]".to_string(),
+            "    env_file:".to_string(),
+            "      - /opt/evm-cloud/.env".to_string(),
+            "    deploy:".to_string(),
+            "      resources:".to_string(),
+            "        limits:".to_string(),
+            "          memory: 1g".to_string(),
+            "    networks:".to_string(),
+            "      - evm-cloud".to_string(),
+            String::new(),
+        ]);
+    }
+
+    lines.extend([
+        "  rindexer:".to_string(),
+        "    image: ghcr.io/joshstevens19/rindexer:latest".to_string(),
+        "    container_name: rindexer".to_string(),
+        "    restart: unless-stopped".to_string(),
+        "    volumes:".to_string(),
+        "      - /opt/evm-cloud/config:/config:ro".to_string(),
+        "    command: [\"start\", \"--path\", \"/config\", \"all\"]".to_string(),
+        "    env_file:".to_string(),
+        "      - /opt/evm-cloud/.env".to_string(),
+        "    deploy:".to_string(),
+        "      resources:".to_string(),
+        "        limits:".to_string(),
+        "          memory: 1g".to_string(),
+    ]);
+
+    if has_erpc {
+        lines.extend([
+            "    depends_on:".to_string(),
+            "      erpc:".to_string(),
+            "        condition: service_started".to_string(),
+        ]);
+    }
+
+    lines.extend([
+        "    networks:".to_string(),
+        "      - evm-cloud".to_string(),
+        String::new(),
+        "networks:".to_string(),
+        "  evm-cloud:".to_string(),
+        "    driver: bridge".to_string(),
+        String::new(),
+    ]);
+
+    lines.join("\n")
 }
 
 fn render_endpoints(endpoints: &BTreeMap<String, String>) -> String {

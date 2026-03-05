@@ -68,6 +68,22 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
         init_templates::erc20_abi_json(),
     )?;
 
+    // Generate docker-compose.yml for external mode with compose-based engines.
+    let workload_mode = answers.workload_mode.as_deref().unwrap_or(
+        match answers.compute_engine.as_str() {
+            "k3s" | "eks" => "external",
+            _ => "terraform",
+        },
+    );
+    if workload_mode == "external"
+        && matches!(answers.compute_engine.as_str(), "ec2" | "docker_compose")
+    {
+        write_atomic(
+            &project_root.join("config").join("docker-compose.yml"),
+            &init_templates::render_docker_compose_yml(answers),
+        )?;
+    }
+
     let secrets_content = init_templates::render_secrets_example(answers);
     write_atomic(
         &project_root.join("secrets.auto.tfvars.example"),

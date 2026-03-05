@@ -49,6 +49,7 @@ pub(crate) struct InitAnswers {
     pub(crate) region: Option<String>,
     pub(crate) compute_engine: String,
     pub(crate) instance_type: Option<String>,
+    pub(crate) workload_mode: Option<String>,
     pub(crate) database_profile: DatabaseProfile,
     pub(crate) chains: Vec<String>,
     pub(crate) rpc_endpoints: BTreeMap<String, String>,
@@ -65,6 +66,7 @@ struct AnswersFile {
     region: Option<String>,
     compute_engine: String,
     instance_type: Option<String>,
+    workload_mode: Option<String>,
     database_profile: Option<DatabaseProfile>,
     chains: Vec<String>,
     rpc_endpoints: BTreeMap<String, String>,
@@ -116,6 +118,7 @@ fn from_runtime_config(config: EvmCloudConfig) -> InitAnswers {
         region: config.project.region,
         compute_engine: config.compute.engine.as_str().to_string(),
         instance_type: config.compute.instance_type,
+        workload_mode: config.compute.workload_mode,
         database_profile: DatabaseProfile::ByodbClickhouse,
         chains: config.indexer.chains,
         rpc_endpoints: endpoints,
@@ -175,6 +178,7 @@ fn from_answers_file(file: AnswersFile, mode_override: Option<InitMode>) -> Resu
         region: file.region,
         compute_engine: file.compute_engine,
         instance_type: file.instance_type,
+        workload_mode: file.workload_mode,
         database_profile: file
             .database_profile
             .unwrap_or(DatabaseProfile::ByodbClickhouse),

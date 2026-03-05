@@ -109,11 +109,17 @@ pub(crate) enum CliError {
     #[error("deploy lock already held at {path}")]
     DeployLockBusy { path: PathBuf },
 
+    #[error("deploy flag conflict: {message}")]
+    DeployFlagConflict { message: String },
+
     #[error("deployer process failed with exit code {code}")]
     DeployerFailed { code: i32 },
 
     #[error("deployer process terminated by signal {signal:?}")]
     DeployerSignaled { signal: Option<i32> },
+
+    #[error("deploy timed out after {seconds}s")]
+    DeployerTimedOut { seconds: u64 },
 
     #[error("{tool} not found on PATH. Install it and retry")]
     PrerequisiteNotFound { tool: String },

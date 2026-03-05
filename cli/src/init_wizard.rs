@@ -70,6 +70,20 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .map_err(|err| CliError::Message(err.to_string()))?;
     let compute_engine = compute_options[compute_idx].to_string();
 
+    // k3s/eks always use external deployers; ec2/docker_compose can choose.
+    let workload_mode = if matches!(compute_engine.as_str(), "ec2" | "docker_compose") {
+        let wm_options = ["terraform", "external"];
+        let wm_idx = Select::with_theme(&theme)
+            .with_prompt("Workload deployment mode (terraform = TF provisioners manage compose; external = CLI deployer)")
+            .items(&wm_options)
+            .default(0)
+            .interact()
+            .map_err(|err| CliError::Message(err.to_string()))?;
+        Some(wm_options[wm_idx].to_string())
+    } else {
+        None // k3s/eks → always "external", inferred downstream
+    };
+
     let region = if is_aws {
         Some(
             Input::with_theme(&theme)
@@ -171,6 +185,7 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         region,
         compute_engine,
         instance_type,
+        workload_mode,
         database_profile,
         chains,
         rpc_endpoints,

@@ -22,7 +22,7 @@ use clap::{Parser, Subcommand};
 /// Terraform module source pointing at the GitHub tag matching this CLI version.
 pub(crate) fn module_source() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    format!("git::https://github.com/ExoMonk/evm-cloud.git?ref=v{version}")
+    format!("git::https://github.com/ExoMonk/evm-cloud.git?ref={version}")
 }
 
 use crate::commands::apply::ApplyArgs;

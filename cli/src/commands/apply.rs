@@ -14,14 +14,14 @@ use crate::post_deploy;
 use crate::preflight::{self, ProjectKind};
 use crate::terraform::TerraformRunner;
 
-fn ensure_non_interactive_terraform(args: &mut Vec<String>) {
+pub(crate) fn ensure_non_interactive_terraform(args: &mut Vec<String>) {
     if args.iter().any(|arg| arg == "-input=false" || arg == "-input=true") {
         return;
     }
     args.push("-input=false".to_string());
 }
 
-fn terraform_log_path(terraform_dir: &Path, op: &str) -> Result<PathBuf> {
+pub(crate) fn terraform_log_path(terraform_dir: &Path, op: &str) -> Result<PathBuf> {
     let logs_dir = if terraform_dir.file_name().and_then(|v| v.to_str()) == Some(".evm-cloud") {
         terraform_dir.join("logs")
     } else {
@@ -41,7 +41,7 @@ fn terraform_log_path(terraform_dir: &Path, op: &str) -> Result<PathBuf> {
     Ok(logs_dir.join(format!("terraform-{op}-{ts}.log")))
 }
 
-fn terraform_output_path(terraform_dir: &Path) -> Result<PathBuf> {
+pub(crate) fn terraform_output_path(terraform_dir: &Path) -> Result<PathBuf> {
     let logs_dir = if terraform_dir.file_name().and_then(|v| v.to_str()) == Some(".evm-cloud") {
         terraform_dir.join("logs")
     } else {
@@ -204,7 +204,7 @@ pub(crate) fn run(args: ApplyArgs, color: ColorMode) -> Result<()> {
     }
 
     output::checkline("Ran terraform apply", color);
-    eprintln!("     ✓  VPC + networking");
+    eprintln!("     ✓ VPC + networking");
 
     if let Some(handoff) = parsed_handoff.as_ref() {
         if handoff.compute_engine == "k3s" {
