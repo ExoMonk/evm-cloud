@@ -146,6 +146,8 @@ output "workload_handoff" {
         url  = var.indexer_clickhouse_url
         user = var.indexer_clickhouse_user
         db   = var.indexer_clickhouse_db
+        # Password only included in handoff when secrets_mode=inline (parity with AWS provider handoff)
+        password = (var.compute_engine == "k3s" && var.secrets_mode == "inline") ? var.indexer_clickhouse_password : null
       } : null
     }
 

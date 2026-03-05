@@ -116,9 +116,10 @@ variable "rindexer_abis" {
 variable "indexer_instances" {
   description = "Multiple indexer instances with independent configs. Empty = single instance (backward compat)."
   type = list(object({
-    name       = string
-    config_key = optional(string)
-    node_role  = optional(string)
+    name          = string
+    config_key    = optional(string)
+    node_role     = optional(string)
+    workload_type = optional(string) # "deployment" (default) or "job" (one-shot backfill)
   }))
   default = []
 }

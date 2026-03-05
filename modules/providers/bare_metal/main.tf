@@ -12,7 +12,9 @@ locals {
   # Secret payload — same shape as EC2 module for consistency
   secret_payload = merge(
     local.resolved_indexer_rpc_url != "" ? { RPC_URL = local.resolved_indexer_rpc_url } : {},
-    var.indexer_storage_backend == "postgres" ? {} : {},
+    var.indexer_storage_backend == "postgres" && var.indexer_postgres_url != "" ? {
+      DATABASE_URL = var.indexer_postgres_url
+    } : {},
     var.indexer_storage_backend == "clickhouse" ? {
       CLICKHOUSE_URL      = var.indexer_clickhouse_url
       CLICKHOUSE_USER     = var.indexer_clickhouse_user

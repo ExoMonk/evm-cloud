@@ -344,9 +344,10 @@ variable "rindexer_abis" {
 variable "indexer_instances" {
   description = "Multiple indexer instances with independent configs. Empty = single instance (backward compat)."
   type = list(object({
-    name       = string
-    config_key = optional(string)
-    node_role  = optional(string)
+    name          = string
+    config_key    = optional(string)
+    node_role     = optional(string)
+    workload_type = optional(string) # "deployment" (default) or "job" (one-shot backfill)
   }))
   default = []
 }
@@ -362,7 +363,7 @@ variable "k3s_version" {
 variable "k3s_instance_type" {
   description = "EC2 instance type for k3s host."
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "k3s_ssh_private_key_path" {
@@ -383,7 +384,7 @@ variable "k3s_worker_nodes" {
   type = list(object({
     name          = string
     role          = optional(string, "general")
-    instance_type = optional(string, "t3.medium")
+    instance_type = optional(string, "t3.small")
     use_spot      = optional(bool, false)
     host          = optional(string)
   }))

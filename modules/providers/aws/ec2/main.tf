@@ -204,6 +204,17 @@ resource "null_resource" "config_update" {
     port        = 22
   }
 
+  # Wait for cloud-init to finish and ensure directory ownership.
+  # cloud-init writes files as root, then runcmd creates dirs + chowns.
+  # We must wait for the full cycle before uploading via SCP.
+  provisioner "remote-exec" {
+    inline = [
+      "sudo cloud-init status --wait >/dev/null 2>&1 || true",
+      "sudo mkdir -p /opt/evm-cloud/config/abis /opt/evm-cloud/scripts /opt/evm-cloud/certs",
+      "sudo chown -R ${self.triggers.ssh_user}:${self.triggers.ssh_user} /opt/evm-cloud",
+    ]
+  }
+
   # Upload docker-compose.yml
   provisioner "file" {
     content     = local.docker_compose_content
