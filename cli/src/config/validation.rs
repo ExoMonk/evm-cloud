@@ -5,8 +5,24 @@ use crate::error::{CliError, Result};
 
 pub(crate) fn validate(config: &EvmCloudConfig) -> Result<()> {
     validate_non_empty("project.name", &config.project.name)?;
-    validate_non_empty("project.region", &config.project.region)?;
-    validate_non_empty("compute.instance_type", &config.compute.instance_type)?;
+
+    let is_aws = config.database.provider == "aws";
+
+    if is_aws {
+        if let Some(ref region) = config.project.region {
+            validate_non_empty("project.region", region)?;
+        } else {
+            return Err(CliError::ConfigValidation {
+                field: "project.region".to_string(),
+                message: "required when infrastructure provider is aws".to_string(),
+            });
+        }
+    }
+
+    if let Some(ref instance_type) = config.compute.instance_type {
+        validate_non_empty("compute.instance_type", instance_type)?;
+    }
+
     validate_non_empty("database.mode", &config.database.mode)?;
     validate_non_empty("database.provider", &config.database.provider)?;
     validate_non_empty("ingress.mode", &config.ingress.mode)?;

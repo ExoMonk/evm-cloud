@@ -56,6 +56,16 @@ impl TerraformRunner {
         self.run_captured(dir, &args)
     }
 
+    /// Skip init if `.terraform/` already exists (modules already downloaded).
+    /// Forces re-init when passthrough args are provided (e.g. `-reconfigure`).
+    pub(crate) fn init_if_needed(&self, dir: &Path, passthrough_args: &[String]) -> Result<bool> {
+        if passthrough_args.is_empty() && dir.join(".terraform").is_dir() {
+            return Ok(false);
+        }
+        self.init(dir, passthrough_args)?;
+        Ok(true)
+    }
+
     pub(crate) fn apply_captured_with_log(
         &self,
         dir: &Path,

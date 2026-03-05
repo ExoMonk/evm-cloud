@@ -59,7 +59,11 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
 
     let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
     let terraform_dir = match preflight.project_kind {
-        ProjectKind::EasyToml => easy_mode::prepare_workspace(&preflight.resolved_root, color)?,
+        ProjectKind::EasyToml => {
+            // Silently regenerate bridge files — destroy needs matching variable
+            // declarations but the user doesn't need to see "Generated" output.
+            easy_mode::prepare_workspace_quiet(&preflight.resolved_root)?
+        }
         ProjectKind::RawTerraform => preflight.resolved_root.clone(),
     };
 
@@ -91,7 +95,6 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
     }
 
     if !args.auto_approve {
-        eprintln!();
         let confirmed = output::confirmline("Destroy infrastructure?", color)
             .map_err(|err| CliError::Other(err.into()))?;
 
@@ -109,12 +112,10 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
     })?;
 
     if kube_target {
-        output::checkline("Kube Pods tore down", color);
-        eprintln!();
+        output::checkline("🛟 Pods tore down", color);
     }
 
     output::checkline("Ran terraform destroy", color);
-    eprintln!();
     output::headline_red(
         &format!(
             "🏰 🚀 Destroy complete - {}",

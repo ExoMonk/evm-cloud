@@ -45,9 +45,10 @@ pub(crate) enum IndexerConfigStrategy {
 pub(crate) struct InitAnswers {
     pub(crate) mode: InitMode,
     pub(crate) project_name: String,
-    pub(crate) region: String,
+    pub(crate) infrastructure_provider: String,
+    pub(crate) region: Option<String>,
     pub(crate) compute_engine: String,
-    pub(crate) instance_type: String,
+    pub(crate) instance_type: Option<String>,
     pub(crate) database_profile: DatabaseProfile,
     pub(crate) chains: Vec<String>,
     pub(crate) rpc_endpoints: BTreeMap<String, String>,
@@ -60,6 +61,7 @@ pub(crate) struct InitAnswers {
 struct AnswersFile {
     mode: Option<InitMode>,
     project_name: String,
+    infrastructure_provider: Option<String>,
     region: Option<String>,
     compute_engine: String,
     instance_type: Option<String>,
@@ -110,6 +112,7 @@ fn from_runtime_config(config: EvmCloudConfig) -> InitAnswers {
     InitAnswers {
         mode: InitMode::Easy,
         project_name: config.project.name,
+        infrastructure_provider: config.database.provider.clone(),
         region: config.project.region,
         compute_engine: config.compute.engine.as_str().to_string(),
         instance_type: config.compute.instance_type,
@@ -166,11 +169,12 @@ fn from_answers_file(file: AnswersFile, mode_override: Option<InitMode>) -> Resu
     Ok(InitAnswers {
         mode: mode_override.or(file.mode).unwrap_or(InitMode::Easy),
         project_name: file.project_name,
-        region: file.region.unwrap_or_else(|| "us-east-1".to_string()),
+        infrastructure_provider: file
+            .infrastructure_provider
+            .unwrap_or_else(|| "aws".to_string()),
+        region: file.region,
         compute_engine: file.compute_engine,
-        instance_type: file
-            .instance_type
-            .unwrap_or_else(|| "t3.micro".to_string()),
+        instance_type: file.instance_type,
         database_profile: file
             .database_profile
             .unwrap_or(DatabaseProfile::ByodbClickhouse),

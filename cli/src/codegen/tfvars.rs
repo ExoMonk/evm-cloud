@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -14,20 +15,41 @@ const GENERATED_TFVARS: &str = "terraform.auto.tfvars.json";
 #[derive(Serialize)]
 struct TerraformVars {
     project_name: String,
-    aws_region: String,
     infrastructure_provider: String,
     database_mode: String,
     compute_engine: String,
-    ec2_instance_type: String,
+    workload_mode: String,
+    secrets_mode: String,
     ingress_mode: String,
     erpc_hostname: String,
     ingress_tls_email: String,
-    secrets_mode: String,
+    // Provider-specific infra (AWS)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    networking_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    aws_region: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ec2_instance_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    k3s_instance_type: Option<String>,
+    // NOTE: ssh_public_key, ec2_ssh_private_key_path, k3s_ssh_private_key_path,
+    // bare_metal_host, bare_metal_ssh_private_key_path are intentionally omitted.
+    // They are sensitive and must be provided via secrets.auto.tfvars.
+    // Database / storage
+    indexer_storage_backend: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    postgres_enabled: Option<bool>,
+    // NOTE: indexer_postgres_url and indexer_clickhouse_url are intentionally omitted.
+    // They are sensitive and must be provided via secrets.auto.tfvars.
+    // Indexer / RPC
     indexer_enabled: bool,
     rpc_proxy_enabled: bool,
     indexer_rpc_url: String,
     rindexer_config_yaml: String,
     erpc_config_yaml: String,
+    // ABI files: map of filename → JSON content
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    rindexer_abis: BTreeMap<String, String>,
 }
 
 pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> Result<Value> {
@@ -45,22 +67,39 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
         String::new()
     };
 
+    let is_bare_metal = config.database.provider == "bare_metal";
+    let is_postgres = config.database.storage_backend == "postgres";
+    let engine = config.compute.engine.as_str();
+    let workload_mode = match engine {
+        "k3s" | "eks" => "external",
+        _ => "terraform",
+    };
+
     let vars = TerraformVars {
         project_name: config.project.name.clone(),
-        aws_region: config.project.region.clone(),
         infrastructure_provider: config.database.provider.clone(),
         database_mode: config.database.mode.clone(),
-        compute_engine: config.compute.engine.as_str().to_string(),
-        ec2_instance_type: config.compute.instance_type.clone(),
+        compute_engine: engine.to_string(),
+        workload_mode: workload_mode.to_string(),
+        secrets_mode: config.secrets.mode.clone(),
         ingress_mode: config.ingress.mode.clone(),
         erpc_hostname: config.ingress.domain.clone().unwrap_or_default(),
         ingress_tls_email: config.ingress.tls_email.clone().unwrap_or_default(),
-        secrets_mode: config.secrets.mode.clone(),
+        // AWS infra
+        networking_enabled: if is_bare_metal { None } else { Some(true) },
+        aws_region: if is_bare_metal { None } else { Some(config.project.region.clone().unwrap_or_else(|| "us-east-1".to_string())) },
+        ec2_instance_type: if !is_bare_metal && engine == "ec2" { config.compute.instance_type.clone().or(Some(String::new())) } else { None },
+        k3s_instance_type: if !is_bare_metal && engine == "k3s" { config.compute.instance_type.clone().or(Some(String::new())) } else { None },
+        // Database / storage
+        indexer_storage_backend: config.database.storage_backend.clone(),
+        postgres_enabled: if is_postgres { Some(true) } else { None },
+        // Indexer / RPC
         indexer_enabled: true,
         rpc_proxy_enabled: !erpc_yaml.is_empty(),
         indexer_rpc_url: infer_indexer_rpc_url(config, !erpc_yaml.is_empty())?,
         rindexer_config_yaml: rindexer_yaml,
         erpc_config_yaml: erpc_yaml,
+        rindexer_abis: load_abi_files(&config.indexer.config_path)?,
     };
 
     let json_value = serde_json::to_value(&vars).map_err(CliError::OutputParseError)?;
@@ -71,6 +110,42 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
 
     ensure_gitignore_entry(project_root, &format!("{GENERATED_DIR}/{GENERATED_TFVARS}"))?;
     Ok(json_value)
+}
+
+/// Load ABI JSON files from the `abis/` directory sibling to the rindexer config.
+fn load_abi_files(rindexer_config_path: &Path) -> Result<BTreeMap<String, String>> {
+    let abis_dir = rindexer_config_path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("abis");
+
+    let mut abis = BTreeMap::new();
+    if !abis_dir.is_dir() {
+        return Ok(abis);
+    }
+
+    let entries = fs::read_dir(&abis_dir).map_err(|source| CliError::Io {
+        source,
+        path: abis_dir.clone(),
+    })?;
+
+    for entry in entries {
+        let entry = entry.map_err(|source| CliError::Io {
+            source,
+            path: abis_dir.clone(),
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let content = fs::read_to_string(&path).map_err(|source| CliError::Io {
+                source,
+                path: path.clone(),
+            })?;
+            abis.insert(name, content);
+        }
+    }
+
+    Ok(abis)
 }
 
 pub(crate) fn ensure_gitignore_entry(project_root: &Path, entry: &str) -> Result<()> {

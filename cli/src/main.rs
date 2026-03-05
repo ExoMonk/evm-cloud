@@ -12,16 +12,24 @@ mod init_templates;
 mod init_wizard;
 mod local;
 mod output;
+mod post_deploy;
 mod preflight;
 mod terraform;
 mod version_guard;
 
 use clap::{Parser, Subcommand};
 
+/// Terraform module source pointing at the GitHub tag matching this CLI version.
+pub(crate) fn module_source() -> String {
+    let version = env!("CARGO_PKG_VERSION");
+    format!("git::https://github.com/ExoMonk/evm-cloud.git?ref=v{version}")
+}
+
 use crate::commands::apply::ApplyArgs;
 use crate::commands::deploy::DeployArgs;
 use crate::commands::destroy::DestroyArgs;
 use crate::commands::init::InitArgs;
+use crate::commands::kubectl::KubectlArgs;
 use crate::commands::logs::LogsArgs;
 use crate::commands::status::StatusArgs;
 use crate::error::CliError;
@@ -47,6 +55,7 @@ enum Commands {
     Init(InitArgs),
     Apply(ApplyArgs),
     Deploy(DeployArgs),
+    Kubectl(KubectlArgs),
     Status(StatusArgs),
     Logs(LogsArgs),
     Destroy(DestroyArgs),
@@ -67,6 +76,7 @@ fn main() {
         Commands::Init(args) => commands::init::run(args, cli.color),
         Commands::Apply(args) => commands::apply::run(args, cli.color),
         Commands::Deploy(args) => commands::deploy::run(args, cli.color),
+        Commands::Kubectl(args) => commands::kubectl::run(args),
         Commands::Status(args) => commands::status::run(args, cli.color),
         Commands::Logs(args) => commands::logs::run(args, cli.color),
         Commands::Destroy(args) => commands::destroy::run(args, cli.color),

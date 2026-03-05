@@ -1,48 +1,73 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::profiles::ResourceSet;
 use crate::error::{CliError, Result};
 
 pub(crate) const DEFAULT_FORK_RPC: &str = "https://ethereum-rpc.publicnode.com";
 
-pub(crate) const STARTER_RINDEXER_YAML_FORK: &str = r#"name: local-indexer
-project_type: no-code
-networks:
-  - name: ethereum
-    chain_id: 1
-    rpc: http://local-erpc:4000/local/evm/1
-storage:
-  clickhouse:
-    enabled: true
-contracts:
-  - name: Placeholder
-    details:
-      - network: ethereum
-        address: "0x0000000000000000000000000000000000000001"
-        start_block: "0"
-    abi: ./abis/placeholder.json
-"#;
+pub(crate) const ERC20_ABI: &str = r#"[
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "from", "type": "address" },
+      { "indexed": true, "name": "to", "type": "address" },
+      { "indexed": false, "name": "value", "type": "uint256" }
+    ],
+    "name": "Transfer",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "owner", "type": "address" },
+      { "indexed": true, "name": "spender", "type": "address" },
+      { "indexed": false, "name": "value", "type": "uint256" }
+    ],
+    "name": "Approval",
+    "type": "event"
+  }
+]"#;
 
-pub(crate) const STARTER_RINDEXER_YAML_FRESH: &str = r#"name: local-indexer
-project_type: no-code
-networks:
-  - name: anvil
-    chain_id: 31337
-    rpc: http://local-erpc:4000/local/evm/31337
-storage:
-  clickhouse:
-    enabled: true
-contracts:
-  - name: Placeholder
-    details:
-      - network: anvil
-        address: "0x0000000000000000000000000000000000000001"
-        start_block: "0"
-    abi: ./abis/placeholder.json
-"#;
+fn default_rindexer_yaml(fresh: bool, chain_id: u64) -> String {
+    let (network_name, effective_chain_id) = if fresh {
+        ("anvil", 31337)
+    } else {
+        ("ethereum", chain_id)
+    };
 
-pub(crate) const PLACEHOLDER_ABI: &str = r#"[{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":false,"name":"value","type":"uint256"}],"name":"Transfer","type":"event"}]"#;
+    format!(
+        "name: local-indexer\nproject_type: no-code\nnetworks:\n  - name: {network_name}\n    chain_id: {effective_chain_id}\n    rpc: http://local-erpc:4000/local/evm/{effective_chain_id}\nstorage:\n  clickhouse:\n    enabled: true\ncontracts:\n  - name: USDC\n    details:\n      - network: {network_name}\n        address: \"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"\n        start_block: \"0\"\n    abi: ./abis/ERC20.json\n"
+    )
+}
+
+pub(crate) fn ensure_default_config_bundle(fresh: bool, chain_id: u64) -> Result<PathBuf> {
+    let config_dir = PathBuf::from("config");
+    let abis_dir = config_dir.join("abis");
+    let rindexer_path = config_dir.join("rindexer.yaml");
+    let erc20_abi_path = abis_dir.join("ERC20.json");
+
+    fs::create_dir_all(&abis_dir).map_err(|source| CliError::Io {
+        source,
+        path: abis_dir.clone(),
+    })?;
+
+    if !rindexer_path.is_file() {
+        fs::write(&rindexer_path, default_rindexer_yaml(fresh, chain_id)).map_err(|source| CliError::Io {
+            source,
+            path: rindexer_path.clone(),
+        })?;
+    }
+
+    if !erc20_abi_path.is_file() {
+        fs::write(&erc20_abi_path, ERC20_ABI).map_err(|source| CliError::Io {
+            source,
+            path: erc20_abi_path.clone(),
+        })?;
+    }
+
+    Ok(rindexer_path)
+}
 
 pub(crate) fn generate_kind_config(persist: bool) -> Result<String> {
     let base_mappings = r#"kind: Cluster
@@ -223,15 +248,25 @@ pub(crate) fn data_dir() -> String {
 
 pub(crate) fn resolve_config_path(explicit: Option<&Path>) -> Option<std::path::PathBuf> {
     if let Some(p) = explicit {
-        if p.exists() {
+        if p.is_file() {
             return Some(p.to_path_buf());
         }
+
+        if p.is_dir() {
+            let candidate = p.join("rindexer.yaml");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+            return None;
+        }
+
         return None;
     }
-    let default = std::path::PathBuf::from("rindexer.yaml");
-    if default.exists() {
-        Some(default)
-    } else {
-        None
+
+    let preferred = std::path::PathBuf::from("config").join("rindexer.yaml");
+    if preferred.is_file() {
+        return Some(preferred);
     }
+
+    None
 }

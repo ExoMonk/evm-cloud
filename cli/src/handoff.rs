@@ -28,19 +28,30 @@ pub(crate) struct Runtime {
     pub(crate) ec2: Option<Ec2Runtime>,
     pub(crate) k3s: Option<K3sRuntime>,
     pub(crate) bare_metal: Option<BareMetalRuntime>,
-    pub(crate) eks: Option<Value>,
+    pub(crate) eks: Option<EksRuntime>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct Ec2Runtime {
     pub(crate) public_ip: Option<String>,
+    pub(crate) cloudwatch_log_group: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub(crate) struct EksRuntime {
+    pub(crate) cluster_name: Option<String>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct K3sRuntime {
+    pub(crate) host_ip: Option<String>,
     pub(crate) kubeconfig_base64: Option<String>,
+    pub(crate) node_name: Option<String>,
+    #[serde(default)]
+    pub(crate) worker_nodes: Vec<Value>,
 }
 
 #[allow(dead_code)]

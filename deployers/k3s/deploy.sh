@@ -135,7 +135,7 @@ if [[ "$SECRETS_MODE" != "inline" ]]; then
       --namespace external-secrets --create-namespace \
       --version "$ESO_CHART_VERSION" \
       --set installCRDs=true \
-      --atomic --timeout 300s
+      --rollback-on-failure --timeout 300s
     echo "[evm-cloud] ESO installed."
   else
     echo "[evm-cloud] ESO CRDs already present."
@@ -191,6 +191,28 @@ CSSEOF
       exit 1
     fi
     echo "[evm-cloud] ClusterSecretStore ${EXT_STORE} verified."
+    STORE_NAME="$EXT_STORE"
+  fi
+
+  # Verify the referenced ClusterSecretStore is actually Ready before workload Helm installs.
+  # This avoids indexer rollback timeouts when ExternalSecret cannot fetch from provider.
+  STORE_READY=false
+  for i in $(seq 1 24); do
+    STORE_COND=$(kubectl get clustersecretstore "$STORE_NAME" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
+    if [[ "$STORE_COND" == "True" ]]; then
+      STORE_READY=true
+      break
+    fi
+    echo "[evm-cloud] Waiting for ClusterSecretStore ${STORE_NAME} to become Ready... (${i}/24)"
+    sleep 5
+  done
+
+  if [[ "$STORE_READY" != "true" ]]; then
+    echo "ERROR: ClusterSecretStore '${STORE_NAME}' is not Ready after 120s." >&2
+    echo "  This usually means provider auth or secret access is misconfigured." >&2
+    echo "  Check store status: kubectl describe clustersecretstore ${STORE_NAME}" >&2
+    echo "  Check ESO logs: kubectl -n external-secrets logs deploy/external-secrets --tail=100" >&2
+    exit 1
   fi
 fi
 
@@ -252,11 +274,11 @@ HEADERSEOF
         --set controller.config.add-headers="ingress-nginx/ingress-nginx-custom-headers" \
         --set controller.hostPort.enabled=true \
         --set controller.service.type=ClusterIP \
-        --set controller.nodeSelector."node-role\.kubernetes\.io/master"=true \
+        --set-string controller.nodeSelector."node-role\.kubernetes\.io/master"=true \
         --set controller.tolerations[0].key="node-role.kubernetes.io/master" \
         --set controller.tolerations[0].effect="NoSchedule" \
         "${NGINX_EXTRA_ARGS[@]}" \
-        --atomic --timeout 300s
+        --rollback-on-failure --timeout 300s
       echo "[evm-cloud] ingress-nginx installed."
     else
       echo "[evm-cloud] ingress-nginx already present."
@@ -277,7 +299,7 @@ HEADERSEOF
         --namespace cert-manager --create-namespace \
         --version "$CERT_MANAGER_VERSION" \
         --set crds.enabled=true \
-        --atomic --timeout 300s
+        --rollback-on-failure --timeout 300s
       echo "[evm-cloud] cert-manager installed."
     else
       echo "[evm-cloud] cert-manager CRDs already present."
@@ -395,8 +417,12 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
 fi
 
 if [[ "$MONITORING_ENABLED" == "true" ]]; then
-  echo "[evm-cloud] Installing kube-prometheus-stack (v${KUBE_PROM_VERSION})..."
   kubectl create namespace monitoring 2>/dev/null || true
+
+  if helm status monitoring -n monitoring >/dev/null 2>&1; then
+    echo "[evm-cloud] kube-prometheus-stack already present."
+  else
+  echo "[evm-cloud] Installing kube-prometheus-stack (v${KUBE_PROM_VERSION})..."
 
   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
   helm repo update prometheus-community
@@ -473,41 +499,50 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
 
   helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
     "${PROM_ARGS[@]}" \
-    --atomic --timeout 600s
+    --rollback-on-failure --timeout 600s
   echo "[evm-cloud] kube-prometheus-stack installed."
+  fi # end helm status guard
 
   # Optional: Loki + Promtail
   if [[ "$LOKI_ENABLED" == "true" ]]; then
-    echo "[evm-cloud] Installing Loki (v${LOKI_VERSION})..."
-    helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
-    helm repo update grafana
+    if helm status loki -n monitoring >/dev/null 2>&1; then
+      echo "[evm-cloud] Loki already present."
+    else
+      echo "[evm-cloud] Installing Loki (v${LOKI_VERSION})..."
+      helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
+      helm repo update grafana
 
-    LOKI_ARGS=(
-      --namespace monitoring
-      --version "$LOKI_VERSION"
-      --set deploymentMode=SingleBinary
-      --set loki.auth_enabled=false
-      --set singleBinary.replicas=1
-      --set loki.commonConfig.replication_factor=1
-      --set loki.storage.type=filesystem
-      --set singleBinary.persistence.enabled="$LOKI_PERSISTENCE"
-      --set read.replicas=0
-      --set write.replicas=0
-      --set backend.replicas=0
-    )
+      LOKI_ARGS=(
+        --namespace monitoring
+        --version "$LOKI_VERSION"
+        --set deploymentMode=SingleBinary
+        --set loki.auth_enabled=false
+        --set singleBinary.replicas=1
+        --set loki.commonConfig.replication_factor=1
+        --set loki.storage.type=filesystem
+        --set singleBinary.persistence.enabled="$LOKI_PERSISTENCE"
+        --set read.replicas=0
+        --set write.replicas=0
+        --set backend.replicas=0
+      )
 
-    helm upgrade --install loki grafana/loki \
-      "${LOKI_ARGS[@]}" \
-      --atomic --timeout 300s
-    echo "[evm-cloud] Loki installed."
+      helm upgrade --install loki grafana/loki \
+        "${LOKI_ARGS[@]}" \
+        --rollback-on-failure --timeout 300s
+      echo "[evm-cloud] Loki installed."
+    fi
 
-    echo "[evm-cloud] Installing Promtail (v${PROMTAIL_VERSION})..."
-    helm upgrade --install promtail grafana/promtail \
-      --namespace monitoring \
-      --version "$PROMTAIL_VERSION" \
-      --set "config.clients[0].url=http://loki.monitoring.svc:3100/loki/api/v1/push" \
-      --atomic --timeout 300s
-    echo "[evm-cloud] Promtail installed."
+    if helm status promtail -n monitoring >/dev/null 2>&1; then
+      echo "[evm-cloud] Promtail already present."
+    else
+      echo "[evm-cloud] Installing Promtail (v${PROMTAIL_VERSION})..."
+      helm upgrade --install promtail grafana/promtail \
+        --namespace monitoring \
+        --version "$PROMTAIL_VERSION" \
+        --set "config.clients[0].url=http://loki.monitoring.svc:3100/loki/api/v1/push" \
+        --rollback-on-failure --timeout 300s
+      echo "[evm-cloud] Promtail installed."
+    fi
   fi
 
   # Deploy dashboards + alert rules chart
@@ -524,6 +559,19 @@ fi
 
 RPC_PROXY_ENABLED=$(jq -r '.services.rpc_proxy != null' "$HANDOFF_FILE")
 INDEXER_ENABLED=$(jq -r '.services.indexer != null' "$HANDOFF_FILE")
+
+# --- Indexer config sanity checks ---
+
+if [[ "$INDEXER_ENABLED" == "true" ]]; then
+  # Default scaffolded config has `contracts: []`; deploying it causes crashlooping pods.
+  # Fail early with a clear message instead of waiting for runtime crashes.
+  if [[ -f "$CONFIG_DIR/rindexer.yaml" ]] && grep -Eq '^[[:space:]]*contracts:[[:space:]]*\[[[:space:]]*\][[:space:]]*$' "$CONFIG_DIR/rindexer.yaml"; then
+    echo "ERROR: rindexer config has an empty contracts list in ${CONFIG_DIR}/rindexer.yaml" >&2
+    echo "  Add at least one contract to index, then redeploy." >&2
+    echo "  Or disable indexer for this stack if you only want eRPC/infra." >&2
+    exit 1
+  fi
+fi
 
 if [[ "$RPC_PROXY_ENABLED" == "true" ]]; then
   echo "[evm-cloud] Deploying eRPC (${PROJECT}-erpc)..."

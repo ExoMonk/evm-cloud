@@ -96,6 +96,8 @@ pub(crate) fn bootstrap_example_to_dir(
         })?;
     }
 
+    rewrite_module_source(destination_dir)?;
+
     let wrote_power_metadata = ensure_power_mode_metadata(destination_dir, &selected.canonical, force)?;
 
     Ok(BootstrapResult {
@@ -624,6 +626,42 @@ fn is_excluded_path(relative: &Path) -> bool {
     relative.components().any(|component| {
         matches!(component, Component::Normal(part) if part == ".terraform" || part == ".git")
     })
+}
+
+/// Rewrite `source = "../.."` (relative dev path) to the published GitHub module source
+/// in all `.tf` files under the destination directory.
+fn rewrite_module_source(dir: &Path) -> Result<()> {
+    let module_source = crate::module_source();
+    let entries = fs::read_dir(dir).map_err(|source| CliError::Io {
+        source,
+        path: dir.to_path_buf(),
+    })?;
+
+    for entry in entries {
+        let entry = entry.map_err(|source| CliError::Io {
+            source,
+            path: dir.to_path_buf(),
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("tf") {
+            let content = fs::read_to_string(&path).map_err(|source| CliError::Io {
+                source,
+                path: path.clone(),
+            })?;
+            if content.contains("source = \"../..\"") {
+                let updated = content.replace(
+                    "source = \"../..\"",
+                    &format!("source = \"{module_source}\""),
+                );
+                fs::write(&path, updated).map_err(|source| CliError::Io {
+                    source,
+                    path: path.clone(),
+                })?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn collect_source_files(root: &Path, cursor: &Path) -> Result<Vec<PathBuf>> {

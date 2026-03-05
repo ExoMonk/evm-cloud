@@ -37,6 +37,7 @@ pub(crate) struct InitArgs {
 }
 
 pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
+    let started = std::time::Instant::now();
     let allow_raw_terraform = args.allow_raw_terraform || args.example.is_some();
 
     output::headline(
@@ -126,7 +127,10 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
             match preflight.project_kind {
                 ProjectKind::EasyToml => easy_mode::prepare_workspace(&preflight.resolved_root, color)?,
-                ProjectKind::RawTerraform => preflight.resolved_root.clone(),
+                ProjectKind::RawTerraform => {
+                    output::checkline("Terraform project ready", color);
+                    preflight.resolved_root.clone()
+                }
             }
         }
         Err(CliError::NoProjectDetected { .. }) => {
@@ -139,14 +143,21 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
             match answers.mode {
                 InitMode::Easy => easy_mode::prepare_workspace(&args.dir, color)?,
-                InitMode::Power => args.dir.clone(),
+                InitMode::Power => {
+                    output::checkline("Generated Terraform files (versions.tf, main.tf, variables.tf, outputs.tf)", color);
+                    output::checkline("Generated secrets.auto.tfvars.example", color);
+                    args.dir.clone()
+                }
             }
         }
         Err(other) => return Err(other),
     };
 
     if args.skip_terraform_init {
-        output::headline("🏰 ✅ Project initialized", color);
+        output::headline(
+            &format!("🏰 ✅ Project initialized - {}", output::duration_human(started.elapsed())),
+            color,
+        );
         return Ok(());
     }
 
@@ -159,7 +170,10 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
         output::with_terraforming(color, || runner.validate(&terraform_dir))?;
     }
 
-    output::headline("🏰 ✅ Project initialized", color);
+    output::headline(
+        &format!("🏰 ✅ Project initialized - {}", output::duration_human(started.elapsed())),
+        color,
+    );
 
     Ok(())
 }

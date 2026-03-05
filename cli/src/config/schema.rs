@@ -20,14 +20,16 @@ pub(crate) struct EvmCloudConfig {
 #[serde(deny_unknown_fields)]
 pub(crate) struct ProjectConfig {
     pub(crate) name: String,
-    pub(crate) region: String,
+    #[serde(default)]
+    pub(crate) region: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ComputeConfig {
     pub(crate) engine: ComputeEngine,
-    pub(crate) instance_type: String,
+    #[serde(default)]
+    pub(crate) instance_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -55,6 +57,12 @@ impl ComputeEngine {
 pub(crate) struct DatabaseConfig {
     pub(crate) mode: String,
     pub(crate) provider: String,
+    #[serde(default = "default_storage_backend")]
+    pub(crate) storage_backend: String,
+}
+
+fn default_storage_backend() -> String {
+    "clickhouse".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize)]

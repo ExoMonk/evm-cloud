@@ -97,9 +97,11 @@ render_indexer_values() {
   local INSTANCE_NAME="$1"
   local NODE_ROLE="$2"
   local OUT_FILE="$3"
+  local WORKLOAD_TYPE="${4:-deployment}"
 
   cat > "$OUT_FILE" <<EOF
 fullnameOverride: ${PROJECT}-${INSTANCE_NAME}
+workloadType: ${WORKLOAD_TYPE}
 storageBackend: ${BACKEND}
 replicas: 1
 strategy:
@@ -168,7 +170,8 @@ if [[ "$INSTANCES" != "null" && "$INSTANCES" != "[]" ]]; then
   for INSTANCE in $(echo "$INSTANCES" | jq -c '.[]'); do
     NAME=$(echo "$INSTANCE" | jq -r '.name')
     NODE_ROLE=$(echo "$INSTANCE" | jq -r '.node_role // empty')
-    render_indexer_values "$NAME" "$NODE_ROLE" "$OUT_DIR/${NAME}-values.yaml"
+    WORKLOAD_TYPE=$(echo "$INSTANCE" | jq -r '.workload_type // "deployment"')
+    render_indexer_values "$NAME" "$NODE_ROLE" "$OUT_DIR/${NAME}-values.yaml" "$WORKLOAD_TYPE"
   done
 else
   # Single instance (backward compat)

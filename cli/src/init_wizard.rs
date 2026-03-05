@@ -47,13 +47,21 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .interact_text()
         .map_err(|err| CliError::Message(err.to_string()))?;
 
-    let region: String = Input::with_theme(&theme)
-        .with_prompt("AWS region")
-        .default("us-east-1".to_string())
-        .interact_text()
+    let provider_options = ["aws", "bare_metal"];
+    let provider_idx = Select::with_theme(&theme)
+        .with_prompt("Infrastructure provider")
+        .items(&provider_options)
+        .default(0)
+        .interact()
         .map_err(|err| CliError::Message(err.to_string()))?;
+    let infrastructure_provider = provider_options[provider_idx].to_string();
+    let is_aws = infrastructure_provider == "aws";
 
-    let compute_options = ["ec2", "k3s", "eks"];
+    let compute_options: Vec<&str> = if is_aws {
+        vec!["ec2", "eks", "k3s"]
+    } else {
+        vec!["k3s", "docker_compose"]
+    };
     let compute_idx = Select::with_theme(&theme)
         .with_prompt("Compute engine")
         .items(&compute_options)
@@ -61,6 +69,18 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .interact()
         .map_err(|err| CliError::Message(err.to_string()))?;
     let compute_engine = compute_options[compute_idx].to_string();
+
+    let region = if is_aws {
+        Some(
+            Input::with_theme(&theme)
+                .with_prompt("AWS region")
+                .default("us-east-1".to_string())
+                .interact_text()
+                .map_err(|err| CliError::Message(err.to_string()))?,
+        )
+    } else {
+        None
+    };
 
     let db_options = [
         "byodb_clickhouse",
@@ -125,21 +145,29 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .interact()
         .map_err(|err| CliError::Message(err.to_string()))?;
 
-    let instance_type_default = match mode {
-        InitMode::Easy => "t3.micro",
-        InitMode::Power => "t3.small",
-    }
-    .to_string();
+    let needs_instance_type = is_aws && matches!(compute_engine.as_str(), "ec2" | "eks" | "k3s");
+    let instance_type = if needs_instance_type {
+        let default = match mode {
+            InitMode::Easy => "t3.micro",
+            InitMode::Power => "t3.small",
+        }
+        .to_string();
 
-    let instance_type: String = Input::with_theme(&theme)
-        .with_prompt("EC2 instance type")
-        .default(instance_type_default)
-        .interact_text()
-        .map_err(|err| CliError::Message(err.to_string()))?;
+        Some(
+            Input::with_theme(&theme)
+                .with_prompt("Instance type")
+                .default(default)
+                .interact_text()
+                .map_err(|err| CliError::Message(err.to_string()))?,
+        )
+    } else {
+        None
+    };
 
     Ok(InitAnswers {
         mode,
         project_name,
+        infrastructure_provider,
         region,
         compute_engine,
         instance_type,

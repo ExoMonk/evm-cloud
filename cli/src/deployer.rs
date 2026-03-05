@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -6,6 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{CliError, Result};
 use crate::handoff::WorkloadHandoff;
+use crate::output::ColorMode;
 
 include!(concat!(env!("OUT_DIR"), "/script_checksums.rs"));
 
@@ -56,6 +58,8 @@ impl Drop for DeployLockGuard {
 pub(crate) struct InvokeOptions<'a> {
     pub(crate) passthrough_args: &'a [String],
     pub(crate) quiet_output: bool,
+    pub(crate) color: ColorMode,
+    pub(crate) compute_engine: String,
 }
 
 pub(crate) fn invoke_deployer(handoff: &WorkloadHandoff, action: Action, options: InvokeOptions<'_>) -> Result<()> {
@@ -91,6 +95,8 @@ pub(crate) fn invoke_deployer(handoff: &WorkloadHandoff, action: Action, options
     command.args(args).stdin(Stdio::inherit());
 
     if options.quiet_output {
+        // Pipe stdout so we can filter [evm-cloud] progress lines.
+        // Merge stderr into stdout so we capture error output too.
         command.stdout(Stdio::piped()).stderr(Stdio::piped());
     } else {
         command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
@@ -98,21 +104,157 @@ pub(crate) fn invoke_deployer(handoff: &WorkloadHandoff, action: Action, options
 
     apply_sanitized_env(&mut command);
 
-    let output = command.output().map_err(|err| CliError::Other(err.into()))?;
-    let status = output.status;
-    if status.success() {
-        return Ok(());
+    if !options.quiet_output {
+        let output = command.output().map_err(|err| CliError::Other(err.into()))?;
+        return exit_status_to_result(output.status);
     }
 
-    if options.quiet_output {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
+    // Quiet mode: stream [evm-cloud] prefixed lines in real-time,
+    // mapping them to curated status lines.
+    let mut child = command.spawn().map_err(|err| CliError::Other(err.into()))?;
+    let engine = options.compute_engine.clone();
+    let color = options.color;
 
+    let stdout = child.stdout.take();
+    if let Some(stdout) = stdout {
+        let reader = BufReader::new(stdout);
+        let mut rindexer_idx = 0u32;
+        for line in reader.lines() {
+            let line = match line {
+                Ok(l) => l,
+                Err(_) => break,
+            };
+            let Some(msg) = line.strip_prefix("[evm-cloud] ") else {
+                continue;
+            };
+            if let Some(formatted) = format_deploy_line(msg, &engine, color, &mut rindexer_idx) {
+                eprintln!("{formatted}");
+            }
+        }
+    }
+
+    let output = child.wait_with_output().map_err(|err| CliError::Other(err.into()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
         if !stderr.trim().is_empty() {
             eprintln!("{}", stderr.trim());
-        } else if !stdout.trim().is_empty() {
-            eprintln!("{}", stdout.trim());
         }
+    }
+
+    exit_status_to_result(output.status)
+}
+
+/// Paint text orange (ANSI yellow/33) when color is enabled.
+fn orange(text: &str, mode: ColorMode) -> String {
+    if matches!(mode, ColorMode::Never)
+        || (matches!(mode, ColorMode::Auto) && !std::io::IsTerminal::is_terminal(&std::io::stderr()))
+    {
+        text.to_string()
+    } else {
+        format!("\x1b[33m{text}\x1b[0m")
+    }
+}
+
+/// Map a raw `[evm-cloud] ...` message to a curated CLI status line.
+/// Returns `None` for messages that should be suppressed.
+fn format_deploy_line(msg: &str, engine: &str, color: ColorMode, rindexer_idx: &mut u32) -> Option<String> {
+    let icon = match engine {
+        "k3s" => "🛟",
+        _ => "⛴️",
+    };
+
+    // --- k3s lines ---
+    if msg == "Cluster reachable." {
+        return Some(format!("     ✔ k3s cluster reachable"));
+    }
+    if msg == "ESO is ready." {
+        return Some(format!("     ✔ ESO is ready"));
+    }
+    // ClusterSecretStore: <name> applied.
+    if let Some(rest) = msg.strip_prefix("ClusterSecretStore ") {
+        if let Some(name) = rest.strip_suffix(" applied.") {
+            return Some(format!("     {icon} ClusterSecretStore: {}", orange(name, color)));
+        }
+    }
+    if msg.starts_with("Cloudflare origin TLS secret created") {
+        return Some(format!("     ✔ Cloudflare origin TLS secret created"));
+    }
+    // ingress-nginx
+    if msg == "ingress-nginx installed." || msg == "ingress-nginx already present." {
+        return Some(format!("     ✔ ingress-nginx"));
+    }
+    // cert-manager
+    if msg == "cert-manager installed." || msg == "cert-manager CRDs already present." {
+        return Some(format!("     ✔ cert-manager"));
+    }
+    // kube-prometheus-stack
+    if msg == "kube-prometheus-stack installed." || msg == "kube-prometheus-stack already present." {
+        return Some(format!("     ✔ kube-prometheus-stack"));
+    }
+    // Loki
+    if msg == "Loki installed." || msg == "Loki already present." {
+        return Some(format!("     ✔ Loki"));
+    }
+    // Promtail
+    if msg == "Promtail installed." || msg == "Promtail already present." {
+        return Some(format!("     ✔ Promtail"));
+    }
+    // Dashboards deployed.
+    if msg == "Dashboards deployed." {
+        return Some(format!("     {icon} Dashboards deployed"));
+    }
+    // Deploying eRPC (<name>)...
+    if let Some(rest) = msg.strip_prefix("Deploying eRPC (") {
+        if let Some(name) = rest.strip_suffix(")...") {
+            return Some(format!("     {icon} eRPC: {}", orange(name, color)));
+        }
+    }
+    if msg.starts_with("eRPC deployed.") {
+        return None; // already showed the deploying line
+    }
+    // Deploying rindexer instance (<name>)...
+    if let Some(rest) = msg.strip_prefix("Deploying rindexer instance (") {
+        if let Some(name) = rest.strip_suffix(")...") {
+            *rindexer_idx += 1;
+            return Some(format!("     {icon} rindexer #{}: {}", rindexer_idx, orange(name, color)));
+        }
+    }
+    // <name> deployed. (rindexer completion)
+    if msg.ends_with(" deployed.") && !msg.starts_with("eRPC") {
+        return None; // suppress rindexer completion echoes
+    }
+    if msg == "All workloads deployed successfully." {
+        return None; // the CLI prints its own success banner
+    }
+
+    // --- compose/docker lines ---
+    if msg == "SSH connectivity verified." {
+        return Some(format!("     ✔ SSH connectivity verified"));
+    }
+    if msg == "Uploaded configs." {
+        return Some(format!("     ✔ Configs uploaded"));
+    }
+    if msg == "Secrets pulled to .env" {
+        return Some(format!("     ✔ Secrets pulled"));
+    }
+    if msg == "Restarting containers..." {
+        return Some(format!("     {icon} Restarting containers..."));
+    }
+    if msg == "Verifying containers..." {
+        return Some(format!("     {icon} Verifying containers..."));
+    }
+    if msg == "Deploy complete." {
+        return None; // CLI prints its own success banner
+    }
+
+    // Suppress everything else (verbose helm output, waiting messages, etc.)
+    None
+}
+
+fn exit_status_to_result(status: std::process::ExitStatus) -> Result<()> {
+    if status.success() {
+        return Ok(());
     }
 
     if let Some(code) = status.code() {

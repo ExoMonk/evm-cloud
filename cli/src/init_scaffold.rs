@@ -34,7 +34,7 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
     match &answers.indexer_config {
         IndexerConfigStrategy::Generate => {
             write_atomic(
-                &project_root.join("rindexer.yaml"),
+                &project_root.join("config").join("rindexer.yaml"),
                 &init_templates::render_rindexer_yaml(answers),
             )?;
         }
@@ -55,14 +55,45 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
 
     if answers.generate_erpc_config {
         write_atomic(
-            &project_root.join("erpc.yaml"),
+            &project_root.join("config").join("erpc.yaml"),
             &init_templates::render_erpc_yaml(answers),
         )?;
     }
 
+    write_atomic(
+        &project_root
+            .join("config")
+            .join("abis")
+            .join("ERC20.json"),
+        init_templates::erc20_abi_json(),
+    )?;
+
+    let secrets_content = init_templates::render_secrets_example(answers);
+    write_atomic(
+        &project_root.join("secrets.auto.tfvars.example"),
+        &secrets_content,
+    )?;
+
+    match answers.mode {
+        InitMode::Easy => {
+            // Easy mode: secrets live inside .evm-cloud/ (terraform runs there)
+            write_atomic(
+                &project_root.join(".evm-cloud").join("secrets.auto.tfvars"),
+                &secrets_content,
+            )?;
+        }
+        InitMode::Power => {
+            // Power mode: secrets live at root (terraform runs there)
+            write_atomic(
+                &project_root.join("secrets.auto.tfvars"),
+                &secrets_content,
+            )?;
+        }
+    }
+
     if matches!(answers.mode, InitMode::Power) {
         write_atomic(&project_root.join("versions.tf"), &init_templates::render_versions_tf())?;
-        write_atomic(&project_root.join("main.tf"), &init_templates::render_main_tf())?;
+        write_atomic(&project_root.join("main.tf"), &init_templates::render_main_tf(answers))?;
         write_atomic(&project_root.join("variables.tf"), &init_templates::render_variables_tf(answers))?;
         write_atomic(&project_root.join("outputs.tf"), &init_templates::render_outputs_tf())?;
     }
@@ -80,13 +111,14 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
 }
 
 fn managed_files(answers: &InitAnswers) -> Vec<&'static str> {
-    let mut files = vec!["evm-cloud.toml", ".gitignore", MODE_MARKER_REL];
+    let mut files = vec!["evm-cloud.toml", "secrets.auto.tfvars.example", ".gitignore", MODE_MARKER_REL];
     if matches!(answers.indexer_config, IndexerConfigStrategy::Generate) {
-        files.push("rindexer.yaml");
+        files.push("config/rindexer.yaml");
     }
     if answers.generate_erpc_config {
-        files.push("erpc.yaml");
+        files.push("config/erpc.yaml");
     }
+    files.push("config/abis/.gitkeep");
     if matches!(answers.mode, InitMode::Power) {
         files.extend(["versions.tf", "main.tf", "variables.tf", "outputs.tf"]);
     }
@@ -114,6 +146,7 @@ fn update_gitignore(project_root: &Path, mode: InitMode) -> Result<()> {
             ensure_line(&mut lines, "terraform.auto.tfvars.json");
         }
         InitMode::Power => {
+            ensure_line(&mut lines, "secrets.auto.tfvars");
             ensure_line(&mut lines, ".terraform/");
             ensure_line(&mut lines, "*.tfstate*");
             ensure_line(&mut lines, ".evm-cloud/");

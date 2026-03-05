@@ -122,16 +122,25 @@ where
     let painter_mode = mode;
 
     let handle = std::thread::spawn(move || {
-        let frames = [
-            "     🔄 Terraforming...   ",
-            "     🔄 Terraforming....  ",
-            "     🔄 Terraforming..... ",
-            "     🔄 Terraforming......",
-        ];
+        let dots = [".", "..", "...", "...."];
         let mut idx = 0usize;
+        let start = std::time::Instant::now();
         while signal.load(Ordering::Relaxed) {
-            let frame = paint(frames[idx % frames.len()], "36", painter_mode);
-            eprint!("\r{frame}");
+            let elapsed = start.elapsed().as_secs();
+            let time_suffix = if elapsed >= 5 {
+                let mins = elapsed / 60;
+                let secs = elapsed % 60;
+                if mins > 0 {
+                    format!(" ({}m {}s)", mins, secs)
+                } else {
+                    format!(" ({}s)", secs)
+                }
+            } else {
+                String::new()
+            };
+            let frame = format!("     🔄 Terraforming{:<4}{}", dots[idx % dots.len()], time_suffix);
+            let painted = paint(&frame, "36", painter_mode);
+            eprint!("\r\x1b[2K{painted}");
             let _ = std::io::stderr().flush();
             idx += 1;
             std::thread::sleep(Duration::from_millis(140));
@@ -143,7 +152,6 @@ where
     let result = action();
     running.store(false, Ordering::Relaxed);
     let _ = handle.join();
-    eprintln!();
     result
 }
 

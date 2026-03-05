@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use clap::{Args, Subcommand, ValueEnum};
 
-use crate::error::Result;
+use crate::error::{CliError, Result};
 use crate::output::{self, ColorMode};
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -54,7 +54,7 @@ pub(crate) struct UpArgs {
     #[arg(long, value_enum, default_value_t = Profile::Default)]
     profile: Profile,
 
-    /// Path to rindexer.yaml config
+    /// Path to rindexer.yaml or config directory containing rindexer.yaml + abis/
     #[arg(long)]
     config: Option<PathBuf>,
 
@@ -91,7 +91,7 @@ pub(crate) struct ResetArgs {
     #[arg(long, value_enum, default_value_t = Profile::Default)]
     profile: Profile,
 
-    /// Path to rindexer.yaml config
+    /// Path to rindexer.yaml or config directory containing rindexer.yaml + abis/
     #[arg(long)]
     config: Option<PathBuf>,
 
@@ -231,7 +231,6 @@ fn run_status(color: ColorMode) -> Result<()> {
     let ch_ok = health::wait_for_http("http://localhost:8123/ping", 4).is_ok();
     let idx_ok = health::wait_for_http("http://localhost:18080/health", 4).is_ok();
 
-    eprintln!();
     print_health_line("Anvil", anvil_ok, "http://localhost:8545", color);
     print_health_line("eRPC", erpc_ok, "http://localhost:4000", color);
     print_health_line("ClickHouse", ch_ok, "http://localhost:8123", color);
@@ -322,18 +321,23 @@ fn resolve_rindexer_config(
         return config::load_user_rindexer_config(&path);
     }
 
-    // No config found — generate starter
-    let starter = if fresh {
-        config::STARTER_RINDEXER_YAML_FRESH
-    } else {
-        &config::STARTER_RINDEXER_YAML_FORK
-            .replace("chain_id: 1", &format!("chain_id: {chain_id}"))
-            .replace("evm/{}", &format!("evm/{chain_id}"))
-    };
+    if let Some(path) = explicit {
+        return Err(CliError::RindexerConfigNotFound {
+            path: path.display().to_string(),
+        });
+    }
 
-    output::warn("No rindexer.yaml found — using starter config with placeholder contract", color);
-    let abis = vec![("placeholder.json".to_string(), config::PLACEHOLDER_ABI.to_string())];
-    Ok((starter.to_string(), abis))
+    let default_path = config::ensure_default_config_bundle(fresh, chain_id)?;
+    output::warn(
+        &format!(
+            "No config/rindexer.yaml found — generated default local config at {}",
+            default_path.display()
+        ),
+        color,
+    );
+    output::subline("Default starter tracks USDC using config/abis/ERC20.json", color);
+    output::subline(&format!("Using rindexer config: {}", default_path.display()), color);
+    config::load_user_rindexer_config(&default_path)
 }
 
 fn run_post_deploy(script: &std::path::Path, chain_id: u64, color: ColorMode) -> Result<()> {
@@ -361,12 +365,10 @@ fn run_post_deploy(script: &std::path::Path, chain_id: u64, color: ColorMode) ->
 }
 
 fn print_summary(fork_url: Option<&str>, chain_id: u64, color: ColorMode) {
-    eprintln!();
     eprintln!("     👉🏻 Anvil         http://localhost:8545");
     eprintln!("     👉🏻 eRPC          http://localhost:4000");
     eprintln!("     👉🏻 ClickHouse    http://localhost:8123");
     eprintln!("     👉🏻 rindexer      http://localhost:18080");
-    eprintln!();
     if let Some(url) = fork_url {
         output::subline(&format!("Chain ID: {chain_id} (fork from {url})"), color);
     } else {
