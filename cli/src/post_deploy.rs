@@ -58,8 +58,17 @@ fn erpc_url(handoff: &WorkloadHandoff) -> Option<String> {
         .or_else(|| value_str_at(&handoff.services, &["rpc_proxy", "internal_url"]))
 }
 
-fn grafana_url(handoff: &WorkloadHandoff) -> Option<String> {
-    value_str_at(&handoff.services, &["monitoring", "grafana_hostname"]).map(build_https_url)
+fn grafana_line(handoff: &WorkloadHandoff) -> Option<String> {
+    let url = value_str_at(&handoff.services, &["monitoring", "grafana_hostname"])
+        .map(build_https_url)?;
+    let has_custom_secret =
+        value_str_at(&handoff.services, &["monitoring", "grafana_admin_password_secret_name"])
+            .map_or(false, |s| !s.is_empty());
+    if has_custom_secret {
+        Some(format!("{url} (admin/<custom-secret>)"))
+    } else {
+        Some(format!("{url} (admin/prom-operator)"))
+    }
 }
 
 fn aws_region(handoff: &WorkloadHandoff) -> Option<String> {
@@ -192,7 +201,7 @@ pub(crate) fn print_summary(handoff: &WorkloadHandoff, _mode: ColorMode) {
     }
 
     push_row(&mut rows, "eRPC", erpc_url(handoff));
-    push_row(&mut rows, "Grafana", grafana_url(handoff));
+    push_row(&mut rows, "Grafana", grafana_line(handoff));
 
     if value_str_at(&handoff.data, &["backend"]).as_deref() == Some("clickhouse") {
         push_row(
