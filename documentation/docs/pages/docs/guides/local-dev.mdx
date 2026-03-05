@@ -102,6 +102,16 @@ The CLI probes the chain ID from the RPC URL and configures all services accordi
 In fork mode, set `start_block` in your `rindexer.yaml` close to the fork block number. Historical `eth_getLogs` requests are proxied to the fork RPC, which may rate-limit or timeout on large ranges.
 :::
 
+## Mainnet mode
+
+Index a live chain directly — no Anvil, eRPC points straight at your RPC:
+
+```bash
+evm-cloud local up --mainnet --rpc https://polygon-rpc.com
+```
+
+The stack deploys ClickHouse + eRPC + rindexer (no Anvil pod). eRPC uses the provided RPC URL as its upstream. This is useful for indexing real on-chain data locally without forking.
+
 ## Fresh mode
 
 For pure local development without external dependencies:
@@ -194,7 +204,7 @@ Persistent data does not survive Docker Desktop VM resets on macOS (kind runs in
 Provide your own `rindexer.yaml` to index custom contracts:
 
 ```bash
-evm-cloud local up --config ./my-rindexer.yaml
+evm-cloud local up --config-dir ./config
 ```
 
 Place ABI files in an `abis/` directory next to the config file. If no config is provided, a starter config with a placeholder contract is generated automatically.
@@ -208,12 +218,13 @@ Re-running `evm-cloud local up` performs an idempotent Helm upgrade — no tear-
 ```bash
 evm-cloud local up [OPTIONS]
 
-  --rpc <url>            Fork from this RPC URL (default: Ethereum mainnet)
+  --rpc <url>            RPC URL (fork source, or direct upstream with --mainnet)
+  --mainnet              Skip Anvil, point eRPC directly at --rpc URL
   --fresh                No fork, chain_id=31337
   --profile <name>       Resource profile: default, heavy (default: default)
   --persist              Persistent ClickHouse data across restarts
   --force                Force-recreate cluster even if it exists
-  --config <path>        Path to rindexer.yaml config
+  --config-dir <path>    Path to config directory or rindexer.yaml
   --post-deploy <path>   Script to run after stack is healthy
 ```
 

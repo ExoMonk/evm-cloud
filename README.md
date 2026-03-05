@@ -1,165 +1,165 @@
-# 🏰 evm-cloud
+# evm-cloud
+
+**Deploy production EVM indexing infrastructure in minutes, not weeks.**
 
 [![rindexer](https://img.shields.io/badge/powered%20by-rindexer-e44d26?style=flat-square)](https://rindexer.xyz) [![Terraform](https://img.shields.io/badge/Terraform-%235835CC?style=flat-square&logo=terraform&logoColor=white)](https://www.terraform.io) [![AWS](https://img.shields.io/badge/AWS-%23FF9900?style=flat-square&logo=amazon-web-services&logoColor=white)](https://aws.amazon.com) [![Docker](https://img.shields.io/badge/Docker-%232496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 
-> **🚧 Work in Progress** — Actively building, expect breaking changes.
+<p align="center">
+  <img src="assets/demo.gif" alt="evm-cloud demo" width="960" />
+</p>
 
-Open-source data infrastructure platform for EVM blockchain data. Deploy, manage, and scale a complete data stack — Nodes, RPC proxies, data indexers, databases, and networking — on AWS or bare metal with a single `terraform apply`.
+Every team indexing EVM data rebuilds the same stack: RPC proxy, indexer, database, networking, secrets, monitoring. Weeks of glue code and DevOps before writing a single query.
 
-> **[Architecture](https://evm-cloud.xyz/docs/architecture)** | [Getting Started](https://evm-cloud.xyz/docs/getting-started) | [Examples](https://evm-cloud.xyz/docs/examples)
-
-## What It Deploys
-
-- **eRPC** — multi-upstream RPC proxy with automatic failover and caching
-- **rindexer** — EVM event indexer (no-code YAML config)
-- **Database** — managed PostgreSQL (RDS) or bring-your-own ClickHouse
-- **Networking** — VPC, subnets, security groups (AWS)
-- **Compute** — EC2 + Docker Compose, EKS, k3s, or bare metal
-
-## Install CLI (Standalone)
-
-Use this if you want to run `evm-cloud` from your own Terraform repository (without cloning this repo).
-
-### Option 1: Homebrew (recommended)
+**evm-cloud** is an open-source platform that deploys the entire stack with a single command. You bring your contracts and ABIs — evm-cloud handles the infrastructure.
 
 ```bash
 brew install ExoMonk/tap/evm-cloud
-evm-cloud --help
+evm-cloud init        # interactive wizard: pick chain, database, compute
+evm-cloud deploy      # provisions infra + deploys workloads
 ```
 
-### Option 2: curl installer (GitHub Releases)
+> **[Documentation](https://evm-cloud.xyz)** | **[Architecture](https://evm-cloud.xyz/docs/architecture)** | **[Getting Started](https://evm-cloud.xyz/docs/getting-started)** | **[Examples](https://evm-cloud.xyz/docs/examples)**
 
-Install latest release:
+## What Gets Deployed
 
-```bash
-curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/latest/download/install.sh | bash
-evm-cloud --help
+```
+[Your contracts + ABIs]
+  -> evm-cloud apply
+    -> VPC + networking (security groups, subnets)
+    -> Compute (EC2, EKS, k3s, or bare metal)
+    -> eRPC (multi-upstream RPC proxy, failover, caching)
+    -> rindexer (EVM event indexer, no-code YAML config)
+    -> Database (PostgreSQL, ClickHouse — managed or BYO)
+    -> Secrets management (AWS Secrets Manager, inline, or ESO)
+    -> Monitoring (Prometheus + Grafana)
+    -> TLS termination (Caddy or ALB)
+    -> [SOON] EVM Node
+    -> [SOON] Your services (APIs, ...)
 ```
 
-Install a pinned version:
+## Who Is This For
 
-```bash
-curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/v0.1.0/install.sh | bash -s -- v0.1.0
-```
-
-### CI: pinned version (GitHub Actions)
-
-```yaml
-- name: Install evm-cloud (pinned)
-	run: curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/v0.1.0/install.sh | bash -s -- v0.1.0
-
-- name: Verify evm-cloud version
-	run: evm-cloud --version
-```
-
-### Option 3: Source build
-
-```bash
-git clone https://github.com/ExoMonk/evm-cloud.git
-cd evm-cloud/cli
-cargo install --path .
-evm-cloud --help
-```
+- **Solo builders** shipping on-chain apps who don't want to manage infra
+- **Data teams** building analytics dashboards on decoded blockchain events
+- **Protocol teams** needing real-time event monitoring and alerting
+- **Anyone** tired of stitching together 5+ tools just to index contract events
 
 ## Quick Start
 
 ```bash
-cd examples/minimal_aws_byo_clickhouse
+# Install
+brew install ExoMonk/tap/evm-cloud
 
-# Configure secrets
-cp secrets.auto.tfvars.example secrets.auto.tfvars
-# Edit: ssh_public_key, indexer_clickhouse_password, indexer_clickhouse_url
+# Initialize a new project
+evm-cloud init
 
-terraform init
-terraform plan -var-file=minimal_clickhouse.tfvars
-terraform apply -var-file=minimal_clickhouse.tfvars
+# Deploy everything
+evm-cloud apply
+
+# Tear down when done
+evm-cloud destroy --yes
 ```
 
-See [Getting Started](https://evm-cloud.xyz/docs/getting-started) for the full walkthrough.
+Or try it locally first (no cloud account needed):
 
-## Examples
+```bash
+evm-cloud local up    # kind cluster + Anvil + eRPC + rindexer + ClickHouse
+```
 
-| Example | Compute | Database | Cost |
-|---------|---------|----------|------|
-| [`minimal_aws_rds`](examples/minimal_aws_rds/) | EC2 + Docker | Managed PostgreSQL | ~$45/mo |
-| [`minimal_aws_byo_clickhouse`](examples/minimal_aws_byo_clickhouse/) | EC2 + Docker | ClickHouse (BYODB) | ~$35/mo |
-| [`aws_eks_BYO_clickhouse`](examples/aws_eks_BYO_clickhouse/) | EKS (Kubernetes) | ClickHouse (BYODB) | ~$110/mo |
-| [`minimal_aws_k3s_byo_clickhouse`](examples/minimal_aws_k3s_byo_clickhouse/) | k3s (lightweight K8s) | ClickHouse (BYODB) | ~$35/mo |
-| [`prod_aws_k3s_multi_byo_clickhouse`](examples/prod_aws_k3s_multi_byo_clickhouse/) | k3s multi-node (server + spot worker) + SM + ESO | ClickHouse (BYODB) | ~$40/mo |
-| [`baremetal_byo_clickhouse`](examples/baremetal_byo_clickhouse/) | Docker Compose (any VPS) | ClickHouse (BYODB) | ~$5-20/mo |
-| [`minimal_aws_external_ec2_byo`](examples/minimal_aws_external_ec2_byo/) | EC2 (infra only) | ClickHouse (BYODB) | ~$35/mo |
-| [`baremetal_k3s_byo_db`](examples/baremetal_k3s_byo_db/) | Bare metal k3s (any VPS) | PostgreSQL (BYODB) | Your VPS |
+See the [Getting Started guide](https://evm-cloud.xyz/docs/getting-started) for the full walkthrough.
 
-See [Choosing an Example](https://evm-cloud.xyz/docs/examples) for help picking the right one.
+## Deployment Patterns
+
+| Pattern | Compute | Database | Starting At |
+|---------|---------|----------|-------------|
+| [`baremetal_byo_clickhouse`](examples/baremetal_byo_clickhouse/) | Docker Compose (any VPS) | ClickHouse (BYO) | ~$5/mo |
+| [`minimal_aws_byo_clickhouse`](examples/minimal_aws_byo_clickhouse/) | EC2 + Docker | ClickHouse (BYO) | ~$35/mo |
+| [`minimal_aws_k3s_byo_clickhouse`](examples/minimal_aws_k3s_byo_clickhouse/) | k3s (lightweight K8s) | ClickHouse (BYO) | ~$35/mo |
+| [`minimal_aws_rds`](examples/minimal_aws_rds/) | EC2 + Docker | Managed PostgreSQL (RDS) | ~$45/mo |
+| [`prod_aws_k3s_multi_byo_clickhouse`](examples/prod_aws_k3s_multi_byo_clickhouse/) | k3s multi-node + Secrets Manager + ESO | ClickHouse (BYO) | ~$40/mo |
+| [`aws_eks_BYO_clickhouse`](examples/aws_eks_BYO_clickhouse/) | EKS (managed Kubernetes) | ClickHouse (BYO) | ~$110/mo |
+| [`baremetal_k3s_byo_db`](examples/baremetal_k3s_byo_db/) | Bare metal k3s (any VPS) | PostgreSQL (BYO) | Your VPS |
+| [`minimal_aws_external_ec2_byo`](examples/minimal_aws_external_ec2_byo/) | EC2 (infra only, BYO deployer) | ClickHouse (BYO) | ~$35/mo |
+
+See [Choosing a Pattern](https://evm-cloud.xyz/docs/examples) for help picking the right one.
+
+## Install
+
+### Homebrew (recommended)
+
+```bash
+brew install ExoMonk/tap/evm-cloud
+```
+
+### curl (GitHub Releases)
+
+```bash
+curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/latest/download/install.sh | bash
+```
+
+### Pinned version
+
+```bash
+curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha4/install.sh | bash -s -- 0.0.1-alpha4
+```
+
+### Source build
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git && cd evm-cloud/cli
+cargo install --path .
+```
+
+### CI (GitHub Actions)
+
+```yaml
+- name: Install evm-cloud
+  run: curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha4/install.sh | bash -s -- 0.0.1-alpha4
+```
+
+## Architecture
+
+evm-cloud is a modular Terraform platform with a Rust CLI orchestrator. The CLI wraps Terraform + deployer scripts into a unified workflow.
+
+```
+evm-cloud init → scaffolds Terraform config from evm-cloud.toml
+evm-cloud apply → terraform apply + workload deployment
+evm-cloud deploy → re-deploy workloads without re-running Terraform
+evm-cloud destroy → teardown everything
+evm-cloud local → local dev stack (kind + Anvil)
+```
+
+11 Terraform modules, 4 compute engines (EC2, EKS, k3s, bare metal), 2 database backends, secrets management, monitoring, and TLS — all composable.
+
+See the full [Architecture docs](https://evm-cloud.xyz/docs/architecture) for how the modules fit together.
+
+## Documentation
+
+Full docs at **[evm-cloud.xyz](https://evm-cloud.xyz)**:
+
+- [Getting Started](https://evm-cloud.xyz/docs/getting-started) — deploy your first indexer
+- [Architecture](https://evm-cloud.xyz/docs/architecture) — how modules fit together
+- [Core Concepts](https://evm-cloud.xyz/docs/concepts) — providers, compute engines, workload modes
+- [CLI Reference](https://evm-cloud.xyz/docs/cli-reference) — all commands and flags
+- [Variable Reference](https://evm-cloud.xyz/docs/variable-reference) — configuration options + sizing guide
+- [Cost Estimates](https://evm-cloud.xyz/docs/cost-estimates) — what each pattern costs
+- [Guides](https://evm-cloud.xyz/docs/guides) — secrets, TLS, config updates, production checklist
+- [Troubleshooting](https://evm-cloud.xyz/docs/troubleshooting) — common issues and fixes
 
 ## Prerequisites
 
 - Terraform >= 1.5.0
 - AWS CLI v2 (for AWS deployments)
 - SSH key pair
-- `jq` (for k3s/EKS external deployers)
+- `jq` (for k3s/EKS deployers)
 
-## QA and Verification
+## Contributing
 
 ```bash
 make qa          # fmt, validate, lint, security (checkov)
 make verify      # qa + plan all examples
 make test-k8s    # Kubernetes chart tests (kind)
 ```
-
-## Terraform CLI Migration (CLI1.1)
-
-The new Rust CLI wraps the existing Terraform flow while preserving an escape hatch for direct Terraform usage.
-
-Recommended entrypoint from repo root:
-
-```bash
-make evm-cloud
-```
-
-This prints CLI help by default.
-
-If you installed the standalone binary, use `evm-cloud` directly.
-
-Use this flag routing rule:
-- `evm-cloud` flags go first (for example: `--dir`, `--allow-raw-terraform`)
-- Terraform passthrough flags go after a second `--` (for example: `-var-file`, `-parallelism`)
-
-Canonical example:
-
-```bash
-make evm-cloud apply -- --dir examples/baremetal_k3s_byo_db --allow-raw-terraform -- -var-file=bare_metal_k3s.tfvars -parallelism=3
-```
-
-| Existing workflow | New wrapper |
-|---|---|
-| `terraform init` | `evm-cloud init` |
-| `terraform apply` | `evm-cloud apply` |
-| `terraform destroy` | `evm-cloud destroy --yes` |
-| `terraform apply -parallelism=50` | `evm-cloud apply -- -- -parallelism=50` |
-
-Safety defaults:
-- `destroy` requires explicit `--yes`.
-- In non-interactive shells, `destroy` requires both `--yes` and `--auto-approve`.
-- In non-interactive shells, `apply` requires `--auto-approve`.
-- Raw Terraform roots require explicit `--allow-raw-terraform`.
-
-Current scope note:
-- `init`, `apply`, and `destroy` are functional wrappers.
-- `deploy`, `status`, and `logs` are scaffolded and currently print "not yet implemented".
-
-Raw Terraform remains supported for advanced workflows and troubleshooting.
-
-## Documentation
-
-Full documentation lives in [`documentation/`](https://evm-cloud.xyz/docs):
-
-- [Architecture](https://evm-cloud.xyz/docs/architecture) — how the modules fit together
-- [Core Concepts](https://evm-cloud.xyz/docs/concepts) — providers, compute engines, workload modes
-- [Variable Reference](https://evm-cloud.xyz/docs/variable-reference) — all configuration options with sizing guide
-- [Cost Estimates](https://evm-cloud.xyz/docs/cost-estimates) — what each pattern costs
-- [Guides](https://evm-cloud.xyz/docs/guides) — secrets, config updates, production checklist
-- [Troubleshooting](https://evm-cloud.xyz/docs/troubleshooting) — common issues and fixes
 
 ## License
 

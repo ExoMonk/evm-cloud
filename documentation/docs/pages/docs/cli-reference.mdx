@@ -118,12 +118,13 @@ Subcommands:
 - `reset` — Tear down, clean data, and restart
 
 Options for `up` and `reset`:
-- `--rpc <url>` — RPC URL for Anvil fork (default: Ethereum mainnet)
+- `--rpc <url>` — RPC URL (fork source, or direct upstream with `--mainnet`)
+- `--mainnet` — Skip Anvil, point eRPC directly at `--rpc` URL
 - `--fresh` — No fork, use chain_id 31337
 - `--persist` — Persist ClickHouse data across restarts
 - `--force` — Force-recreate cluster even if it exists
 - `--profile <name>` — Resource profile: `default` or `heavy`
-- `--config <path>` — Path to `rindexer.yaml` or directory containing it
+- `--config-dir <path>` — Path to config directory or `rindexer.yaml`
 - `--post-deploy <script>` — Script to run after stack is healthy
 
 See [Local Dev Stack guide](./guides/local-dev.mdx) for full usage.

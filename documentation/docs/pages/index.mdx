@@ -8,21 +8,25 @@ import { TerminalDemo } from '../components/TerminalDemo'
 
 <HomePage.Root>
   <HomePage.Logo />
-  <HomePage.Tagline>One command. Full EVM data stack.</HomePage.Tagline>
+  <HomePage.Tagline>Deploy production EVM indexing infrastructure in minutes, not weeks.</HomePage.Tagline>
   <HomePage.Description>
-    Deploy, manage, and scale Production-grade EVM blockchain data infrastructure — BYO/self-hosted RPCs+proxies, Indexers, BYO/self-hosted Databases, and Networking — on any cloud or bare metal.
+    Open-source platform that deploys a complete EVM data stack: RPC proxy, indexer, database, secrets, monitoring, and TLS, on any cloud or bare metal with a single command.
   </HomePage.Description>
-  <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0 8px' }}>
-    <span style={{ padding: '6px 14px', borderRadius: '6px', backgroundColor: '#f59e0b20', border: '1px solid #f59e0b50', color: '#f59e0b', fontSize: '13px', fontWeight: 500 }}>
-      🚧 Work in Progress — actively building, expect breaking changes
-    </span>
-  </div>
   <HomePage.Buttons>
     <HomePage.Button href="/docs/getting-started" variant="accent">Get Started</HomePage.Button>
-    <HomePage.Button href="/docs/install">Build with CLI</HomePage.Button>
+    <HomePage.Button href="/docs/install">Install CLI</HomePage.Button>
     <HomePage.Button href="/docs/examples">View Examples</HomePage.Button>
   </HomePage.Buttons>
   <TerminalDemo />
+  <div style={{ maxWidth: '640px', margin: '32px auto 0', textAlign: 'center' }}>
+    <p style={{ color: '#9ca3af', fontSize: '15px', lineHeight: '1.7', margin: '0 0 20px' }}>
+      <strong style={{ color: '#e5e7eb' }}>Who is this for?</strong>
+      <br />
+      Solo builders shipping on-chain apps. Data teams building analytics dashboards.
+      Protocol teams needing real-time event monitoring.
+      Anyone tired of stitching together 5+ tools just to index contract events.
+    </p>
+  </div>
   <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
     <a href="/docs/roadmap" style={{ color: '#6b7280', fontSize: '14px', textDecoration: 'none' }}>
       See what's coming → Roadmap

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@types/react": "latest",
+    "motion": "^12.35.0",
     "react": "latest",
     "react-dom": "latest",
     "typescript": "latest",

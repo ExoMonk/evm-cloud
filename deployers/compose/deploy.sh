@@ -69,12 +69,12 @@ PROJECT=$(jq -r '.project_name' "$HANDOFF_FILE")
 RPC_PROXY_ENABLED=$(jq -r '.services.rpc_proxy != null' "$HANDOFF_FILE")
 INDEXER_ENABLED=$(jq -r '.services.indexer != null' "$HANDOFF_FILE")
 
-# Resolve SSH host from handoff (EC2 public_ip) or CLI override
+# Resolve SSH host from handoff or CLI override
 if [[ -z "$SSH_HOST" ]]; then
-  SSH_HOST=$(jq -r '.runtime.ec2.public_ip // empty' "$HANDOFF_FILE")
+  SSH_HOST=$(jq -r '.runtime.ec2.public_ip // .runtime.bare_metal.host_address // empty' "$HANDOFF_FILE")
 fi
 if [[ -z "$SSH_HOST" ]]; then
-  echo "ERROR: No SSH host found. Provide --host or ensure handoff.runtime.ec2.public_ip is set." >&2
+  echo "ERROR: No SSH host found. Provide --host or ensure handoff contains runtime.ec2.public_ip or runtime.bare_metal.host_address." >&2
   exit 1
 fi
 
@@ -124,12 +124,22 @@ fi
 
 echo "[evm-cloud] Uploaded configs."
 
-# --- Pull secrets (.env) ---
+# --- Deploy .env (secrets) ---
 
-if ssh $SSH_OPTS "${SSH_USER}@${SSH_HOST}" "test -x ${REMOTE_DIR}/scripts/pull-secrets.sh" 2>/dev/null; then
+if [[ -f "${CONFIG_DIR}/.env" ]]; then
+  # CLI generated .env from tfvars secrets — upload it directly.
+  echo "[evm-cloud] Uploading .env from config directory..."
+  scp $SCP_OPTS "${CONFIG_DIR}/.env" "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/.env"
+  ssh $SSH_OPTS "${SSH_USER}@${SSH_HOST}" "chmod 0600 ${REMOTE_DIR}/.env"
+  echo "[evm-cloud] Uploaded .env"
+elif ssh $SSH_OPTS "${SSH_USER}@${SSH_HOST}" "test -x ${REMOTE_DIR}/scripts/pull-secrets.sh" 2>/dev/null; then
+  # AWS path: pull from Secrets Manager.
   echo "[evm-cloud] Pulling secrets from Secrets Manager..."
   ssh $SSH_OPTS "${SSH_USER}@${SSH_HOST}" "cd ${REMOTE_DIR} && bash scripts/pull-secrets.sh"
   echo "[evm-cloud] Secrets pulled to .env"
+else
+  # Ensure .env exists (docker compose requires it via env_file directive).
+  ssh $SSH_OPTS "${SSH_USER}@${SSH_HOST}" "touch ${REMOTE_DIR}/.env"
 fi
 
 # --- Restart containers ---

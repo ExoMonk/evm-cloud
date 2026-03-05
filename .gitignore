@@ -34,3 +34,5 @@ cli/target/
 sandbox/
 
 .DS_Store
+documentation/docs/components/TerminalDemoImproved.tsx
+documentation/docs/pages/temp.mdx
