@@ -230,6 +230,10 @@ CSSEOF
   fi
 fi
 
+# --- Ensure project namespace exists ---
+
+kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
+
 # --- Ingress setup ---
 
 INGRESS_MODE=$(jq -r '.ingress.mode // "none"' "$HANDOFF_FILE")
@@ -239,9 +243,6 @@ if [[ "$INGRESS_MODE" != "none" ]]; then
   HSTS_PRELOAD=$(jq -r '.ingress.hsts_preload // false' "$HANDOFF_FILE")
   REQUEST_BODY_MAX=$(jq -r '.ingress.request_body_max_size // "1m"' "$HANDOFF_FILE")
   echo "[evm-cloud] Ingress mode: ${INGRESS_MODE} (erpc_hostname: ${ERPC_HOSTNAME})"
-
-  # Ensure project namespace exists
-  kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
 
   # Install ingress-nginx if needed (cloudflare + ingress_nginx modes on k3s)
   if [[ "$INGRESS_MODE" == "cloudflare" || "$INGRESS_MODE" == "ingress_nginx" ]]; then

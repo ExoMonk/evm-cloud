@@ -71,6 +71,8 @@ pub(crate) struct PostgresData {
     pub(crate) port: Option<String>,
     #[serde(default)]
     pub(crate) db_name: Option<String>,
+    #[serde(default)]
+    pub(crate) url: Option<String>,
     #[serde(flatten)]
     pub(crate) extra: HashMap<String, Value>,
 }

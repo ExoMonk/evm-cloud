@@ -187,6 +187,7 @@ output "workload_handoff" {
         port       = module.postgres[0].port
         db_name    = module.postgres[0].db_name
         secret_arn = module.postgres[0].master_secret_arn
+        url        = local.managed_database_url
       } : null
 
       clickhouse = (var.indexer_enabled && var.indexer_storage_backend == "clickhouse") ? {

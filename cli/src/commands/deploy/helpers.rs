@@ -270,6 +270,11 @@ fn build_and_write_env(
     if backend == "postgres" || tfvars.contains_key("indexer_postgres_url") {
         if let Some(url) = tfvars.get("indexer_postgres_url") {
             env_lines.push(format!("DATABASE_URL={url}"));
+        } else if let Some(pg) = &handoff.data.postgres {
+            // Managed RDS: URL is constructed by Terraform and included in handoff
+            if let Some(url) = &pg.url {
+                env_lines.push(format!("DATABASE_URL={url}"));
+            }
         }
     }
 

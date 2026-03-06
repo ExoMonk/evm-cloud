@@ -374,24 +374,33 @@ resource "aws_secretsmanager_secret_version" "workload" {
   ))
 }
 
-# --- EKS: Postgres secret resolution ---
+# --- Managed Postgres: credential resolution ---
+# Used by EKS (K8s Secret), k3s inline secrets (handoff DATABASE_URL), and workload secret payload.
 
 data "aws_secretsmanager_secret_version" "rds_master" {
-  count     = (var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads && var.postgres_manage_master_user_password) ? 1 : 0
+  count     = (local._managed_pg_needs_url && var.postgres_manage_master_user_password) ? 1 : 0
   secret_id = module.postgres[0].master_secret_arn
 }
 
 locals {
-  _eks_pg_enabled = var.indexer_enabled && var.compute_engine == "eks" && var.indexer_storage_backend == "postgres" && local.terraform_manages_workloads
-  _eks_pg_user = local._eks_pg_enabled ? (
+  # Any engine with managed postgres that needs a constructed DATABASE_URL
+  _managed_pg_needs_url = var.indexer_enabled && var.indexer_storage_backend == "postgres" && var.postgres_enabled && (
+    (var.compute_engine == "eks" && local.terraform_manages_workloads) ||
+    (var.compute_engine == "k3s") ||
+    (var.compute_engine == "ec2")
+  )
+  _managed_pg_user = local._managed_pg_needs_url ? (
     !var.postgres_manage_master_user_password ? module.postgres[0].master_username : try(jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["username"], "")
   ) : ""
-  _eks_pg_pass = local._eks_pg_enabled ? (
+  _managed_pg_pass = local._managed_pg_needs_url ? (
     !var.postgres_manage_master_user_password ? var.postgres_master_password : try(jsondecode(data.aws_secretsmanager_secret_version.rds_master[0].secret_string)["password"], "")
   ) : ""
-  eks_database_url = local._eks_pg_enabled ? (
-    "postgresql://${local._eks_pg_user}:${urlencode(local._eks_pg_pass)}@${module.postgres[0].endpoint}:${module.postgres[0].port}/${module.postgres[0].db_name}"
+  managed_database_url = local._managed_pg_needs_url ? (
+    "postgresql://${local._managed_pg_user}:${urlencode(local._managed_pg_pass)}@${module.postgres[0].endpoint}:${module.postgres[0].port}/${module.postgres[0].db_name}"
   ) : ""
+
+  # Backward compat alias
+  eks_database_url = local.managed_database_url
 }
 
 # --- K8s Addons (Helm charts) ---
