@@ -74,14 +74,14 @@ See the [Getting Started guide](https://evm-cloud.xyz/docs/getting-started) for 
 | Pattern | Compute | Database | Starting At |
 |---------|---------|----------|-------------|
 | [`baremetal_byo_clickhouse`](examples/baremetal_byo_clickhouse/) | Docker Compose (any VPS) | ClickHouse (BYO) | ~$5/mo |
-| [`minimal_aws_byo_clickhouse`](examples/minimal_aws_byo_clickhouse/) | EC2 + Docker | ClickHouse (BYO) | ~$35/mo |
+| [`minimal_aws_byo_clickhouse`](examples/minimal_aws_byo_clickhouse/) | EC2 + Docker | ClickHouse (BYO) | ~$15/mo |
 | [`minimal_aws_k3s_byo_clickhouse`](examples/minimal_aws_k3s_byo_clickhouse/) | k3s (lightweight K8s) | ClickHouse (BYO) | ~$35/mo |
 | [`minimal_aws_rds`](examples/minimal_aws_rds/) | EC2 + Docker | Managed PostgreSQL (RDS) | ~$45/mo |
 | [`prod_aws_k3s_multi_byo_clickhouse`](examples/prod_aws_k3s_multi_byo_clickhouse/) | k3s multi-node + Secrets Manager + ESO | ClickHouse (BYO) | ~$40/mo |
 | [`aws_eks_BYO_clickhouse`](examples/aws_eks_BYO_clickhouse/) | EKS (managed Kubernetes) | ClickHouse (BYO) | ~$110/mo |
 | [`baremetal_k3s_byo_db`](examples/baremetal_k3s_byo_db/) | Bare metal k3s (any VPS) | PostgreSQL (BYO) | Your VPS |
 | [`aws_k3s_cloudflare_ingress`](examples/aws_k3s_cloudflare_ingress/) | k3s + Cloudflare TLS | ClickHouse (BYO) | ~$17/mo |
-| [`minimal_aws_external_ec2_byo`](examples/minimal_aws_external_ec2_byo/) | EC2 (infra only, BYO deployer) | ClickHouse (BYO) | ~$35/mo |
+| [`minimal_aws_external_ec2_byo`](examples/minimal_aws_external_ec2_byo/) | EC2 (infra only, BYO deployer) | ClickHouse (BYO) | ~$15/mo |
 
 See [Choosing a Pattern](https://evm-cloud.xyz/docs/examples) for help picking the right one.
 

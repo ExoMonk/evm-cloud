@@ -40,7 +40,7 @@ The `workload_handoff` is the primary integration point for external deployers. 
 |-------|------|-------------|
 | `version` | `string` | Contract version: `"v1"` |
 | `mode` | `string` | `"terraform"` or `"external"` |
-| `compute_engine` | `string` | `"ec2"`, `"eks"`, or `"k3s"` |
+| `compute_engine` | `string` | `"ec2"`, `"eks"`, `"k3s"`, or `"docker_compose"` |
 | `project_name` | `string` | Project identifier |
 | `aws_region` | `string` | AWS region (when provider=aws) |
 | `ingress` | `object` | Ingress/TLS contract for deployers (`mode`, domain/TLS settings, provider-specific fields) |

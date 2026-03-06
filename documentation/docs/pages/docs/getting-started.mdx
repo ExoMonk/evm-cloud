@@ -107,7 +107,7 @@ indexer_clickhouse_url      = "https://your-instance.clickhouse.cloud:8443"
 indexer_clickhouse_password = "your-password"
 ```
 
-> **Don't have ClickHouse?** Sign up for [ClickHouse Cloud](https://clickhouse.cloud/) free tier — create a service, copy the HTTPS endpoint (e.g. `https://abc123.us-east-1.aws.clickhouse.cloud:8443`) and the password. Or use the `minimal_aws_rds` example instead (uses managed PostgreSQL, no external DB needed).
+> **Don't have ClickHouse?** Sign up for [ClickHouse Cloud](https://clickhouse.cloud/) free tier — create a service, copy the HTTPS endpoint (e.g. `https://abc123.us-east-1.aws.clickhouse.cloud:8443`) and the password. The free tier supports ~10M rows and is sufficient for development/testing. For production workloads, see [Database Sizing](./guides/production-checklist.mdx#database-sizing). Or use the `minimal_aws_rds` example instead (uses managed PostgreSQL, no external DB needed).
 
 ### 3. Preview
 
@@ -202,10 +202,11 @@ Here's what Terraform created and how data flows:
 
 ## Next Steps
 
+- **Configure rindexer & eRPC**: See [Rindexer & eRPC Configuration](./guides/rindexer-config.mdx) for sample configs, multi-chain setup, and ABI management
 - **Try a different example**: See [Examples](./examples/index.mdx) for all 9 deployment patterns
 - **Understand the architecture**: Read [Architecture](./architecture.mdx) and [Core Concepts](./concepts.mdx)
 - **Tune performance**: See [Variable Reference](./variable-reference.mdx) for instance types, memory limits, and other knobs
-- **Go to production**: Follow the [Production Checklist](./guides/production-checklist.mdx)
+- **Go to production**: Follow the [Production Guide](./guides/production-checklist.mdx) — includes scaling, backup/recovery, database sizing, and upgrade procedures
 
 ## Other Starting Points
 

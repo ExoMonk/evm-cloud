@@ -6,11 +6,11 @@ Estimated monthly costs for each deployment pattern. All prices are US East (N. 
 
 | Pattern | Components | Est. Monthly Cost |
 |---------|-----------|------------------|
-| **EC2 + Managed RDS** | t3.medium EC2 + db.t4g.micro RDS + VPC | ~$45-60 |
-| **EC2 + BYO ClickHouse** | t3.medium EC2 + VPC | ~$35-50 (+ your ClickHouse) |
+| **EC2 + Managed RDS** | t3.small EC2 + db.t4g.micro RDS + VPC | ~$45-60 |
+| **EC2 + BYO ClickHouse** | t3.small EC2 + VPC | ~$15-35 (+ your ClickHouse) |
 | **EC2 + BYO ClickHouse (dev)** | t3.micro EC2 + VPC | ~$10-15 (+ your ClickHouse) |
-| **EKS + BYO ClickHouse** | EKS control plane + t3.medium node + VPC | ~$110-140 (+ your ClickHouse) |
-| **k3s + BYO ClickHouse** | t3.medium EC2 (no EKS fee) + VPC | ~$35-50 (+ your ClickHouse) |
+| **EKS + BYO ClickHouse** | EKS control plane + t3.small node + VPC | ~$110-140 (+ your ClickHouse) |
+| **k3s + BYO ClickHouse** | t3.small EC2 (no EKS fee) + VPC | ~$35-50 (+ your ClickHouse) |
 | **Bare Metal + BYO ClickHouse** | Your VPS cost only | ~$5-20 (Hetzner/OVH) |
 
 ## What Drives Cost

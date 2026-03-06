@@ -147,11 +147,11 @@ Same interface, different cloud:
 ```hcl
 # AWS deployment
 infrastructure_provider = "aws"
-compute_engine          = "ec2_docker"
+compute_engine          = "ec2"
 
 # Becomes GCP deployment — same variables, same stack
 infrastructure_provider = "gcp"
-compute_engine          = "gce_docker"
+compute_engine          = "gce"
 ```
 
 - GCE instances, GKE clusters, Cloud SQL

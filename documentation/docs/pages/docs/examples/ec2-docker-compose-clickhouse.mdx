@@ -74,13 +74,13 @@ ssh -i ~/.ssh/evm-cloud ec2-user@<public-ip> 'sudo docker compose -f /opt/evm-cl
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `ec2_instance_type` | string | `t3.micro` | EC2 instance size |
+| `ec2_instance_type` | string | `t3.small` | EC2 instance size |
 | `indexer_clickhouse_url` | string | - | ClickHouse HTTP endpoint (sensitive) |
 | `indexer_clickhouse_user` | string | `default` | ClickHouse username |
 | `indexer_clickhouse_password` | string | - | ClickHouse password (sensitive) |
 | `indexer_clickhouse_db` | string | `default` | ClickHouse database name |
-| `ec2_rpc_proxy_mem_limit` | string | `256m` | eRPC container memory limit |
-| `ec2_indexer_mem_limit` | string | `512m` | rindexer container memory limit |
+| `ec2_rpc_proxy_mem_limit` | string | `1g` | eRPC container memory limit |
+| `ec2_indexer_mem_limit` | string | `2g` | rindexer container memory limit |
 
 ## When to Use This
 

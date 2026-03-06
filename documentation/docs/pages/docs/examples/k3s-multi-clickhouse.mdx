@@ -181,7 +181,7 @@ Each worker node object accepts:
 |-------|------|---------|-------------|
 | `name` | string | (required) | Unique name for the worker |
 | `role` | string | `general` | Node role label (`indexer`, `database`, `evm-node`, `monitoring`, `general`) |
-| `instance_type` | string | `t3.medium` | EC2 instance type |
+| `instance_type` | string | `t3.small` | EC2 instance type |
 | `use_spot` | bool | `false` | Use a spot instance (~70% cheaper, interruptible). Recommended for backfill workers. |
 
 ## Spot Instances

@@ -52,6 +52,44 @@ export default defineConfig({
       ],
     },
     {
+      text: "Reference",
+      items: [
+        { text: "CLI Reference", link: "/docs/cli-reference" },
+        { text: "Variable Reference", link: "/docs/variable-reference" },
+        { text: "Outputs Reference", link: "/docs/outputs-reference" },
+        { text: "Cost Estimates", link: "/docs/cost-estimates" },
+      ],
+    },
+    {
+      text: "Guides",
+      items: [
+        { text: "Rindexer & eRPC Config", link: "/docs/guides/rindexer-config" },
+        { text: "Local Dev Stack", link: "/docs/guides/local-dev" },
+        {
+          text: "TLS & Ingress",
+          link: "/docs/guides/tls-ingress",
+        },
+        {
+          text: "Secrets Management",
+          link: "/docs/guides/secrets-management",
+        },
+        {
+          text: "Two-Phase Workflow",
+          link: "/docs/guides/two-phase-workflow",
+        },
+        {
+          text: "External Deployers",
+          link: "/docs/guides/external-deployers",
+        },
+        { text: "Observability", link: "/docs/guides/observability" },
+        { text: "Config Updates", link: "/docs/guides/config-updates" },
+        {
+          text: "Production",
+          link: "/docs/guides/production-checklist",
+        },
+      ],
+    },
+    {
       text: "Examples",
       items: [
         { text: "Choosing an Example", link: "/docs/examples" },
@@ -75,43 +113,6 @@ export default defineConfig({
         {
           text: "Prod: k3s Multi-Node + ClickHouse",
           link: "/docs/examples/k3s-multi-clickhouse",
-        },
-      ],
-    },
-    {
-      text: "Reference",
-      items: [
-        { text: "CLI Reference", link: "/docs/cli-reference" },
-        { text: "Variable Reference", link: "/docs/variable-reference" },
-        { text: "Outputs Reference", link: "/docs/outputs-reference" },
-        { text: "Cost Estimates", link: "/docs/cost-estimates" },
-      ],
-    },
-    {
-      text: "Guides",
-      items: [
-        { text: "Local Dev Stack", link: "/docs/guides/local-dev" },
-        {
-          text: "TLS & Ingress",
-          link: "/docs/guides/tls-ingress",
-        },
-        {
-          text: "Secrets Management",
-          link: "/docs/guides/secrets-management",
-        },
-        {
-          text: "Two-Phase Workflow",
-          link: "/docs/guides/two-phase-workflow",
-        },
-        {
-          text: "External Deployers",
-          link: "/docs/guides/external-deployers",
-        },
-        { text: "Observability", link: "/docs/guides/observability" },
-        { text: "Config Updates", link: "/docs/guides/config-updates" },
-        {
-          text: "Production Checklist",
-          link: "/docs/guides/production-checklist",
         },
       ],
     },

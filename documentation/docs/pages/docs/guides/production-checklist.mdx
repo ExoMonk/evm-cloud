@@ -1,6 +1,6 @@
-# Production Checklist
+# Production Guide
 
-A step-by-step checklist for hardening your evm-cloud deployment before running in production.
+Everything you need to harden, scale, and operate your evm-cloud deployment in production.
 
 ---
 
@@ -312,6 +312,115 @@ curl http://<ip>:4000/health
 
 ---
 
+## Database Sizing
+
+### ClickHouse Cloud
+
+| Tier | Row Limit | Storage | Best For |
+|------|----------|---------|----------|
+| **Free** | ~10M rows | 10 GB | Development, testing, single contract |
+| **Basic** ($0.14/GB) | Unlimited | Pay-per-use | Small production (< 100M events) |
+| **Scale** | Unlimited | Pay-per-use | High-volume indexing (100M+ events) |
+
+**Rules of thumb:**
+- 1M Transfer events ≈ 200-400 MB in ClickHouse (compressed)
+- A busy ERC-20 contract generates ~50K-500K events/day
+- Backfilling 1 year of a popular token: ~50-200M rows → need Basic tier or above
+- ClickHouse Cloud free tier is sufficient for getting started but will fill up quickly with production contracts
+
+### PostgreSQL (RDS)
+
+| Instance | RAM | Storage | Events Capacity | Monthly Cost |
+|----------|-----|---------|----------------|-------------|
+| `db.t4g.micro` | 1 GB | 20 GB | ~5-10M rows | ~$13 |
+| `db.t4g.small` | 2 GB | 50 GB | ~20-50M rows | ~$26 |
+| `db.t4g.medium` | 4 GB | 100 GB | ~50-200M rows | ~$52 |
+
+PostgreSQL is better for transactional workloads and small-to-medium datasets. ClickHouse excels at analytical queries over large event volumes.
+
+---
+
+## Backup and Recovery
+
+### What to back up
+
+| Component | Where it lives | Backup strategy |
+|-----------|---------------|----------------|
+| **Terraform state** | Local (`terraform.tfstate`) or remote backend | Use a remote backend (S3+DynamoDB, Terraform Cloud) — local state is a single point of failure |
+| **Database** | ClickHouse Cloud or RDS | ClickHouse Cloud: automatic backups. RDS: `postgres_backup_retention` (default: 7 days) |
+| **Config files** | `rindexer.yaml`, `erpc.yaml`, ABIs | Commit to git — these are the source of truth |
+| **Secrets** | `secrets.auto.tfvars` | Store in a password manager or vault. Never commit to git |
+| **EC2 instance** | Ephemeral — rebuilt from Terraform | No backup needed. `terraform apply` recreates it from scratch |
+
+### Recovery scenarios
+
+**EC2 instance dies:** Run `terraform apply` — it creates a new instance, reinstalls Docker, and redeploys workloads. rindexer resumes from the last indexed block in your database.
+
+**Database corruption:** Restore from ClickHouse Cloud backup or RDS snapshot. rindexer will re-index any missing blocks automatically.
+
+**Lost Terraform state:** If using a local backend, the state is unrecoverable — you'll need to `terraform import` resources or destroy and recreate. **Use a remote backend for production.**
+
+---
+
+## Scaling Guide
+
+### When to scale up
+
+| Signal | Current Setup | Recommended Move |
+|--------|--------------|-----------------|
+| rindexer OOM kills or slow indexing | EC2 `t3.small` | Increase `ec2_instance_type` to `t3.medium` or `t3.large` |
+| Multiple chains competing for CPU | Single EC2 | Move to k3s with separate pods per chain |
+| Need zero-downtime deploys | EC2 Docker Compose | Move to k3s or EKS (Helm rolling updates) |
+| Backfill blocking live indexing | Single node k3s | Add a spot worker node ([k3s multi-node](../examples/k3s-multi-clickhouse.mdx)) |
+| Need HA control plane | k3s single-node | Move to EKS (managed, multi-AZ) |
+| Monthly cost too high on EKS | EKS (~$110+/mo) | Move to k3s (~$35/mo) |
+
+### Scaling path
+
+```
+EC2 + Docker Compose ($15-35/mo)
+  → single-node k3s ($35-50/mo) — adds K8s, rolling updates
+    → multi-node k3s with spot ($40-60/mo) — adds backfill separation
+      → EKS ($110+/mo) — adds managed control plane, IAM integration, multi-AZ
+```
+
+Each step is a separate evm-cloud example — you can migrate by changing `compute_engine` and re-deploying with the same config files and database.
+
+---
+
+## Upgrading evm-cloud
+
+### CLI upgrades
+
+```bash
+# Homebrew
+brew upgrade evm-cloud
+
+# Or re-run the install script
+curl -fsSL https://raw.githubusercontent.com/ExoMonk/evm-cloud/main/install.sh | bash
+```
+
+Pin your team to a specific version using `.evm-cloud-version` (see [CLI Reference](../cli-reference.mdx#version-pinning)).
+
+### Module upgrades
+
+Update the module `source` ref in your `main.tf` (or let Easy mode handle it):
+
+```hcl
+module "evm_cloud" {
+  source = "git::https://github.com/ExoMonk/evm-cloud.git?ref=v0.2.0"
+  # ...
+}
+```
+
+Then run `terraform init -upgrade` and `terraform plan` to review changes before applying.
+
+### Breaking changes
+
+Check the [CHANGELOG](https://github.com/ExoMonk/evm-cloud/blob/main/CHANGELOG.md) before upgrading. Breaking changes (variable renames, removed features) are documented with migration steps.
+
+---
+
 ## Summary Checklist
 
 Use this as a pre-launch checklist:
@@ -334,8 +443,10 @@ Use this as a pre-launch checklist:
 
 ## Related Pages
 
+- **[Rindexer & eRPC Configuration](./rindexer-config.mdx)** -- Sample configs and multi-chain setup
 - **[Secrets Management](./secrets-management.mdx)** -- Full secrets lifecycle and rotation
 - **[Updating Configuration](./config-updates.mdx)** -- Post-deploy config changes
 - **[Two-Phase Deployment](./two-phase-workflow.mdx)** -- k3s teardown procedure
 - **[Variable Reference](../variable-reference.mdx)** -- All configuration options with defaults
+- **[Cost Estimates](../cost-estimates.mdx)** -- Full cost breakdown by deployment pattern
 - **[Getting Started](../getting-started.mdx)** -- First deployment walkthrough

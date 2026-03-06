@@ -1,0 +1,177 @@
+# Rindexer & eRPC Configuration
+
+Sample configuration files and multi-chain setup patterns for rindexer and eRPC.
+
+---
+
+## Minimal `rindexer.yaml`
+
+```yaml
+name: my-indexer
+project_type: no-code
+networks:
+  - name: ethereum
+    chain_id: 1
+    rpc: ${RPC_URL}
+storage:
+  clickhouse:
+    enabled: true
+contracts:
+  - name: USDT
+    details:
+      - network: ethereum
+        address: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+        start_block: 19000000
+    abi: ./abis/ERC20.json
+    include_events:
+      - Transfer
+```
+
+Key points:
+- `${RPC_URL}` is resolved at runtime — when eRPC is enabled, it points to `http://erpc:4000` automatically
+- `storage.clickhouse.enabled: true` tells rindexer to write to ClickHouse (set `storage.postgres.enabled: true` for PostgreSQL)
+- `start_block` controls where indexing begins — use a recent block for testing, genesis for full history
+
+For the full rindexer configuration reference, see the [rindexer documentation](https://rindexer.xyz/docs/introduction).
+
+---
+
+## Minimal `erpc.yaml`
+
+```yaml
+logLevel: info
+server:
+  httpHost: 0.0.0.0
+  httpPort: 4000
+projects:
+  - id: main
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 1
+        failsafe:
+          retry:
+            maxCount: 3
+            delay: 500ms
+        upstreams:
+          - id: llama
+            endpoint: https://eth.llamarpc.com
+            type: evm
+```
+
+Key points:
+- eRPC listens on port 4000 — rindexer connects to it via `RPC_URL=http://erpc:4000`
+- Add multiple upstreams per network for failover (eRPC tries them in order, falls back on failure)
+- `failsafe.retry` configures automatic retries on transient RPC errors
+
+For the full eRPC configuration reference, see the [eRPC documentation](https://docs.erpc.cloud/).
+
+---
+
+## File Placement
+
+Place config files in your project root or a `config/` directory:
+
+```
+my-project/
+├── config/
+│   ├── erpc.yaml
+│   ├── rindexer.yaml
+│   └── abis/
+│       └── ERC20.json
+├── secrets.auto.tfvars
+└── main.tf (or evm-cloud.toml)
+```
+
+The CLI auto-discovers configs from `config/` or the project root. If files are scattered, it bundles them into `.evm-cloud/config-bundle/` during deploy.
+
+---
+
+## Multi-Chain Setup
+
+To index multiple chains, add networks to both config files.
+
+### `rindexer.yaml` — add networks and reference them in contracts
+
+```yaml
+networks:
+  - name: ethereum
+    chain_id: 1
+    rpc: ${RPC_URL}
+  - name: base
+    chain_id: 8453
+    rpc: ${RPC_URL}  # eRPC routes by chain ID automatically
+contracts:
+  - name: USDT_ETH
+    details:
+      - network: ethereum
+        address: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+        start_block: 19000000
+    abi: ./abis/ERC20.json
+    include_events: [Transfer]
+  - name: USDC_BASE
+    details:
+      - network: base
+        address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+        start_block: 10000000
+    abi: ./abis/ERC20.json
+    include_events: [Transfer]
+```
+
+### `erpc.yaml` — add upstreams per chain
+
+```yaml
+projects:
+  - id: main
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 1
+        upstreams:
+          - id: eth-llama
+            endpoint: https://eth.llamarpc.com
+            type: evm
+      - architecture: evm
+        evm:
+          chainId: 8453
+        upstreams:
+          - id: base-llama
+            endpoint: https://base.llamarpc.com
+            type: evm
+```
+
+### How it works
+
+- All chains share one ClickHouse/PostgreSQL database — rindexer creates separate tables per contract
+- eRPC routes requests by `chainId` automatically, so rindexer only needs one `RPC_URL` pointing to eRPC
+- Each chain can have multiple upstreams for failover (add more entries under `upstreams`)
+
+### Adding more chains
+
+To add a new chain:
+1. Add the network to `rindexer.yaml` under `networks`
+2. Add contracts referencing that network
+3. Add the corresponding upstream in `erpc.yaml` under `networks`
+4. Re-deploy: `evm-cloud deploy --only app` (k3s/bare metal) or `evm-cloud deploy` (EC2)
+
+---
+
+## ABI Files
+
+rindexer needs ABI JSON files to decode contract events. Place them in `config/abis/` or `abis/`:
+
+```bash
+# Download from Etherscan
+curl -s "https://api.etherscan.io/api?module=contract&action=getabi&address=0xdAC17F958D2ee523a2206206994597C13D831ec7" \
+  | jq -r '.result' > config/abis/USDT.json
+```
+
+You can also use the standard ERC-20 ABI for any token — the `Transfer(address,address,uint256)` event signature is the same across all ERC-20 tokens.
+
+---
+
+## Related Pages
+
+- **[Getting Started](../getting-started.mdx)** — First deployment walkthrough
+- **[Variable Reference](../variable-reference.mdx)** — `rindexer_config_yaml`, `erpc_config_yaml`, `rindexer_abis` variables
+- **[Config Updates](./config-updates.mdx)** — How to update configs after deploy

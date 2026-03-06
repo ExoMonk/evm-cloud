@@ -17,7 +17,17 @@ evm-cloud [--color auto|always|never] <command> [flags]
 Initialize Terraform and/or scaffold project files.
 
 ```bash
-evm-cloud init [--dir <path>] [--example <name>] [--list-examples] [--mode easy|power] [--force] [--allow-raw-terraform] [--non-interactive --config <file>] [--skip-terraform-init] [-- <terraform args>]
+evm-cloud init [OPTIONS] [-- <terraform args>]
+
+  -d, --dir <path>              Project directory (default: .)
+  --example <name>              Bootstrap from an example template
+  --list-examples               Print available example names and aliases
+  --mode <easy|power>           Integration mode
+  --force                       Overwrite existing project files
+  --allow-raw-terraform         Allow init in raw Terraform roots without easy-mode markers
+  --non-interactive             Non-interactive mode (requires --config)
+  --config <path>               Answers file for non-interactive init
+  --skip-terraform-init         Skip terraform init after scaffolding
 ```
 
 Key behavior:
@@ -25,28 +35,31 @@ Key behavior:
 - Existing project: init-only unless `--force`
 - `--config` on existing project requires `--force` (fails fast otherwise)
 - Supports both answers TOML and runtime `evm-cloud.toml` in non-interactive mode
-- `--example <name>` bootstraps from local `examples/` when in a repo checkout, otherwise downloads examples from GitHub (current CLI tag, fallback `main`) before init
+- `--example` bootstraps from local `examples/` when in a repo checkout, otherwise downloads from GitHub (current CLI tag, fallback `main`)
 - `--list-examples` prints canonical example names and aliases
-- `--allow-raw-terraform` is required in raw Terraform roots without easy-mode markers
 
 ### `deploy`
 
 Provision infrastructure **and** deploy workloads in a single pipeline. This is the primary command for going from zero to running infrastructure.
 
 ```bash
-evm-cloud deploy [--dir <path>] [--dry-run] [--auto-approve] [--only infra|app] [--tf-args <args>] [--deploy-timeout <secs>] [--module-name <name>] [--allow-raw-terraform] [--json] [-- <deployer args>]
+evm-cloud deploy [OPTIONS] [-- <deployer args>]
+
+  -d, --dir <path>              Project directory (default: .)
+  --dry-run                     Run Terraform plan only (no apply, no deployer)
+  --auto-approve                Skip interactive confirmation (required for CI)
+  --only <infra|app>            Run only one phase of the pipeline
+  --tf-args <args>              Extra arguments for Terraform (repeatable)
+  --deploy-timeout <secs>       Timeout in seconds for the deployer phase
+  --module-name <name>          Terraform output module name (default: evm_cloud)
+  --allow-raw-terraform         Allow deploy in raw Terraform roots
+  --json                        Raw handoff JSON output, suppress pretty output
 ```
 
 - **Full pipeline** (default): terraform init → plan → confirm → apply → parse handoff → invoke deployer
-- `--dry-run` runs Terraform plan only (no apply, no deployer)
-- `--auto-approve` skips interactive confirmation (required for non-interactive shells)
 - `--only infra` runs terraform only (skip workload deployer)
 - `--only app` runs deployer only (reads existing terraform state)
-- `--tf-args` passes extra arguments to terraform (repeatable, e.g. `--tf-args='-target=module.x'`)
-- `--deploy-timeout` optional outer timeout (seconds) for the deployer phase
-- `--json` outputs raw handoff JSON and suppresses pretty output (for CI pipelines)
-- `--module-name` overrides the Terraform output module name (default: `evm_cloud`)
-- Streams real-time deploy progress with phase labels and status icons (✔ for confirmations, 🛟 for k3s workloads, ⛴️ for Docker workloads)
+- Streams real-time deploy progress with phase labels and status icons
 
 Flag conflicts:
 - `--only app` + `--dry-run` / `--auto-approve` / `--tf-args` → error (these control terraform)
@@ -61,13 +74,16 @@ Flag conflicts:
 Terraform plan/apply only — escape hatch when you need raw terraform control without workload deployment.
 
 ```bash
-evm-cloud apply [--dir <path>] [--dry-run] [--auto-approve] [--allow-raw-terraform] [--json] [-- <terraform args>]
+evm-cloud apply [OPTIONS] [-- <terraform args>]
+
+  -d, --dir <path>              Project directory (default: .)
+  --dry-run                     Run Terraform plan only (no changes applied)
+  --auto-approve                Skip interactive confirmation (required for CI)
+  --allow-raw-terraform         Allow apply in raw Terraform roots
+  --json                        Raw handoff JSON output, suppress pretty output
 ```
 
-- `--dry-run` runs Terraform plan (no changes applied)
-- `--json` outputs raw handoff JSON and suppresses pretty output (for CI pipelines)
 - Interactive mode prompts: `Apply these changes? (y/N)`
-- Non-interactive shells require `--auto-approve`
 - Terraform output is captured for concise UX; detailed output is written to `.evm-cloud/logs/`
 
 :::tip
@@ -79,7 +95,12 @@ For most workflows, use `evm-cloud deploy` instead — it runs terraform **and**
 Destroy infrastructure resources.
 
 ```bash
-evm-cloud destroy [--dir <path>] --yes [--auto-approve] [--allow-raw-terraform] [-- <terraform args>]
+evm-cloud destroy [OPTIONS] [-- <terraform args>]
+
+  -d, --dir <path>              Project directory (default: .)
+  --yes                         Confirm destruction (required)
+  --auto-approve                Skip interactive Terraform confirmation
+  --allow-raw-terraform         Allow destroy in raw Terraform roots
 ```
 
 ### `status`
@@ -107,43 +128,66 @@ Current behavior: prints `logs command not yet implemented`.
 Run kubectl commands against the deployed cluster with automatic kubeconfig resolution.
 
 ```bash
-evm-cloud kubectl [--dir <path>] [--kubeconfig <path>] [-- <kubectl args>]
+evm-cloud kubectl [OPTIONS] <kubectl args>
+
+  -d, --dir <path>              Project directory (default: .)
+  --kubeconfig <path>           Override kubeconfig path (skips auto-resolution)
 ```
 
 - Auto-resolves kubeconfig from Terraform state (k3s base64 decode, EKS `update-kubeconfig`)
 - Falls back to `kubeconfig.yaml` or `.evm-cloud/kubeconfig.yaml` if present
-- `--kubeconfig` overrides auto-resolution
 
 ```bash
 # Examples
-evm-cloud kubectl -- get pods -n evm-cloud
-evm-cloud kubectl -- logs -n evm-cloud -l app=rindexer -f
-evm-cloud kubectl --dir ./my-project -- get nodes -o wide
+evm-cloud kubectl get pods -n evm-cloud
+evm-cloud kubectl logs -n evm-cloud -l app=rindexer -f
+evm-cloud kubectl --dir ./my-project get nodes -o wide
 ```
 
 ### `local`
 
 Manage a local dev stack (kind cluster with Anvil, eRPC, ClickHouse, and rindexer).
 
+#### `local up`
+
+Start the local stack.
+
 ```bash
-evm-cloud local <up|down|status|reset> [OPTIONS]
+evm-cloud local up [OPTIONS]
+
+  --rpc <url>            RPC URL (fork source, or direct upstream with --mainnet)
+  --mainnet              Skip Anvil, point eRPC directly at --rpc URL
+  --fresh                No fork, chain_id=31337
+  --profile <name>       Resource profile: default, heavy (default: default)
+  --persist              Persistent ClickHouse data across restarts
+  --force                Force-recreate cluster even if it exists
+  --config-dir <path>    Path to config directory or rindexer.yaml
+  --post-deploy <path>   Script to run after stack is healthy
 ```
 
-Subcommands:
-- `up` — Start the local stack
-- `down` — Tear down the local stack
-- `status` — Show stack status
-- `reset` — Tear down, clean data, and restart
+#### `local down`
 
-Options for `up` and `reset`:
-- `--rpc <url>` — RPC URL (fork source, or direct upstream with `--mainnet`)
-- `--mainnet` — Skip Anvil, point eRPC directly at `--rpc` URL
-- `--fresh` — No fork, use chain_id 31337
-- `--persist` — Persist ClickHouse data across restarts
-- `--force` — Force-recreate cluster even if it exists
-- `--profile <name>` — Resource profile: `default` or `heavy`
-- `--config-dir <path>` — Path to config directory or `rindexer.yaml`
-- `--post-deploy <script>` — Script to run after stack is healthy
+Tear down the local stack.
+
+```bash
+evm-cloud local down
+```
+
+#### `local status`
+
+Show stack status (pods, endpoints, resource usage).
+
+```bash
+evm-cloud local status
+```
+
+#### `local reset`
+
+Tear down, clean persistent data, and restart. Accepts the same options as `up`.
+
+```bash
+evm-cloud local reset [OPTIONS]
+```
 
 See [Local Dev Stack guide](./guides/local-dev.mdx) for full usage.
 
@@ -181,6 +225,163 @@ Commands route based on marker/root detection:
   - `main.tf` + `versions.tf` => raw/power path
   - `evm-cloud.toml` => easy path
 - Both TOML + explicit root without marker => explicit error
+
+### The `.evm-cloud/` Directory
+
+In Easy mode, `evm-cloud deploy` calls `prepare_workspace` which reads `evm-cloud.toml` and generates a bridge directory:
+
+```
+.evm-cloud/
+├── mode                    # "easy" or "power" — authoritative mode marker
+├── main.tf                 # Generated Terraform root calling the evm-cloud module
+├── variables.tf            # Generated variable declarations
+├── outputs.tf              # Generated output declarations
+├── terraform.auto.tfvars.json  # Generated from evm-cloud.toml values
+├── config-bundle/          # Assembled config files for the deployer
+│   ├── erpc.yaml
+│   ├── rindexer.yaml
+│   ├── abis/
+│   └── .env                # Auto-generated from secrets.auto.tfvars (see below)
+├── logs/                   # Terraform plan/apply log files
+└── .terraform/             # Terraform provider cache
+```
+
+You should `.gitignore` the entire `.evm-cloud/` directory — it's generated on every `deploy`.
+
+---
+
+## `evm-cloud.toml` Schema (Easy Mode)
+
+Easy mode uses `evm-cloud.toml` as a simplified configuration file. The CLI reads it and generates Terraform files in `.evm-cloud/`.
+
+```toml
+schema_version = 1
+
+[project]
+name = "my-indexer"
+region = "us-east-1"              # optional, default: us-east-1
+deployment_target = "managed"      # optional: managed, hybrid, self_hosted
+runtime_arch = "multi"             # optional: amd64, arm64, multi
+
+[compute]
+engine = "ec2"                     # ec2, eks, k3s, docker_compose
+instance_type = "t3.small"         # optional
+workload_mode = "terraform"        # optional: terraform, external
+
+[compute.ec2]                      # optional, EC2-specific overrides
+rpc_proxy_mem_limit = "1g"
+indexer_mem_limit = "2g"
+secret_recovery_window_in_days = 7
+
+[compute.k3s]                      # optional, k3s-specific overrides
+version = "v1.30.4+k3s1"
+
+[database]
+mode = "managed"                   # managed or self_hosted
+provider = "aws"                   # aws or bare_metal
+storage_backend = "clickhouse"     # clickhouse or postgres
+
+[indexer]
+config_path = "./rindexer.yaml"
+erpc_config_path = "./erpc.yaml"   # optional
+chains = ["ethereum", "base"]
+
+[rpc]
+[rpc.endpoints]
+ethereum = "https://eth.llamarpc.com"
+base = "https://base.llamarpc.com"
+
+[ingress]
+mode = "none"                      # none, cloudflare, caddy, ingress_nginx
+domain = "rpc.example.com"         # required when mode != none
+tls_email = "admin@example.com"    # required for caddy or ingress_nginx
+
+[secrets]
+mode = "provider"                  # inline, provider, external
+
+[networking]                       # optional
+vpc_cidr = "10.42.0.0/16"
+enable_vpc_endpoints = false
+environment = "dev"
+
+[postgres]                         # optional, when storage_backend = postgres
+instance_class = "db.t4g.micro"
+engine_version = "16.4"
+
+[containers]                       # optional
+rpc_proxy_image = "ghcr.io/erpc/erpc:latest"
+indexer_image = "ghcr.io/joshstevens19/rindexer:latest"
+
+[monitoring]                       # optional
+enabled = false
+grafana_hostname = "grafana.example.com"
+
+[bare_metal]                       # optional, when provider = bare_metal
+rpc_proxy_mem_limit = "1g"
+indexer_mem_limit = "2g"
+
+[streaming]                        # optional
+mode = "disabled"
+```
+
+All fields marked `optional` can be omitted — the CLI uses sensible defaults. Required fields are `[project].name`, `[compute].engine`, `[database].*`, `[indexer].*`, `[rpc].endpoints.*`, `[ingress].mode`, and `[secrets].mode`.
+
+---
+
+## Deploy Internals
+
+### Deploy Lock
+
+The `deploy` command acquires an exclusive file lock (`.evm-cloud-deploy.lock`) before running. This prevents concurrent deploys from corrupting Terraform state.
+
+- The lock file contains the PID and timestamp of the holder
+- If a previous deploy crashed (stale lock from a dead PID), the CLI auto-recovers
+- If another deploy is running, the CLI exits with `DeployLockBusy`
+
+### `workload_mode = "terraform"` Skip Behavior
+
+When `workload_mode = "terraform"`, Terraform provisioners deploy workloads during `terraform apply` (e.g., Docker Compose services via cloud-init or SSH provisioner). In this case, `evm-cloud deploy` skips the external deployer phase after apply — workloads are already running.
+
+To force a re-deploy of workloads (e.g., config change without infra change), use `--only app`.
+
+### Auto `.env` Generation
+
+During deploy, the CLI automatically generates a `.env` file in the config bundle directory from your `secrets.auto.tfvars`. This injects database credentials and RPC URLs into the deployer without manual wiring:
+
+| Source Variable | Generated `.env` Key | Condition |
+|----------------|---------------------|-----------|
+| `indexer_clickhouse_url` | `CLICKHOUSE_URL` | ClickHouse backend |
+| `indexer_clickhouse_password` | `CLICKHOUSE_PASSWORD` | ClickHouse backend |
+| `indexer_clickhouse_user` | `CLICKHOUSE_USER` | ClickHouse backend (default: `default`) |
+| `indexer_clickhouse_db` | `CLICKHOUSE_DB` | ClickHouse backend (default: `rindexer`) |
+| `indexer_postgres_url` | `DATABASE_URL` | Postgres backend |
+| eRPC internal URL | `RPC_URL` | When `rpc_proxy_enabled = true` |
+
+The `.env` file is written with `0600` permissions (owner-only read/write).
+
+### SSH Variable Resolution
+
+The CLI resolves `ssh_private_key_path` from your tfvars files automatically for deployers that need SSH access (compose deployer for EC2/Docker Compose, k3s deployer for k3s). It checks `secrets.auto.tfvars` and `terraform.tfvars` in order.
+
+---
+
+## Version Pinning
+
+Create a `.evm-cloud-version` file in your project root (or any parent directory) to pin the CLI version:
+
+```bash
+echo "0.0.1-alpha5" > .evm-cloud-version
+```
+
+When this file exists, the CLI checks its version on every command. If there's a mismatch, it exits with an error:
+
+```
+Error: CLI version 0.0.1-alpha5 does not match pinned version 0.0.2 in .evm-cloud-version
+```
+
+This prevents accidental version drift across team members or CI environments. The `v` prefix is optional (`v0.0.1-alpha5` and `0.0.1-alpha5` are equivalent).
+
+---
 
 ## Related Docs
 
