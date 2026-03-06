@@ -17,8 +17,8 @@ use crate::preflight::{self, ProjectKind};
 use crate::terraform::TerraformRunner;
 
 use helpers::{
-    backfill_inline_clickhouse_password, ensure_config_dir, generate_env_file,
-    has_flag_with_value, invoke_with_optional_timeout, resolve_ssh_vars_from_tfvars,
+    backfill_inline_clickhouse_password, ensure_config_dir, generate_env_file, has_flag_with_value,
+    invoke_with_optional_timeout, resolve_ssh_vars_from_tfvars,
 };
 
 /// Phase selector for the deploy pipeline.
@@ -152,7 +152,10 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
             json: args.json,
             color,
         })? {
-            InfraPhaseOutcome::DryRun { log_path: lp, output_path: op } => {
+            InfraPhaseOutcome::DryRun {
+                log_path: lp,
+                output_path: op,
+            } => {
                 if !args.json {
                     output::checkline("Ran terraform plan", color);
                     output::headline(
@@ -171,7 +174,11 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
                 output::warn("Deploy cancelled", color);
                 return Ok(());
             }
-            InfraPhaseOutcome::Applied { handoff, log_path: lp, output_path: op } => {
+            InfraPhaseOutcome::Applied {
+                handoff,
+                log_path: lp,
+                output_path: op,
+            } => {
                 let handoff = *handoff;
                 if !args.json {
                     if let Some(h) = handoff.as_ref() {
@@ -217,86 +224,93 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
                 output::checkline("Workloads deployed by Terraform provisioners", color);
             }
         } else {
+            // Backfill for handoffs that came from the infra phase too.
+            backfill_inline_clickhouse_password(handoff, &project_root, &preflight.project_kind)?;
+            handoff::validate_for_action(handoff, Action::Deploy, &args.deployer_args)?;
 
-        // Backfill for handoffs that came from the infra phase too.
-        backfill_inline_clickhouse_password(handoff, &project_root, &preflight.project_kind)?;
-        handoff::validate_for_action(handoff, Action::Deploy, &args.deployer_args)?;
+            let mut effective_deployer_args = args.deployer_args.clone();
+            let resolved_config_dir =
+                if matches!(
+                    handoff.compute_engine,
+                    ComputeEngine::K3s | ComputeEngine::Ec2 | ComputeEngine::DockerCompose
+                ) && !has_flag_with_value(&effective_deployer_args, "--config-dir")
+                {
+                    let config_dir = ensure_config_dir(&project_root)?;
+                    effective_deployer_args.push("--config-dir".to_string());
+                    effective_deployer_args.push(config_dir.display().to_string());
+                    Some(config_dir)
+                } else {
+                    None
+                };
 
-        let mut effective_deployer_args = args.deployer_args.clone();
-        let resolved_config_dir = if matches!(handoff.compute_engine, ComputeEngine::K3s | ComputeEngine::Ec2 | ComputeEngine::DockerCompose)
-            && !has_flag_with_value(&effective_deployer_args, "--config-dir")
-        {
-            let config_dir = ensure_config_dir(&project_root)?;
-            effective_deployer_args.push("--config-dir".to_string());
-            effective_deployer_args.push(config_dir.display().to_string());
-            Some(config_dir)
-        } else {
-            None
-        };
-
-        // Compose deployer (ec2/docker_compose): generate .env from tfvars secrets
-        // so the deployer can upload it to the remote host.
-        if matches!(handoff.compute_engine, ComputeEngine::Ec2 | ComputeEngine::DockerCompose) {
-            if let Some(ref config_dir) = resolved_config_dir {
-                generate_env_file(config_dir, &project_root, &preflight.project_kind, handoff)?;
-            }
-        }
-
-        // Compose deployer (ec2/docker_compose) needs SSH args for SCP/SSH.
-        // Auto-inject from tfvars if not explicitly provided.
-        if matches!(handoff.compute_engine, ComputeEngine::Ec2 | ComputeEngine::DockerCompose) {
-            let ssh_vars =
-                resolve_ssh_vars_from_tfvars(&project_root, &preflight.project_kind)?;
-
-            if !has_flag_with_value(&effective_deployer_args, "--ssh-key") {
-                if let Some(ref key_path) = ssh_vars.key_path {
-                    effective_deployer_args.push("--ssh-key".to_string());
-                    effective_deployer_args.push(key_path.clone());
+            // Compose deployer (ec2/docker_compose): generate .env from tfvars secrets
+            // so the deployer can upload it to the remote host.
+            if matches!(
+                handoff.compute_engine,
+                ComputeEngine::Ec2 | ComputeEngine::DockerCompose
+            ) {
+                if let Some(ref config_dir) = resolved_config_dir {
+                    generate_env_file(config_dir, &project_root, &preflight.project_kind, handoff)?;
                 }
             }
-            if !has_flag_with_value(&effective_deployer_args, "--user") {
-                if let Some(ref user) = ssh_vars.user {
-                    effective_deployer_args.push("--user".to_string());
-                    effective_deployer_args.push(user.clone());
+
+            // Compose deployer (ec2/docker_compose) needs SSH args for SCP/SSH.
+            // Auto-inject from tfvars if not explicitly provided.
+            if matches!(
+                handoff.compute_engine,
+                ComputeEngine::Ec2 | ComputeEngine::DockerCompose
+            ) {
+                let ssh_vars =
+                    resolve_ssh_vars_from_tfvars(&project_root, &preflight.project_kind)?;
+
+                if !has_flag_with_value(&effective_deployer_args, "--ssh-key") {
+                    if let Some(ref key_path) = ssh_vars.key_path {
+                        effective_deployer_args.push("--ssh-key".to_string());
+                        effective_deployer_args.push(key_path.clone());
+                    }
+                }
+                if !has_flag_with_value(&effective_deployer_args, "--user") {
+                    if let Some(ref user) = ssh_vars.user {
+                        effective_deployer_args.push("--user".to_string());
+                        effective_deployer_args.push(user.clone());
+                    }
+                }
+                if !has_flag_with_value(&effective_deployer_args, "--port") {
+                    if let Some(ref port) = ssh_vars.port {
+                        effective_deployer_args.push("--port".to_string());
+                        effective_deployer_args.push(port.clone());
+                    }
                 }
             }
-            if !has_flag_with_value(&effective_deployer_args, "--port") {
-                if let Some(ref port) = ssh_vars.port {
-                    effective_deployer_args.push("--port".to_string());
-                    effective_deployer_args.push(port.clone());
+
+            let _lock = DeployLockGuard::acquire(
+                &project_root,
+                if args.json { ColorMode::Never } else { color },
+            )?;
+
+            let deploy_result = invoke_with_optional_timeout(
+                handoff,
+                &effective_deployer_args,
+                args.deploy_timeout,
+                args.json,
+                color,
+            );
+
+            if let Err(ref _err) = deploy_result {
+                // Phase-aware recovery hint: infra succeeded, deployer failed.
+                if run_infra && !args.json {
+                    eprintln!();
+                    output::warn(
+                        "Terraform applied successfully. Infrastructure is provisioned.",
+                        color,
+                    );
+                    eprintln!(
+                        "      Retry deployer only: evm-cloud deploy --only app --dir {}",
+                        args.dir.display()
+                    );
                 }
+                return deploy_result;
             }
-        }
-
-        let _lock = DeployLockGuard::acquire(
-            &project_root,
-            if args.json { ColorMode::Never } else { color },
-        )?;
-
-        let deploy_result = invoke_with_optional_timeout(
-            handoff,
-            &effective_deployer_args,
-            args.deploy_timeout,
-            args.json,
-            color,
-        );
-
-        if let Err(ref _err) = deploy_result {
-            // Phase-aware recovery hint: infra succeeded, deployer failed.
-            if run_infra && !args.json {
-                eprintln!();
-                output::warn(
-                    "Terraform applied successfully. Infrastructure is provisioned.",
-                    color,
-                );
-                eprintln!(
-                    "      Retry deployer only: evm-cloud deploy --only app --dir {}",
-                    args.dir.display()
-                );
-            }
-            return deploy_result;
-        }
-
         } // else (external deployer)
     }
 

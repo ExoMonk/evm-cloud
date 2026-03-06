@@ -27,9 +27,10 @@ impl TerraformRunner {
         let binary_path = which::which("terraform").map_err(|_| CliError::TerraformNotFound)?;
 
         let version = probe_terraform_version(&binary_path)?;
-        let found_tuple = parse_version(&version).ok_or_else(|| CliError::TerraformVersionProbeFailed {
-            details: format!("unsupported terraform version format: {version}"),
-        })?;
+        let found_tuple =
+            parse_version(&version).ok_or_else(|| CliError::TerraformVersionProbeFailed {
+                details: format!("unsupported terraform version format: {version}"),
+            })?;
 
         let mut required = BASELINE_MIN_VERSION;
         let mut required_str = tuple_to_version(required);
@@ -83,7 +84,12 @@ impl TerraformRunner {
         self.run_captured_with_log(dir, &args, Some(log_path))
     }
 
-    pub(crate) fn plan_with_log(&self, dir: &Path, passthrough_args: &[String], log_path: &Path) -> Result<()> {
+    pub(crate) fn plan_with_log(
+        &self,
+        dir: &Path,
+        passthrough_args: &[String],
+        log_path: &Path,
+    ) -> Result<()> {
         let mut args = vec!["plan".to_string()];
         args.extend_from_slice(passthrough_args);
         ensure_default_parallelism(&mut args);
@@ -98,7 +104,12 @@ impl TerraformRunner {
         self.run_captured(dir, &["validate".to_string()])
     }
 
-    pub(crate) fn destroy_captured(&self, dir: &Path, auto_approve: bool, passthrough_args: &[String]) -> Result<()> {
+    pub(crate) fn destroy_captured(
+        &self,
+        dir: &Path,
+        auto_approve: bool,
+        passthrough_args: &[String],
+    ) -> Result<()> {
         let mut args = vec!["destroy".to_string()];
         if auto_approve {
             args.push("-auto-approve".to_string());
@@ -177,7 +188,12 @@ impl TerraformRunner {
         self.run_captured_with_log(dir, args, None)
     }
 
-    fn run_captured_with_log(&self, dir: &Path, args: &[String], log_path: Option<&Path>) -> Result<()> {
+    fn run_captured_with_log(
+        &self,
+        dir: &Path,
+        args: &[String],
+        log_path: Option<&Path>,
+    ) -> Result<()> {
         let output = Command::new(&self.binary_path)
             .args(args)
             .current_dir(dir)
@@ -289,16 +305,17 @@ fn probe_terraform_version(binary_path: &Path) -> Result<String> {
         .stderr(Stdio::piped())
         .output()
         .map_err(|source| CliError::CommandSpawn {
-                command: "terraform".to_string(),
-                source,
-            })?;
+            command: "terraform".to_string(),
+            source,
+        })?;
 
     if json_attempt.status.success() {
-        let parsed: TerraformVersionJson = serde_json::from_slice(&json_attempt.stdout).map_err(|err| {
-            CliError::TerraformVersionProbeFailed {
-                details: format!("invalid JSON from `terraform version -json`: {err}"),
-            }
-        })?;
+        let parsed: TerraformVersionJson =
+            serde_json::from_slice(&json_attempt.stdout).map_err(|err| {
+                CliError::TerraformVersionProbeFailed {
+                    details: format!("invalid JSON from `terraform version -json`: {err}"),
+                }
+            })?;
         return Ok(parsed.terraform_version);
     }
 
@@ -308,9 +325,9 @@ fn probe_terraform_version(binary_path: &Path) -> Result<String> {
         .stderr(Stdio::piped())
         .output()
         .map_err(|source| CliError::CommandSpawn {
-                command: "terraform".to_string(),
-                source,
-            })?;
+            command: "terraform".to_string(),
+            source,
+        })?;
 
     if !text_attempt.status.success() {
         return Err(CliError::TerraformVersionProbeFailed {
@@ -347,12 +364,16 @@ fn root_floor_requirement(root: &Path) -> Result<Option<VersionFloor>> {
         path: versions_path.clone(),
     })?;
 
-    parse_required_version_floor(&contents).map_err(|details| CliError::TerraformVersionProbeFailed {
-        details: format!("{} ({})", details, versions_path.display()),
+    parse_required_version_floor(&contents).map_err(|details| {
+        CliError::TerraformVersionProbeFailed {
+            details: format!("{} ({})", details, versions_path.display()),
+        }
     })
 }
 
-fn parse_required_version_floor(contents: &str) -> std::result::Result<Option<VersionFloor>, String> {
+fn parse_required_version_floor(
+    contents: &str,
+) -> std::result::Result<Option<VersionFloor>, String> {
     let mut required_expr: Option<String> = None;
 
     for line in contents.lines() {
@@ -365,9 +386,9 @@ fn parse_required_version_floor(contents: &str) -> std::result::Result<Option<Ve
             "`required_version` found but expression is not a quoted string".to_string()
         })?;
         let rest = &trimmed[(first_quote + 1)..];
-        let second_quote = rest.find('"').ok_or_else(|| {
-            "`required_version` found but closing quote is missing".to_string()
-        })?;
+        let second_quote = rest
+            .find('"')
+            .ok_or_else(|| "`required_version` found but closing quote is missing".to_string())?;
 
         required_expr = Some(rest[..second_quote].to_string());
         break;

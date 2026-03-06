@@ -8,11 +8,7 @@ use crate::output::ColorMode;
 use super::manifests;
 use super::profiles::ResourceSet;
 
-pub(crate) fn deploy_clickhouse(
-    persist: bool,
-    res: &ResourceSet,
-    _color: ColorMode,
-) -> Result<()> {
+pub(crate) fn deploy_clickhouse(persist: bool, res: &ResourceSet, _color: ColorMode) -> Result<()> {
     let manifest = manifests::clickhouse_manifest(persist, res);
     kubectl_apply_stdin(&manifest)?;
     kubectl_wait("app=clickhouse", "condition=Ready", 120)?;
@@ -53,13 +49,7 @@ pub(crate) fn deploy_anvil(
         extra_args.push(format!("anvil.forkUrl={url}"));
     }
 
-    helm_upgrade_install(
-        "local-anvil",
-        &chart_path,
-        &values_path,
-        &extra_args,
-        120,
-    )?;
+    helm_upgrade_install("local-anvil", &chart_path, &values_path, &extra_args, 120)?;
 
     Ok(())
 }
@@ -118,11 +108,8 @@ fn extract_chart_to_temp(chart_prefix: &str) -> Result<TempChartDir> {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let tmp = std::env::temp_dir().join(format!(
-        "evm-cloud-local-{}-{}",
-        std::process::id(),
-        suffix
-    ));
+    let tmp =
+        std::env::temp_dir().join(format!("evm-cloud-local-{}-{}", std::process::id(), suffix));
 
     for (relative_path, contents) in chart_data::assets() {
         if !relative_path.starts_with(chart_prefix) {
@@ -196,10 +183,12 @@ fn kubectl_apply_stdin(manifest: &str) -> Result<()> {
 
     if let Some(mut stdin) = child.stdin.take() {
         use std::io::Write;
-        stdin.write_all(manifest.as_bytes()).map_err(|e| CliError::ToolFailed {
-            tool: "kubectl".into(),
-            details: e.to_string(),
-        })?;
+        stdin
+            .write_all(manifest.as_bytes())
+            .map_err(|e| CliError::ToolFailed {
+                tool: "kubectl".into(),
+                details: e.to_string(),
+            })?;
     }
 
     let status = child.wait().map_err(|e| CliError::ToolFailed {

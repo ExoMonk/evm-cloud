@@ -2,7 +2,9 @@ use std::fs;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-use crate::commands::apply::{ensure_non_interactive_terraform, terraform_log_path, terraform_output_path};
+use crate::commands::apply::{
+    ensure_non_interactive_terraform, terraform_log_path, terraform_output_path,
+};
 use crate::commands::tfvars;
 use crate::config::schema::ComputeEngine;
 use crate::error::{CliError, Result};
@@ -34,7 +36,11 @@ pub(crate) enum InfraPhaseOutcome {
 }
 
 pub(crate) fn run_infra_phase(opts: InfraPhaseOpts<'_>) -> Result<InfraPhaseOutcome> {
-    let render_color = if opts.json { ColorMode::Never } else { opts.color };
+    let render_color = if opts.json {
+        ColorMode::Never
+    } else {
+        opts.color
+    };
 
     if !std::io::stdin().is_terminal() && !opts.auto_approve && !opts.dry_run {
         return Err(CliError::FlagConflict {

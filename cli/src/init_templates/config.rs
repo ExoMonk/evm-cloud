@@ -84,7 +84,9 @@ fn infer_storage_backend(answers: &InitAnswers) -> &'static str {
 }
 
 fn infer_secrets_mode(answers: &InitAnswers) -> String {
-    if answers.infrastructure_provider.is_bare_metal() || answers.compute_engine == ComputeEngine::K3s {
+    if answers.infrastructure_provider.is_bare_metal()
+        || answers.compute_engine == ComputeEngine::K3s
+    {
         "inline".to_string()
     } else {
         "provider".to_string()

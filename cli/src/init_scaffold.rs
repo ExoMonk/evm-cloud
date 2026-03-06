@@ -11,7 +11,12 @@ use crate::output::{self, ColorMode};
 
 const MODE_MARKER_REL: &str = ".evm-cloud/mode";
 
-pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force: bool, color: ColorMode) -> Result<()> {
+pub(crate) fn scaffold_project(
+    project_root: &Path,
+    answers: &InitAnswers,
+    force: bool,
+    color: ColorMode,
+) -> Result<()> {
     fs::create_dir_all(project_root).map_err(|source| CliError::Io {
         source,
         path: project_root.to_path_buf(),
@@ -63,10 +68,7 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
     }
 
     write_atomic(
-        &project_root
-            .join("config")
-            .join("abis")
-            .join("ERC20.json"),
+        &project_root.join("config").join("abis").join("ERC20.json"),
         init_templates::erc20_abi_json(),
     )?;
 
@@ -75,7 +77,10 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
         .workload_mode
         .unwrap_or_else(|| WorkloadMode::default_for_engine(answers.compute_engine));
     if workload_mode == WorkloadMode::External
-        && matches!(answers.compute_engine, ComputeEngine::Ec2 | ComputeEngine::DockerCompose)
+        && matches!(
+            answers.compute_engine,
+            ComputeEngine::Ec2 | ComputeEngine::DockerCompose
+        )
     {
         write_atomic(
             &project_root.join("config").join("docker-compose.yml"),
@@ -99,18 +104,27 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
         }
         InitMode::Power => {
             // Power mode: secrets live at root (terraform runs there)
-            write_atomic(
-                &project_root.join("secrets.auto.tfvars"),
-                &secrets_content,
-            )?;
+            write_atomic(&project_root.join("secrets.auto.tfvars"), &secrets_content)?;
         }
     }
 
     if matches!(answers.mode, InitMode::Power) {
-        write_atomic(&project_root.join("versions.tf"), &init_templates::render_versions_tf())?;
-        write_atomic(&project_root.join("main.tf"), &init_templates::render_main_tf(answers))?;
-        write_atomic(&project_root.join("variables.tf"), &init_templates::render_variables_tf(answers))?;
-        write_atomic(&project_root.join("outputs.tf"), &init_templates::render_outputs_tf())?;
+        write_atomic(
+            &project_root.join("versions.tf"),
+            &init_templates::render_versions_tf(),
+        )?;
+        write_atomic(
+            &project_root.join("main.tf"),
+            &init_templates::render_main_tf(answers),
+        )?;
+        write_atomic(
+            &project_root.join("variables.tf"),
+            &init_templates::render_variables_tf(answers),
+        )?;
+        write_atomic(
+            &project_root.join("outputs.tf"),
+            &init_templates::render_outputs_tf(),
+        )?;
     }
 
     write_atomic(
@@ -126,7 +140,12 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
 }
 
 fn managed_files(answers: &InitAnswers) -> Vec<&'static str> {
-    let mut files = vec!["evm-cloud.toml", "secrets.auto.tfvars.example", ".gitignore", MODE_MARKER_REL];
+    let mut files = vec![
+        "evm-cloud.toml",
+        "secrets.auto.tfvars.example",
+        ".gitignore",
+        MODE_MARKER_REL,
+    ];
     if matches!(answers.indexer_config, IndexerConfigStrategy::Generate) {
         files.push("config/rindexer.yaml");
     }
@@ -184,7 +203,10 @@ fn backup_existing_managed(project_root: &Path, managed_files: &[&str]) -> Resul
         .map_err(|err| CliError::SystemClock(err.to_string()))?
         .as_secs();
 
-    let backup_root = project_root.join(".evm-cloud").join("backups").join(timestamp.to_string());
+    let backup_root = project_root
+        .join(".evm-cloud")
+        .join("backups")
+        .join(timestamp.to_string());
 
     for rel in managed_files {
         let source_path = project_root.join(rel);
@@ -212,4 +234,3 @@ fn backup_existing_managed(project_root: &Path, managed_files: &[&str]) -> Resul
 
     Ok(())
 }
-

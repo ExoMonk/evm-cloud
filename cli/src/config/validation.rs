@@ -42,8 +42,9 @@ pub(crate) fn validate(config: &EvmCloudConfig) -> Result<()> {
     if config.rpc.endpoints.is_empty() && config.indexer.erpc_config_path.is_none() {
         return Err(CliError::ConfigValidation {
             field: "rpc.endpoints".to_string(),
-            message: "must include at least one endpoint when indexer.erpc_config_path is not provided"
-                .to_string(),
+            message:
+                "must include at least one endpoint when indexer.erpc_config_path is not provided"
+                    .to_string(),
         });
     }
 

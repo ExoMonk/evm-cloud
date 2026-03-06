@@ -29,7 +29,11 @@ pub(crate) struct InvokeOptions<'a> {
     pub(crate) child_pid: Option<std::sync::Arc<std::sync::atomic::AtomicU32>>,
 }
 
-pub(crate) fn invoke_deployer(handoff: &WorkloadHandoff, action: Action, options: InvokeOptions<'_>) -> Result<()> {
+pub(crate) fn invoke_deployer(
+    handoff: &WorkloadHandoff,
+    action: Action,
+    options: InvokeOptions<'_>,
+) -> Result<()> {
     let temp = scripts::TempWorkspace::new()?;
     let extracted = scripts::extract_scripts(temp.path())?;
     let handoff_path = scripts::write_handoff_file(temp.path(), handoff)?;
@@ -38,8 +42,11 @@ pub(crate) fn invoke_deployer(handoff: &WorkloadHandoff, action: Action, options
     let script_path = match (handoff.compute_engine, action) {
         (ComputeEngine::K3s, Action::Deploy) => extracted.k3s_deploy.clone(),
         (ComputeEngine::K3s, Action::Teardown) => extracted.k3s_teardown.clone(),
-        (ComputeEngine::Ec2, Action::Deploy) | (ComputeEngine::DockerCompose, Action::Deploy) => extracted.compose_deploy.clone(),
-        (ComputeEngine::Ec2, Action::Teardown) | (ComputeEngine::DockerCompose, Action::Teardown) => {
+        (ComputeEngine::Ec2, Action::Deploy) | (ComputeEngine::DockerCompose, Action::Deploy) => {
+            extracted.compose_deploy.clone()
+        }
+        (ComputeEngine::Ec2, Action::Teardown)
+        | (ComputeEngine::DockerCompose, Action::Teardown) => {
             default_args.push("--teardown".to_string());
             extracted.compose_deploy.clone()
         }
@@ -96,16 +103,20 @@ pub(crate) fn invoke_deployer(handoff: &WorkloadHandoff, action: Action, options
             let Some(msg) = line.strip_prefix("[evm-cloud] ") else {
                 continue;
             };
-            if let Some(formatted) = output::format_deploy_line(msg, engine, color, &mut rindexer_idx) {
+            if let Some(formatted) =
+                output::format_deploy_line(msg, engine, color, &mut rindexer_idx)
+            {
                 eprintln!("{formatted}");
             }
         }
     }
 
-    let cmd_output = child.wait_with_output().map_err(|source| CliError::CommandSpawn {
-        command: script_path.display().to_string(),
-        source,
-    })?;
+    let cmd_output = child
+        .wait_with_output()
+        .map_err(|source| CliError::CommandSpawn {
+            command: script_path.display().to_string(),
+            source,
+        })?;
 
     if !cmd_output.status.success() {
         let stderr = String::from_utf8_lossy(&cmd_output.stderr);

@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use clap::ValueEnum;
 use serde::Deserialize;
 
-use crate::config::schema::{ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode, WorkloadMode};
+use crate::config::schema::{
+    ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode, WorkloadMode,
+};
 use crate::error::{CliError, Result};
 
 #[derive(Debug, Clone, Copy, Deserialize, ValueEnum)]
@@ -17,6 +19,13 @@ pub(crate) enum InitMode {
 
 impl InitMode {
     pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Easy => "easy",
+            Self::Power => "power",
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Easy => "🧪 easy",
             Self::Power => "⚡️ power",
@@ -87,7 +96,10 @@ struct IndexerConfigFile {
     path: Option<PathBuf>,
 }
 
-pub(crate) fn load_from_config(path: &Path, mode_override: Option<InitMode>) -> Result<InitAnswers> {
+pub(crate) fn load_from_config(
+    path: &Path,
+    mode_override: Option<InitMode>,
+) -> Result<InitAnswers> {
     let raw = fs::read_to_string(path).map_err(|source| CliError::Io {
         source,
         path: path.to_path_buf(),
@@ -110,11 +122,14 @@ pub(crate) fn load_from_config(path: &Path, mode_override: Option<InitMode>) -> 
 }
 
 fn from_runtime_config(config: EvmCloudConfig) -> InitAnswers {
-    let database_profile = match (config.database.mode.as_str(), config.database.storage_backend.as_str()) {
+    let database_profile = match (
+        config.database.mode.as_str(),
+        config.database.storage_backend.as_str(),
+    ) {
         ("managed", "postgres") => DatabaseProfile::ManagedRds,
-        ("managed", _)          => DatabaseProfile::ManagedClickhouse,
-        (_, "postgres")         => DatabaseProfile::ByodbPostgres,
-        _                       => DatabaseProfile::ByodbClickhouse,
+        ("managed", _) => DatabaseProfile::ManagedClickhouse,
+        (_, "postgres") => DatabaseProfile::ByodbPostgres,
+        _ => DatabaseProfile::ByodbClickhouse,
     };
 
     let generate_erpc_config = config.indexer.erpc_config_path.is_none();
@@ -235,6 +250,9 @@ fn from_answers_file(file: AnswersFile, mode_override: Option<InitMode>) -> Resu
 
 fn sanitize_hostname(raw: &str) -> String {
     let s = raw.trim();
-    let s = s.strip_prefix("https://").or_else(|| s.strip_prefix("http://")).unwrap_or(s);
+    let s = s
+        .strip_prefix("https://")
+        .or_else(|| s.strip_prefix("http://"))
+        .unwrap_or(s);
     s.trim_end_matches('/').to_string()
 }

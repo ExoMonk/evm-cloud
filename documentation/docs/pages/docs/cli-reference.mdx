@@ -105,13 +105,83 @@ evm-cloud destroy [OPTIONS] [-- <terraform args>]
 
 ### `status`
 
-Status command placeholder.
+Live infrastructure health dashboard. Detects the compute engine, probes running services, and prints an actionable status report with copy-pasteable connection commands.
 
 ```bash
-evm-cloud status
+evm-cloud status [OPTIONS]
+
+  -d, --dir <path>              Project directory (default: .)
+  --module-name <name>          Terraform output module name (default: evm_cloud)
+  --json                        Machine-readable JSON output to stdout
+  --ssh-key <path>              Override SSH key path (auto-resolved from tfvars)
+  --ssh-user <user>             Override SSH user (default: ec2-user for EC2, ubuntu for others)
+  --ssh-port <port>             Override SSH port (default: 22)
+  --allow-raw-terraform         Allow status in raw Terraform roots
 ```
 
-Current behavior: prints `status command not yet implemented`.
+Key behavior:
+- **Adaptive probing**: automatically detects compute engine from the deployment handoff and uses the right probe strategy
+  - **EC2 / Docker Compose / Bare Metal** → SSH into host, check `docker compose ps`, curl health endpoints
+  - **K3s / EKS** → auto-generate kubeconfig, check `kubectl get deployments` and pod status
+- **Service-aware**: only probes services present in the deployment (eRPC, ClickHouse, Postgres, Caddy, Grafana, Prometheus)
+- **Actionable output**: failing services include remediation hints with exact commands to run
+- **Exit codes**: `0` = all healthy, `1` = any service down, `2` = any service degraded (useful for CI/scripts)
+
+**EC2 / Docker Compose example output:**
+
+```
+ evm-cloud status — my-project (ec2 · us-east-1)
+
+  Services
+  ────────────────────────────────────────────────────────
+
+  ✓ rindexer       UP         running · port 18080
+  ✓ eRPC           UP         running · https://erpc.example.com
+  ✓ ClickHouse     UP         running · port 8123
+  ✓ Caddy          UP         running · TLS active
+
+  Connection
+  ────────────────────────────────────────────────────────
+     SSH       ssh -i ~/.ssh/key.pem ec2-user@34.x.x.x
+     Logs      aws logs tail /ecs/my-project --follow
+
+  ✓ All 4 services healthy
+```
+
+**K3s example output:**
+
+```
+ evm-cloud status — my-project (k3s · us-east-1)
+
+     Cluster        3 nodes · Ready
+     Namespace      my-project
+
+  Services
+  ────────────────────────────────────────────────────────
+  ✓ rindexer       UP         1/1  my-project-indexer-7f8b9 · Running
+  ✓ eRPC           UP         1/1  my-project-erpc-4a2c1 · Running
+  ✓ ClickHouse     UP         1/1  my-project-clickhouse-0 · Running
+
+  Monitoring (namespace: monitoring)
+  ────────────────────────────────────────────────────────
+  ✓ Grafana        UP         grafana-5f7b9 · Running
+  ✓ Prometheus     UP         prometheus-0 · Running
+
+  Connection
+  ────────────────────────────────────────────────────────
+     kubectl   evm-cloud kubectl -- get pods -n my-project
+     SSH       ssh ubuntu@54.1.2.3
+     Grafana   https://grafana.example.com (admin/prom-operator)
+     Logs      kubectl --kubeconfig=kubeconfig.yaml logs -n my-project -l app=rindexer -f
+
+  ✓ All 5 services healthy
+```
+
+**`--json` mode** outputs a `StatusReport` JSON object to stdout (human output goes to stderr), useful for CI pipelines and monitoring integrations.
+
+:::tip
+SSH key and user are auto-resolved from your `secrets.auto.tfvars` and `terraform.tfvars` files. Use `--ssh-key`, `--ssh-user`, and `--ssh-port` only when you need to override the defaults.
+:::
 
 ### `logs`
 

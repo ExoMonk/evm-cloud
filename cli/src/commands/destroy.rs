@@ -4,10 +4,10 @@ use std::time::Instant;
 
 use clap::Args;
 
-use crate::config::schema::ComputeEngine;
 use crate::commands::apply::ensure_non_interactive_terraform;
-use crate::easy_mode;
 use crate::commands::tfvars;
+use crate::config::schema::ComputeEngine;
+use crate::easy_mode;
 use crate::error::{CliError, Result};
 use crate::handoff;
 use crate::output::{self, ColorMode};
@@ -60,7 +60,8 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
     let non_interactive = !std::io::stdin().is_terminal();
     if non_interactive && !args.auto_approve {
         return Err(CliError::FlagConflict {
-            message: "non-interactive shell detected: destroy requires --yes --auto-approve".to_string(),
+            message: "non-interactive shell detected: destroy requires --yes --auto-approve"
+                .to_string(),
         });
     }
 

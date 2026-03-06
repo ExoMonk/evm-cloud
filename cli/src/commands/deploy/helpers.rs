@@ -72,7 +72,9 @@ pub(super) fn invoke_with_optional_timeout(
 #[cfg(unix)]
 fn kill_child(pid: u32) {
     if pid != 0 {
-        unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM); }
+        unsafe {
+            libc::kill(pid as libc::pid_t, libc::SIGTERM);
+        }
     }
 }
 
@@ -100,12 +102,7 @@ pub(super) fn backfill_inline_clickhouse_password(
         return Ok(());
     }
 
-    let backend = handoff
-        .data
-        .backend
-        .as_deref()
-        .map(str::trim)
-        .unwrap_or("");
+    let backend = handoff.data.backend.as_deref().map(str::trim).unwrap_or("");
     if backend != "clickhouse" {
         return Ok(());
     }
@@ -129,7 +126,9 @@ pub(super) fn backfill_inline_clickhouse_password(
         return Ok(());
     }
 
-    let Some(password) = crate::tfvars_parser::lookup(&secrets_path, "indexer_clickhouse_password")? else {
+    let Some(password) =
+        crate::tfvars_parser::lookup(&secrets_path, "indexer_clickhouse_password")?
+    else {
         return Ok(());
     };
 
@@ -213,9 +212,12 @@ fn copy_required_with_fallback(
     destination_root: &Path,
     file: &str,
 ) -> Result<()> {
-    let source = [source_root.join("config").join(file), source_root.join(file)]
-        .into_iter()
-        .find(|candidate| candidate.is_file());
+    let source = [
+        source_root.join("config").join(file),
+        source_root.join(file),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.is_file());
 
     let Some(source) = source else {
         return Err(CliError::DeployConfigFileMissing {
@@ -243,9 +245,7 @@ pub(super) fn generate_env_file(
             project_root.join(".evm-cloud").join("secrets.auto.tfvars"),
             project_root.join("secrets.auto.tfvars"),
         ],
-        ProjectKind::RawTerraform => vec![
-            project_root.join("secrets.auto.tfvars"),
-        ],
+        ProjectKind::RawTerraform => vec![project_root.join("secrets.auto.tfvars")],
     };
 
     let tfvars = crate::tfvars_parser::parse_first_existing(&candidates)?;
@@ -257,11 +257,7 @@ fn build_and_write_env(
     tfvars: &HashMap<String, String>,
     handoff: &handoff::WorkloadHandoff,
 ) -> Result<()> {
-    let backend = handoff
-        .data
-        .backend
-        .as_deref()
-        .unwrap_or("");
+    let backend = handoff.data.backend.as_deref().unwrap_or("");
 
     let mut env_lines: Vec<String> = Vec::new();
 
@@ -281,12 +277,18 @@ fn build_and_write_env(
         if let Some(url) = tfvars.get("indexer_clickhouse_url") {
             env_lines.push(format!("CLICKHOUSE_URL={url}"));
         }
-        let user = tfvars.get("indexer_clickhouse_user").map(|s| s.as_str()).unwrap_or("default");
+        let user = tfvars
+            .get("indexer_clickhouse_user")
+            .map(|s| s.as_str())
+            .unwrap_or("default");
         env_lines.push(format!("CLICKHOUSE_USER={user}"));
         if let Some(password) = tfvars.get("indexer_clickhouse_password") {
             env_lines.push(format!("CLICKHOUSE_PASSWORD={password}"));
         }
-        let db = tfvars.get("indexer_clickhouse_db").map(|s| s.as_str()).unwrap_or("rindexer");
+        let db = tfvars
+            .get("indexer_clickhouse_db")
+            .map(|s| s.as_str())
+            .unwrap_or("rindexer");
         env_lines.push(format!("CLICKHOUSE_DB={db}"));
     }
 
@@ -308,9 +310,15 @@ fn build_and_write_env(
             .truncate(true)
             .mode(0o600)
             .open(&env_path)
-            .map_err(|source| CliError::Io { source, path: env_path.clone() })?;
+            .map_err(|source| CliError::Io {
+                source,
+                path: env_path.clone(),
+            })?;
         f.write_all(content.as_bytes())
-            .map_err(|source| CliError::Io { source, path: env_path })?;
+            .map_err(|source| CliError::Io {
+                source,
+                path: env_path,
+            })?;
     }
     #[cfg(not(unix))]
     {
@@ -398,7 +406,10 @@ mod tests {
     fn env_file_includes_postgres_url() {
         let dir = tempfile::tempdir().unwrap();
         let mut tfvars = HashMap::new();
-        tfvars.insert("indexer_postgres_url".into(), "postgres://localhost/db".into());
+        tfvars.insert(
+            "indexer_postgres_url".into(),
+            "postgres://localhost/db".into(),
+        );
 
         let mut handoff = minimal_handoff();
         handoff.data.backend = Some("postgres".into());
@@ -448,7 +459,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let secrets = dir.path().join(".evm-cloud").join("secrets.auto.tfvars");
         fs::create_dir_all(secrets.parent().unwrap()).unwrap();
-        fs::write(&secrets, "ssh_private_key_path = \"/home/user/.ssh/id_rsa\"\n").unwrap();
+        fs::write(
+            &secrets,
+            "ssh_private_key_path = \"/home/user/.ssh/id_rsa\"\n",
+        )
+        .unwrap();
 
         let vars = resolve_ssh_vars_from_tfvars(dir.path(), &ProjectKind::EasyToml).unwrap();
         assert_eq!(vars.key_path.as_deref(), Some("/home/user/.ssh/id_rsa"));

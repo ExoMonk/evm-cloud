@@ -57,7 +57,10 @@ pub(crate) fn run(args: KubectlArgs) -> Result<()> {
     crate::error::tool_exit_status(status, "kubectl")
 }
 
-fn resolve_or_generate_kubeconfig_path(canonical_dir: &Path, explicit: Option<PathBuf>) -> Result<PathBuf> {
+fn resolve_or_generate_kubeconfig_path(
+    canonical_dir: &Path,
+    explicit: Option<PathBuf>,
+) -> Result<PathBuf> {
     if let Some(path) = explicit {
         let target = absolutize_path(canonical_dir, path);
         if target.is_file() {
@@ -128,9 +131,14 @@ fn generate_kubeconfig(start_dir: &Path, target_path: &Path) -> Result<()> {
                     .truncate(true)
                     .mode(0o600)
                     .open(target_path)
-                    .map_err(|source| CliError::Io { source, path: target_path.to_path_buf() })?;
-                f.write_all(&decoded)
-                    .map_err(|source| CliError::Io { source, path: target_path.to_path_buf() })?;
+                    .map_err(|source| CliError::Io {
+                        source,
+                        path: target_path.to_path_buf(),
+                    })?;
+                f.write_all(&decoded).map_err(|source| CliError::Io {
+                    source,
+                    path: target_path.to_path_buf(),
+                })?;
             }
             #[cfg(not(unix))]
             {
@@ -149,7 +157,11 @@ fn generate_kubeconfig(start_dir: &Path, target_path: &Path) -> Result<()> {
     }
 }
 
-fn generate_eks_kubeconfig(handoff: &WorkloadHandoff, project_root: &Path, target_path: &Path) -> Result<()> {
+fn generate_eks_kubeconfig(
+    handoff: &WorkloadHandoff,
+    project_root: &Path,
+    target_path: &Path,
+) -> Result<()> {
     let cluster_name = handoff
         .runtime
         .eks
@@ -168,7 +180,13 @@ fn generate_eks_kubeconfig(handoff: &WorkloadHandoff, project_root: &Path, targe
 
     let mut command = Command::new(aws);
     command
-        .args(["eks", "update-kubeconfig", "--name", cluster_name, "--kubeconfig"])
+        .args([
+            "eks",
+            "update-kubeconfig",
+            "--name",
+            cluster_name,
+            "--kubeconfig",
+        ])
         .arg(target_path)
         .current_dir(project_root)
         .stdin(Stdio::inherit())
@@ -196,8 +214,12 @@ fn generate_eks_kubeconfig(handoff: &WorkloadHandoff, project_root: &Path, targe
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(target_path, fs::Permissions::from_mode(0o600))
-            .map_err(|source| CliError::Io { source, path: target_path.to_path_buf() })?;
+        fs::set_permissions(target_path, fs::Permissions::from_mode(0o600)).map_err(|source| {
+            CliError::Io {
+                source,
+                path: target_path.to_path_buf(),
+            }
+        })?;
     }
 
     Ok(())
@@ -226,7 +248,9 @@ fn normalize_embedded_wrapper_flags(mut args: KubectlArgs) -> Result<KubectlArgs
             let value = args
                 .kubectl_args
                 .get(index + 1)
-                .ok_or_else(|| CliError::FlagConflict { message: "`--dir` requires a value".to_string() })?;
+                .ok_or_else(|| CliError::FlagConflict {
+                    message: "`--dir` requires a value".to_string(),
+                })?;
 
             if args.dir != PathBuf::from(".") {
                 return Err(CliError::FlagConflict {
@@ -255,7 +279,9 @@ fn normalize_embedded_wrapper_flags(mut args: KubectlArgs) -> Result<KubectlArgs
             let value = args
                 .kubectl_args
                 .get(index + 1)
-                .ok_or_else(|| CliError::FlagConflict { message: "`--kubeconfig` requires a value".to_string() })?;
+                .ok_or_else(|| CliError::FlagConflict {
+                    message: "`--kubeconfig` requires a value".to_string(),
+                })?;
 
             if args.kubeconfig.is_some() {
                 return Err(CliError::FlagConflict {
@@ -322,7 +348,9 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use super::{absolutize_path, kubeconfig_candidates, normalize_embedded_wrapper_flags, KubectlArgs};
+    use super::{
+        absolutize_path, kubeconfig_candidates, normalize_embedded_wrapper_flags, KubectlArgs,
+    };
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let base = std::env::temp_dir().join(format!(
@@ -378,8 +406,14 @@ mod tests {
         let normalized = normalize_embedded_wrapper_flags(args).expect("must normalize args");
 
         assert_eq!(normalized.dir, std::path::PathBuf::from("sandbox/alpha-1"));
-        assert_eq!(normalized.kubeconfig, Some(std::path::PathBuf::from("custom.yaml")));
-        assert_eq!(normalized.kubectl_args, vec!["get".to_string(), "pods".to_string()]);
+        assert_eq!(
+            normalized.kubeconfig,
+            Some(std::path::PathBuf::from("custom.yaml"))
+        );
+        assert_eq!(
+            normalized.kubectl_args,
+            vec!["get".to_string(), "pods".to_string()]
+        );
     }
 
     #[test]

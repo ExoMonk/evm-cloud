@@ -3,11 +3,16 @@ use std::path::Path;
 
 use crate::error::{CliError, Result};
 
-pub(crate) fn auto_var_file_arg(terraform_dir: &Path, passthrough_args: &[String]) -> Result<Option<String>> {
-    if passthrough_args
-        .iter()
-        .any(|arg| arg == "-var-file" || arg == "--var-file" || arg.starts_with("-var-file=") || arg.starts_with("--var-file="))
-    {
+pub(crate) fn auto_var_file_arg(
+    terraform_dir: &Path,
+    passthrough_args: &[String],
+) -> Result<Option<String>> {
+    if passthrough_args.iter().any(|arg| {
+        arg == "-var-file"
+            || arg == "--var-file"
+            || arg.starts_with("-var-file=")
+            || arg.starts_with("--var-file=")
+    }) {
         return Ok(None);
     }
 
@@ -31,7 +36,10 @@ pub(crate) fn auto_var_file_arg(terraform_dir: &Path, passthrough_args: &[String
                     .unwrap_or(false)
         })
         .filter(|path| {
-            let name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
+            let name = path
+                .file_name()
+                .and_then(|v| v.to_str())
+                .unwrap_or_default();
             !name.ends_with(".auto.tfvars")
                 && !name.ends_with(".tfvars.example")
                 && !name.eq_ignore_ascii_case("terraform.tfvars")

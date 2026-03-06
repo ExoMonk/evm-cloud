@@ -62,10 +62,7 @@ impl DeployLockGuard {
                 }
                 Err(CliError::DeployLockBusy { path })
             }
-            Err(source) => Err(CliError::Io {
-                source,
-                path,
-            }),
+            Err(source) => Err(CliError::Io { source, path }),
         }
     }
 }
@@ -108,7 +105,7 @@ fn is_process_alive(_pid: u32) -> bool {
 mod tests {
     use std::fs;
 
-    use super::{DeployLockGuard, parse_lock_pid, is_process_alive};
+    use super::{is_process_alive, parse_lock_pid, DeployLockGuard};
     use crate::error::CliError;
     use crate::output::ColorMode;
 
@@ -129,8 +126,10 @@ mod tests {
     #[test]
     fn lock_guard_blocks_concurrent_acquisition() {
         let dir = temp_dir("deploy-lock");
-        let first = DeployLockGuard::acquire(&dir, ColorMode::Never).expect("first lock must succeed");
-        let second = DeployLockGuard::acquire(&dir, ColorMode::Never).expect_err("second lock must fail");
+        let first =
+            DeployLockGuard::acquire(&dir, ColorMode::Never).expect("first lock must succeed");
+        let second =
+            DeployLockGuard::acquire(&dir, ColorMode::Never).expect_err("second lock must fail");
 
         match second {
             CliError::DeployLockBusy { .. } => {}
@@ -166,7 +165,10 @@ mod tests {
 
     #[test]
     fn parse_lock_pid_extracts_correctly() {
-        assert_eq!(parse_lock_pid("{\"pid\":12345,\"started_at\":0}"), Some(12345));
+        assert_eq!(
+            parse_lock_pid("{\"pid\":12345,\"started_at\":0}"),
+            Some(12345)
+        );
         assert_eq!(parse_lock_pid("{\"pid\":1,\"started_at\":0}"), Some(1));
         assert_eq!(parse_lock_pid("garbage"), None);
         assert_eq!(parse_lock_pid(""), None);

@@ -138,7 +138,11 @@ where
             } else {
                 String::new()
             };
-            let frame = format!("     🔄 Terraforming{:<4}{}", dots[idx % dots.len()], time_suffix);
+            let frame = format!(
+                "     🔄 Terraforming{:<4}{}",
+                dots[idx % dots.len()],
+                time_suffix
+            );
             let painted = paint(&frame, "36", painter_mode);
             eprint!("\r\x1b[2K{painted}");
             let _ = std::io::stderr().flush();
@@ -178,7 +182,41 @@ pub(crate) fn error(msg: &str, mode: ColorMode) {
     eprintln!("{}", paint(&decorated, "31", mode));
 }
 
-pub(crate) fn with_spinner<T, E, F>(label: &str, mode: ColorMode, action: F) -> std::result::Result<T, E>
+pub(crate) fn status_line(name: &str, icon: &str, status: &str, detail: &str, mode: ColorMode) {
+    if pretty_enabled(mode) {
+        eprintln!("  {icon} {name:<14} {status:<10} {detail}");
+    } else {
+        eprintln!("{name}: {status} {detail}");
+    }
+}
+
+pub(crate) fn hint_line(msg: &str, mode: ColorMode) {
+    if pretty_enabled(mode) {
+        eprintln!(
+            "{}",
+            paint(&format!("                    → {msg}"), "33", mode)
+        );
+    } else {
+        eprintln!("  HINT: {msg}");
+    }
+}
+
+pub(crate) fn section_line(title: &str, mode: ColorMode) {
+    if pretty_enabled(mode) {
+        eprintln!();
+        eprintln!("  {title}");
+        eprintln!("  {}", "─".repeat(56));
+    } else {
+        eprintln!();
+        eprintln!("[{title}]");
+    }
+}
+
+pub(crate) fn with_spinner<T, E, F>(
+    label: &str,
+    mode: ColorMode,
+    action: F,
+) -> std::result::Result<T, E>
 where
     F: FnOnce() -> std::result::Result<T, E>,
 {

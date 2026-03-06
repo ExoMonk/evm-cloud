@@ -9,7 +9,9 @@ use crate::error::{CliError, Result};
 
 /// Deserialize a value that may be a string or an integer into `Option<String>`.
 /// Terraform outputs numeric values like port as integers in JSON.
-fn deserialize_string_or_number<'de, D>(deserializer: D) -> std::result::Result<Option<String>, D::Error>
+fn deserialize_string_or_number<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -179,10 +181,11 @@ pub(crate) fn parse_handoff_value(value: Value) -> Result<WorkloadHandoff> {
         });
     }
 
-    let parsed: WorkloadHandoff = serde_json::from_value(value).map_err(|err| CliError::HandoffInvalid {
-        field: "workload_handoff".to_string(),
-        details: err.to_string(),
-    })?;
+    let parsed: WorkloadHandoff =
+        serde_json::from_value(value).map_err(|err| CliError::HandoffInvalid {
+            field: "workload_handoff".to_string(),
+            details: err.to_string(),
+        })?;
 
     if parsed.version != "v1" {
         return Err(CliError::HandoffVersionUnsupported {
@@ -248,7 +251,11 @@ pub(crate) fn try_load_from_state(
     load_from_state(runner, terraform_dir, module_name).ok()
 }
 
-pub(crate) fn validate_for_action(handoff: &WorkloadHandoff, action: Action, passthrough_args: &[String]) -> Result<()> {
+pub(crate) fn validate_for_action(
+    handoff: &WorkloadHandoff,
+    action: Action,
+    passthrough_args: &[String],
+) -> Result<()> {
     if handoff.project_name.trim().is_empty() {
         return Err(CliError::HandoffInvalid {
             field: "project_name".to_string(),
@@ -310,7 +317,8 @@ pub(crate) fn validate_for_action(handoff: &WorkloadHandoff, action: Action, pas
 
                 if !has_runtime_host && !has_override {
                     return Err(CliError::HandoffInvalid {
-                        field: "runtime.ec2.public_ip|runtime.bare_metal.host_address|--host".to_string(),
+                        field: "runtime.ec2.public_ip|runtime.bare_metal.host_address|--host"
+                            .to_string(),
                         details: "compose deploy requires resolvable host".to_string(),
                     });
                 }
@@ -371,8 +379,12 @@ mod tests {
             }
         });
 
-        let handoff = parse_from_full_output(full, "custom_stack").expect("must parse from module path");
-        assert_eq!(handoff.compute_engine, crate::config::schema::ComputeEngine::K3s);
+        let handoff =
+            parse_from_full_output(full, "custom_stack").expect("must parse from module path");
+        assert_eq!(
+            handoff.compute_engine,
+            crate::config::schema::ComputeEngine::K3s
+        );
     }
 
     #[test]

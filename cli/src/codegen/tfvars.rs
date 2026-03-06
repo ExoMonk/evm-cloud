@@ -6,7 +6,9 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::codegen::write_atomic;
-use crate::config::schema::{ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode, WorkloadMode};
+use crate::config::schema::{
+    ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode, WorkloadMode,
+};
 use crate::error::{CliError, Result};
 
 const GENERATED_DIR: &str = ".evm-cloud";
@@ -170,10 +172,11 @@ struct TerraformVars {
 }
 
 pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> Result<Value> {
-    let rindexer_yaml = fs::read_to_string(&config.indexer.config_path).map_err(|source| CliError::Io {
-        source,
-        path: config.indexer.config_path.clone(),
-    })?;
+    let rindexer_yaml =
+        fs::read_to_string(&config.indexer.config_path).map_err(|source| CliError::Io {
+            source,
+            path: config.indexer.config_path.clone(),
+        })?;
 
     let erpc_yaml = if let Some(path) = &config.indexer.erpc_config_path {
         fs::read_to_string(path).map_err(|source| CliError::Io {
@@ -210,7 +213,17 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
         ingress_tls_email: config.ingress.tls_email.clone().unwrap_or_default(),
         // AWS infra
         networking_enabled: if is_bare_metal { None } else { Some(true) },
-        aws_region: if is_bare_metal { None } else { Some(config.project.region.clone().unwrap_or_else(|| "us-east-1".to_string())) },
+        aws_region: if is_bare_metal {
+            None
+        } else {
+            Some(
+                config
+                    .project
+                    .region
+                    .clone()
+                    .unwrap_or_else(|| "us-east-1".to_string()),
+            )
+        },
         network_availability_zones: if is_bare_metal {
             None
         } else {
@@ -218,13 +231,41 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
             Some(vec![format!("{region}a"), format!("{region}b")])
         },
         network_enable_nat_gateway: if is_bare_metal { None } else { Some(true) },
-        ec2_instance_type: if !is_bare_metal && engine == ComputeEngine::Ec2 { Some(config.compute.instance_type.clone().unwrap_or_else(|| "t3.small".to_string())) } else { None },
-        k3s_instance_type: if !is_bare_metal && engine == ComputeEngine::K3s { Some(config.compute.instance_type.clone().unwrap_or_else(|| "t3.small".to_string())) } else { None },
+        ec2_instance_type: if !is_bare_metal && engine == ComputeEngine::Ec2 {
+            Some(
+                config
+                    .compute
+                    .instance_type
+                    .clone()
+                    .unwrap_or_else(|| "t3.small".to_string()),
+            )
+        } else {
+            None
+        },
+        k3s_instance_type: if !is_bare_metal && engine == ComputeEngine::K3s {
+            Some(
+                config
+                    .compute
+                    .instance_type
+                    .clone()
+                    .unwrap_or_else(|| "t3.small".to_string()),
+            )
+        } else {
+            None
+        },
         // Database / storage
         indexer_storage_backend: config.database.storage_backend.clone(),
         postgres_enabled: if is_postgres { Some(true) } else { None },
-        indexer_clickhouse_user: if !is_postgres { Some("default".to_string()) } else { None },
-        indexer_clickhouse_db: if !is_postgres { Some("rindexer".to_string()) } else { None },
+        indexer_clickhouse_user: if !is_postgres {
+            Some("default".to_string())
+        } else {
+            None
+        },
+        indexer_clickhouse_db: if !is_postgres {
+            Some("rindexer".to_string())
+        } else {
+            None
+        },
         // Indexer / RPC
         indexer_enabled: true,
         rpc_proxy_enabled: !erpc_yaml.is_empty(),
@@ -233,67 +274,501 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
         erpc_config_yaml: erpc_yaml,
         rindexer_abis: load_abi_files(&config.indexer.config_path)?,
         // Deployment
-        deployment_target: config.project.deployment_target.clone().unwrap_or_else(|| "managed".to_string()),
-        runtime_arch: config.project.runtime_arch.clone().unwrap_or_else(|| "multi".to_string()),
-        streaming_mode: config.streaming.as_ref().map_or_else(|| "disabled".to_string(), |s| s.mode.clone()),
+        deployment_target: config
+            .project
+            .deployment_target
+            .clone()
+            .unwrap_or_else(|| "managed".to_string()),
+        runtime_arch: config
+            .project
+            .runtime_arch
+            .clone()
+            .unwrap_or_else(|| "multi".to_string()),
+        streaming_mode: config
+            .streaming
+            .as_ref()
+            .map_or_else(|| "disabled".to_string(), |s| s.mode.clone()),
         // Container images
-        rpc_proxy_image: config.containers.as_ref().and_then(|c| c.rpc_proxy_image.clone()).unwrap_or_else(|| "ghcr.io/erpc/erpc:latest".to_string()),
-        indexer_image: config.containers.as_ref().and_then(|c| c.indexer_image.clone()).unwrap_or_else(|| "ghcr.io/joshstevens19/rindexer:latest".to_string()),
+        rpc_proxy_image: config
+            .containers
+            .as_ref()
+            .and_then(|c| c.rpc_proxy_image.clone())
+            .unwrap_or_else(|| "ghcr.io/erpc/erpc:latest".to_string()),
+        indexer_image: config
+            .containers
+            .as_ref()
+            .and_then(|c| c.indexer_image.clone())
+            .unwrap_or_else(|| "ghcr.io/joshstevens19/rindexer:latest".to_string()),
         // Ingress details
-        ingress_cloudflare_ssl_mode: if ingress_mode == IngressMode::Cloudflare { Some(config.ingress.cloudflare_ssl_mode.clone().unwrap_or_else(|| "full_strict".to_string())) } else { None },
-        ingress_caddy_image: if ingress_mode == IngressMode::Caddy { Some(config.ingress.caddy_image.clone().unwrap_or_else(|| "caddy:2.9.1-alpine".to_string())) } else { None },
-        ingress_caddy_mem_limit: if ingress_mode == IngressMode::Caddy { Some(config.ingress.caddy_mem_limit.clone().unwrap_or_else(|| "128m".to_string())) } else { None },
-        ingress_nginx_chart_version: if ingress_mode == IngressMode::IngressNginx { Some(config.ingress.nginx_chart_version.clone().unwrap_or_else(|| "4.11.3".to_string())) } else { None },
-        ingress_cert_manager_chart_version: if ingress_mode == IngressMode::IngressNginx { Some(config.ingress.cert_manager_chart_version.clone().unwrap_or_else(|| "1.16.2".to_string())) } else { None },
-        ingress_request_body_max_size: if matches!(ingress_mode, IngressMode::Caddy | IngressMode::IngressNginx) { Some(config.ingress.request_body_max_size.clone().unwrap_or_else(|| "1m".to_string())) } else { None },
-        ingress_tls_staging: if matches!(ingress_mode, IngressMode::Caddy | IngressMode::IngressNginx) { Some(config.ingress.tls_staging.unwrap_or(false)) } else { None },
-        ingress_hsts_preload: if matches!(ingress_mode, IngressMode::Caddy | IngressMode::IngressNginx) { Some(config.ingress.hsts_preload.unwrap_or(false)) } else { None },
-        ingress_class_name: if is_k8s { Some(config.ingress.class_name.clone().unwrap_or_else(|| "nginx".to_string())) } else { None },
+        ingress_cloudflare_ssl_mode: if ingress_mode == IngressMode::Cloudflare {
+            Some(
+                config
+                    .ingress
+                    .cloudflare_ssl_mode
+                    .clone()
+                    .unwrap_or_else(|| "full_strict".to_string()),
+            )
+        } else {
+            None
+        },
+        ingress_caddy_image: if ingress_mode == IngressMode::Caddy {
+            Some(
+                config
+                    .ingress
+                    .caddy_image
+                    .clone()
+                    .unwrap_or_else(|| "caddy:2.9.1-alpine".to_string()),
+            )
+        } else {
+            None
+        },
+        ingress_caddy_mem_limit: if ingress_mode == IngressMode::Caddy {
+            Some(
+                config
+                    .ingress
+                    .caddy_mem_limit
+                    .clone()
+                    .unwrap_or_else(|| "128m".to_string()),
+            )
+        } else {
+            None
+        },
+        ingress_nginx_chart_version: if ingress_mode == IngressMode::IngressNginx {
+            Some(
+                config
+                    .ingress
+                    .nginx_chart_version
+                    .clone()
+                    .unwrap_or_else(|| "4.11.3".to_string()),
+            )
+        } else {
+            None
+        },
+        ingress_cert_manager_chart_version: if ingress_mode == IngressMode::IngressNginx {
+            Some(
+                config
+                    .ingress
+                    .cert_manager_chart_version
+                    .clone()
+                    .unwrap_or_else(|| "1.16.2".to_string()),
+            )
+        } else {
+            None
+        },
+        ingress_request_body_max_size: if matches!(
+            ingress_mode,
+            IngressMode::Caddy | IngressMode::IngressNginx
+        ) {
+            Some(
+                config
+                    .ingress
+                    .request_body_max_size
+                    .clone()
+                    .unwrap_or_else(|| "1m".to_string()),
+            )
+        } else {
+            None
+        },
+        ingress_tls_staging: if matches!(
+            ingress_mode,
+            IngressMode::Caddy | IngressMode::IngressNginx
+        ) {
+            Some(config.ingress.tls_staging.unwrap_or(false))
+        } else {
+            None
+        },
+        ingress_hsts_preload: if matches!(
+            ingress_mode,
+            IngressMode::Caddy | IngressMode::IngressNginx
+        ) {
+            Some(config.ingress.hsts_preload.unwrap_or(false))
+        } else {
+            None
+        },
+        ingress_class_name: if is_k8s {
+            Some(
+                config
+                    .ingress
+                    .class_name
+                    .clone()
+                    .unwrap_or_else(|| "nginx".to_string()),
+            )
+        } else {
+            None
+        },
         // EC2 extras
-        ec2_rpc_proxy_mem_limit: if !is_bare_metal && engine == ComputeEngine::Ec2 { Some(config.compute.ec2.as_ref().and_then(|e| e.rpc_proxy_mem_limit.clone()).unwrap_or_else(|| "1g".to_string())) } else { None },
-        ec2_indexer_mem_limit: if !is_bare_metal && engine == ComputeEngine::Ec2 { Some(config.compute.ec2.as_ref().and_then(|e| e.indexer_mem_limit.clone()).unwrap_or_else(|| "2g".to_string())) } else { None },
-        ec2_secret_recovery_window_in_days: if !is_bare_metal && engine == ComputeEngine::Ec2 { Some(config.compute.ec2.as_ref().and_then(|e| e.secret_recovery_window_in_days).unwrap_or(7)) } else { None },
+        ec2_rpc_proxy_mem_limit: if !is_bare_metal && engine == ComputeEngine::Ec2 {
+            Some(
+                config
+                    .compute
+                    .ec2
+                    .as_ref()
+                    .and_then(|e| e.rpc_proxy_mem_limit.clone())
+                    .unwrap_or_else(|| "1g".to_string()),
+            )
+        } else {
+            None
+        },
+        ec2_indexer_mem_limit: if !is_bare_metal && engine == ComputeEngine::Ec2 {
+            Some(
+                config
+                    .compute
+                    .ec2
+                    .as_ref()
+                    .and_then(|e| e.indexer_mem_limit.clone())
+                    .unwrap_or_else(|| "2g".to_string()),
+            )
+        } else {
+            None
+        },
+        ec2_secret_recovery_window_in_days: if !is_bare_metal && engine == ComputeEngine::Ec2 {
+            Some(
+                config
+                    .compute
+                    .ec2
+                    .as_ref()
+                    .and_then(|e| e.secret_recovery_window_in_days)
+                    .unwrap_or(7),
+            )
+        } else {
+            None
+        },
         // Networking extras
-        network_environment: if !is_bare_metal { Some(config.networking.as_ref().and_then(|n| n.environment.clone()).unwrap_or_else(|| "dev".to_string())) } else { None },
-        network_vpc_cidr: if !is_bare_metal { Some(config.networking.as_ref().and_then(|n| n.vpc_cidr.clone()).unwrap_or_else(|| "10.42.0.0/16".to_string())) } else { None },
-        network_enable_vpc_endpoints: if !is_bare_metal { Some(config.networking.as_ref().and_then(|n| n.enable_vpc_endpoints).unwrap_or(false)) } else { None },
+        network_environment: if !is_bare_metal {
+            Some(
+                config
+                    .networking
+                    .as_ref()
+                    .and_then(|n| n.environment.clone())
+                    .unwrap_or_else(|| "dev".to_string()),
+            )
+        } else {
+            None
+        },
+        network_vpc_cidr: if !is_bare_metal {
+            Some(
+                config
+                    .networking
+                    .as_ref()
+                    .and_then(|n| n.vpc_cidr.clone())
+                    .unwrap_or_else(|| "10.42.0.0/16".to_string()),
+            )
+        } else {
+            None
+        },
+        network_enable_vpc_endpoints: if !is_bare_metal {
+            Some(
+                config
+                    .networking
+                    .as_ref()
+                    .and_then(|n| n.enable_vpc_endpoints)
+                    .unwrap_or(false),
+            )
+        } else {
+            None
+        },
         // Postgres tuning
-        postgres_instance_class: if is_managed_postgres { Some(config.postgres.as_ref().and_then(|p| p.instance_class.clone()).unwrap_or_else(|| "db.t4g.micro".to_string())) } else { None },
-        postgres_engine_version: if is_managed_postgres { Some(config.postgres.as_ref().and_then(|p| p.engine_version.clone()).unwrap_or_else(|| "16.4".to_string())) } else { None },
-        postgres_db_name: if is_managed_postgres { Some(config.postgres.as_ref().and_then(|p| p.db_name.clone()).unwrap_or_else(|| "rindexer".to_string())) } else { None },
-        postgres_db_username: if is_managed_postgres { Some(config.postgres.as_ref().and_then(|p| p.db_username.clone()).unwrap_or_else(|| "rindexer".to_string())) } else { None },
-        postgres_backup_retention: if is_managed_postgres { Some(config.postgres.as_ref().and_then(|p| p.backup_retention).unwrap_or(7)) } else { None },
-        postgres_manage_master_user_password: if is_managed_postgres { Some(config.postgres.as_ref().and_then(|p| p.manage_master_user_password).unwrap_or(true)) } else { None },
-        postgres_force_ssl: if is_managed_postgres { Some(config.postgres.as_ref().and_then(|p| p.force_ssl).unwrap_or(false)) } else { None },
+        postgres_instance_class: if is_managed_postgres {
+            Some(
+                config
+                    .postgres
+                    .as_ref()
+                    .and_then(|p| p.instance_class.clone())
+                    .unwrap_or_else(|| "db.t4g.micro".to_string()),
+            )
+        } else {
+            None
+        },
+        postgres_engine_version: if is_managed_postgres {
+            Some(
+                config
+                    .postgres
+                    .as_ref()
+                    .and_then(|p| p.engine_version.clone())
+                    .unwrap_or_else(|| "16.4".to_string()),
+            )
+        } else {
+            None
+        },
+        postgres_db_name: if is_managed_postgres {
+            Some(
+                config
+                    .postgres
+                    .as_ref()
+                    .and_then(|p| p.db_name.clone())
+                    .unwrap_or_else(|| "rindexer".to_string()),
+            )
+        } else {
+            None
+        },
+        postgres_db_username: if is_managed_postgres {
+            Some(
+                config
+                    .postgres
+                    .as_ref()
+                    .and_then(|p| p.db_username.clone())
+                    .unwrap_or_else(|| "rindexer".to_string()),
+            )
+        } else {
+            None
+        },
+        postgres_backup_retention: if is_managed_postgres {
+            Some(
+                config
+                    .postgres
+                    .as_ref()
+                    .and_then(|p| p.backup_retention)
+                    .unwrap_or(7),
+            )
+        } else {
+            None
+        },
+        postgres_manage_master_user_password: if is_managed_postgres {
+            Some(
+                config
+                    .postgres
+                    .as_ref()
+                    .and_then(|p| p.manage_master_user_password)
+                    .unwrap_or(true),
+            )
+        } else {
+            None
+        },
+        postgres_force_ssl: if is_managed_postgres {
+            Some(
+                config
+                    .postgres
+                    .as_ref()
+                    .and_then(|p| p.force_ssl)
+                    .unwrap_or(false),
+            )
+        } else {
+            None
+        },
         // Bare metal extras
-        bare_metal_ssh_user: if is_bare_metal { Some("ubuntu".to_string()) } else { None },
+        bare_metal_ssh_user: if is_bare_metal {
+            Some("ubuntu".to_string())
+        } else {
+            None
+        },
         bare_metal_ssh_port: if is_bare_metal { Some(22) } else { None },
-        bare_metal_rpc_proxy_mem_limit: if is_bare_metal { Some(config.bare_metal.as_ref().and_then(|b| b.rpc_proxy_mem_limit.clone()).unwrap_or_else(|| "1g".to_string())) } else { None },
-        bare_metal_indexer_mem_limit: if is_bare_metal { Some(config.bare_metal.as_ref().and_then(|b| b.indexer_mem_limit.clone()).unwrap_or_else(|| "2g".to_string())) } else { None },
-        bare_metal_secrets_encryption: if is_bare_metal { Some(config.bare_metal.as_ref().and_then(|b| b.secrets_encryption.clone()).unwrap_or_else(|| "none".to_string())) } else { None },
+        bare_metal_rpc_proxy_mem_limit: if is_bare_metal {
+            Some(
+                config
+                    .bare_metal
+                    .as_ref()
+                    .and_then(|b| b.rpc_proxy_mem_limit.clone())
+                    .unwrap_or_else(|| "1g".to_string()),
+            )
+        } else {
+            None
+        },
+        bare_metal_indexer_mem_limit: if is_bare_metal {
+            Some(
+                config
+                    .bare_metal
+                    .as_ref()
+                    .and_then(|b| b.indexer_mem_limit.clone())
+                    .unwrap_or_else(|| "2g".to_string()),
+            )
+        } else {
+            None
+        },
+        bare_metal_secrets_encryption: if is_bare_metal {
+            Some(
+                config
+                    .bare_metal
+                    .as_ref()
+                    .and_then(|b| b.secrets_encryption.clone())
+                    .unwrap_or_else(|| "none".to_string()),
+            )
+        } else {
+            None
+        },
         // K3s extras
-        k3s_version: if !is_bare_metal && engine == ComputeEngine::K3s { Some(config.compute.k3s.as_ref().and_then(|k| k.version.clone()).unwrap_or_else(|| "v1.30.4+k3s1".to_string())) } else { None },
+        k3s_version: if !is_bare_metal && engine == ComputeEngine::K3s {
+            Some(
+                config
+                    .compute
+                    .k3s
+                    .as_ref()
+                    .and_then(|k| k.version.clone())
+                    .unwrap_or_else(|| "v1.30.4+k3s1".to_string()),
+            )
+        } else {
+            None
+        },
         // Secrets management
-        secrets_manager_kms_key_id: if secrets_mode == "provider" { Some(config.secrets.kms_key_id.clone().unwrap_or_default()) } else { None },
-        external_secret_store_name: if secrets_mode == "external" { Some(config.secrets.external_store_name.clone().unwrap_or_default()) } else { None },
-        external_secret_key: if secrets_mode == "external" { Some(config.secrets.external_secret_key.clone().unwrap_or_default()) } else { None },
-        eso_chart_version: if matches!(secrets_mode.as_str(), "provider" | "external") { Some(config.secrets.eso_chart_version.clone().unwrap_or_else(|| "0.9.13".to_string())) } else { None },
+        secrets_manager_kms_key_id: if secrets_mode == "provider" {
+            Some(config.secrets.kms_key_id.clone().unwrap_or_default())
+        } else {
+            None
+        },
+        external_secret_store_name: if secrets_mode == "external" {
+            Some(
+                config
+                    .secrets
+                    .external_store_name
+                    .clone()
+                    .unwrap_or_default(),
+            )
+        } else {
+            None
+        },
+        external_secret_key: if secrets_mode == "external" {
+            Some(
+                config
+                    .secrets
+                    .external_secret_key
+                    .clone()
+                    .unwrap_or_default(),
+            )
+        } else {
+            None
+        },
+        eso_chart_version: if matches!(secrets_mode.as_str(), "provider" | "external") {
+            Some(
+                config
+                    .secrets
+                    .eso_chart_version
+                    .clone()
+                    .unwrap_or_else(|| "0.9.13".to_string()),
+            )
+        } else {
+            None
+        },
         // Monitoring
         monitoring_enabled: if is_k8s { Some(is_monitoring) } else { None },
-        kube_prometheus_stack_version: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.kube_prometheus_stack_version.clone()).unwrap_or_else(|| "72.6.2".to_string())) } else { None },
-        grafana_admin_password_secret_name: if is_monitoring { Some(String::new()) } else { None },
-        grafana_ingress_enabled: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.grafana_ingress_enabled).unwrap_or(true)) } else { None },
-        grafana_hostname: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.grafana_hostname.clone()).unwrap_or_default()) } else { None },
-        alertmanager_slack_webhook_secret_name: if is_monitoring { Some(String::new()) } else { None },
-        alertmanager_sns_topic_arn: if is_monitoring { Some(String::new()) } else { None },
-        alertmanager_pagerduty_routing_key_secret_name: if is_monitoring { Some(String::new()) } else { None },
-        alertmanager_route_target: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.alertmanager_route_target.clone()).unwrap_or_else(|| "slack".to_string())) } else { None },
-        alertmanager_slack_channel: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.alertmanager_slack_channel.clone()).unwrap_or_else(|| "#alerts".to_string())) } else { None },
-        loki_enabled: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.loki_enabled).unwrap_or(false)) } else { None },
-        loki_chart_version: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.loki_chart_version.clone()).unwrap_or_else(|| "6.24.0".to_string())) } else { None },
-        promtail_chart_version: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.promtail_chart_version.clone()).unwrap_or_else(|| "6.16.6".to_string())) } else { None },
-        loki_persistence_enabled: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.loki_persistence_enabled).unwrap_or(false)) } else { None },
-        clickhouse_metrics_url: if is_monitoring { Some(config.monitoring.as_ref().and_then(|m| m.clickhouse_metrics_url.clone()).unwrap_or_default()) } else { None },
+        kube_prometheus_stack_version: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.kube_prometheus_stack_version.clone())
+                    .unwrap_or_else(|| "72.6.2".to_string()),
+            )
+        } else {
+            None
+        },
+        grafana_admin_password_secret_name: if is_monitoring {
+            Some(String::new())
+        } else {
+            None
+        },
+        grafana_ingress_enabled: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.grafana_ingress_enabled)
+                    .unwrap_or(true),
+            )
+        } else {
+            None
+        },
+        grafana_hostname: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.grafana_hostname.clone())
+                    .unwrap_or_default(),
+            )
+        } else {
+            None
+        },
+        alertmanager_slack_webhook_secret_name: if is_monitoring {
+            Some(String::new())
+        } else {
+            None
+        },
+        alertmanager_sns_topic_arn: if is_monitoring {
+            Some(String::new())
+        } else {
+            None
+        },
+        alertmanager_pagerduty_routing_key_secret_name: if is_monitoring {
+            Some(String::new())
+        } else {
+            None
+        },
+        alertmanager_route_target: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.alertmanager_route_target.clone())
+                    .unwrap_or_else(|| "slack".to_string()),
+            )
+        } else {
+            None
+        },
+        alertmanager_slack_channel: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.alertmanager_slack_channel.clone())
+                    .unwrap_or_else(|| "#alerts".to_string()),
+            )
+        } else {
+            None
+        },
+        loki_enabled: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.loki_enabled)
+                    .unwrap_or(false),
+            )
+        } else {
+            None
+        },
+        loki_chart_version: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.loki_chart_version.clone())
+                    .unwrap_or_else(|| "6.24.0".to_string()),
+            )
+        } else {
+            None
+        },
+        promtail_chart_version: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.promtail_chart_version.clone())
+                    .unwrap_or_else(|| "6.16.6".to_string()),
+            )
+        } else {
+            None
+        },
+        loki_persistence_enabled: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.loki_persistence_enabled)
+                    .unwrap_or(false),
+            )
+        } else {
+            None
+        },
+        clickhouse_metrics_url: if is_monitoring {
+            Some(
+                config
+                    .monitoring
+                    .as_ref()
+                    .and_then(|m| m.clickhouse_metrics_url.clone())
+                    .unwrap_or_default(),
+            )
+        } else {
+            None
+        },
     };
 
     let json_value = serde_json::to_value(&vars).map_err(CliError::OutputParseError)?;
@@ -373,16 +848,17 @@ fn infer_indexer_rpc_url(config: &EvmCloudConfig, rpc_proxy_enabled: bool) -> Re
         return Ok("http://erpc:4000".to_string());
     }
 
-    let endpoint = config
-        .rpc
-        .endpoints
-        .values()
-        .next()
-        .ok_or_else(|| CliError::ConfigValidation {
-            field: "rpc.endpoints".to_string(),
-            message: "at least one RPC endpoint is required when eRPC config is not provided"
-                .to_string(),
-        })?;
+    let endpoint =
+        config
+            .rpc
+            .endpoints
+            .values()
+            .next()
+            .ok_or_else(|| CliError::ConfigValidation {
+                field: "rpc.endpoints".to_string(),
+                message: "at least one RPC endpoint is required when eRPC config is not provided"
+                    .to_string(),
+            })?;
 
     Ok(endpoint.clone())
 }
@@ -461,12 +937,17 @@ mode = "provider"
         assert!(object.contains_key("network_availability_zones"));
         assert!(object.contains_key("network_enable_nat_gateway"));
         // Verify AZs are derived from region
-        let azs = object["network_availability_zones"].as_array().expect("azs is array");
+        let azs = object["network_availability_zones"]
+            .as_array()
+            .expect("azs is array");
         assert_eq!(azs.len(), 2);
         assert_eq!(azs[0].as_str().unwrap(), "us-east-1a");
         assert_eq!(azs[1].as_str().unwrap(), "us-east-1b");
         // Verify NAT gateway defaults to true
-        assert_eq!(object["network_enable_nat_gateway"].as_bool().unwrap(), true);
+        assert_eq!(
+            object["network_enable_nat_gateway"].as_bool().unwrap(),
+            true
+        );
         assert!(object.contains_key("compute_engine"));
         assert!(object.contains_key("database_mode"));
         assert!(object.contains_key("infrastructure_provider"));
@@ -511,7 +992,10 @@ mode = "provider"
             indexer_rpc_url: String::new(),
             rindexer_config_yaml: String::new(),
             erpc_config_yaml: String::new(),
-            rindexer_abis: std::collections::BTreeMap::from([("dummy".to_string(), "{}".to_string())]),
+            rindexer_abis: std::collections::BTreeMap::from([(
+                "dummy".to_string(),
+                "{}".to_string(),
+            )]),
             // New fields — all Some to ensure they appear in JSON keys
             deployment_target: String::new(),
             runtime_arch: String::new(),
@@ -578,9 +1062,39 @@ mode = "provider"
 
         // Check multiple resolved configs to catch conditional variables.
         let configs = [
-            ResolvedConfig { is_bare_metal: false, is_postgres: false, is_managed_postgres: false, is_k8s: false, is_monitoring: false, engine: ComputeEngine::Ec2, ingress_mode: IngressMode::None, secrets_mode_val: "inline".to_string(), user_defaults: std::collections::HashMap::new() },
-            ResolvedConfig { is_bare_metal: false, is_postgres: false, is_managed_postgres: false, is_k8s: true, is_monitoring: false, engine: ComputeEngine::K3s, ingress_mode: IngressMode::None, secrets_mode_val: "inline".to_string(), user_defaults: std::collections::HashMap::new() },
-            ResolvedConfig { is_bare_metal: false, is_postgres: true, is_managed_postgres: true, is_k8s: false, is_monitoring: false, engine: ComputeEngine::Ec2, ingress_mode: IngressMode::None, secrets_mode_val: "provider".to_string(), user_defaults: std::collections::HashMap::new() },
+            ResolvedConfig {
+                is_bare_metal: false,
+                is_postgres: false,
+                is_managed_postgres: false,
+                is_k8s: false,
+                is_monitoring: false,
+                engine: ComputeEngine::Ec2,
+                ingress_mode: IngressMode::None,
+                secrets_mode_val: "inline".to_string(),
+                user_defaults: std::collections::HashMap::new(),
+            },
+            ResolvedConfig {
+                is_bare_metal: false,
+                is_postgres: false,
+                is_managed_postgres: false,
+                is_k8s: true,
+                is_monitoring: false,
+                engine: ComputeEngine::K3s,
+                ingress_mode: IngressMode::None,
+                secrets_mode_val: "inline".to_string(),
+                user_defaults: std::collections::HashMap::new(),
+            },
+            ResolvedConfig {
+                is_bare_metal: false,
+                is_postgres: true,
+                is_managed_postgres: true,
+                is_k8s: false,
+                is_monitoring: false,
+                engine: ComputeEngine::Ec2,
+                ingress_mode: IngressMode::None,
+                secrets_mode_val: "provider".to_string(),
+                user_defaults: std::collections::HashMap::new(),
+            },
         ];
 
         for rc in &configs {

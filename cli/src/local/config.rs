@@ -53,9 +53,11 @@ pub(crate) fn ensure_default_config_bundle(fresh: bool, chain_id: u64) -> Result
     })?;
 
     if !rindexer_path.is_file() {
-        fs::write(&rindexer_path, default_rindexer_yaml(fresh, chain_id)).map_err(|source| CliError::Io {
-            source,
-            path: rindexer_path.clone(),
+        fs::write(&rindexer_path, default_rindexer_yaml(fresh, chain_id)).map_err(|source| {
+            CliError::Io {
+                source,
+                path: rindexer_path.clone(),
+            }
         })?;
     }
 
@@ -254,10 +256,7 @@ pub(crate) fn load_user_rindexer_config(
         path: config_path.display().to_string(),
     })?;
 
-    let abis_dir = config_path
-        .parent()
-        .unwrap_or(Path::new("."))
-        .join("abis");
+    let abis_dir = config_path.parent().unwrap_or(Path::new(".")).join("abis");
 
     let mut abis = Vec::new();
     if abis_dir.is_dir() {

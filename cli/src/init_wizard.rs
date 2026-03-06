@@ -5,7 +5,9 @@ use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
 use crate::config::schema::{ComputeEngine, InfrastructureProvider, IngressMode, WorkloadMode};
 use crate::error::{CliError, Result};
-use crate::init_answers::{load_from_config, DatabaseProfile, IndexerConfigStrategy, InitAnswers, InitMode};
+use crate::init_answers::{
+    load_from_config, DatabaseProfile, IndexerConfigStrategy, InitAnswers, InitMode,
+};
 
 pub(crate) fn collect_answers(
     config_path: Option<&Path>,
@@ -28,7 +30,7 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
     let theme = ColorfulTheme::default();
 
     let mode = mode_override.unwrap_or_else(|| {
-        let options = ["easy", "power"];
+        let options = [InitMode::Easy.label(), InitMode::Power.label()];
         let selection = Select::with_theme(&theme)
             .with_prompt("Integration mode")
             .items(&options)
@@ -48,7 +50,10 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .interact_text()
         .map_err(|err| CliError::PromptFailed(err.to_string()))?;
 
-    let provider_options = [InfrastructureProvider::Aws, InfrastructureProvider::BareMetal];
+    let provider_options = [
+        InfrastructureProvider::Aws,
+        InfrastructureProvider::BareMetal,
+    ];
     let provider_labels: Vec<&str> = provider_options.iter().map(|p| p.as_str()).collect();
     let provider_idx = Select::with_theme(&theme)
         .with_prompt("Infrastructure provider")
@@ -74,7 +79,10 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
     let compute_engine = compute_options[compute_idx];
 
     // k3s/eks always use external deployers; ec2/docker_compose can choose.
-    let workload_mode = if matches!(compute_engine, ComputeEngine::Ec2 | ComputeEngine::DockerCompose) {
+    let workload_mode = if matches!(
+        compute_engine,
+        ComputeEngine::Ec2 | ComputeEngine::DockerCompose
+    ) {
         let wm_options = [WorkloadMode::Terraform, WorkloadMode::External];
         let wm_labels: Vec<&str> = wm_options.iter().map(|m| m.as_str()).collect();
         let wm_idx = Select::with_theme(&theme)
@@ -139,7 +147,10 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         rpc_endpoints.insert(chain.clone(), endpoint);
     }
 
-    let indexer_options = ["generate starter rindexer.yaml", "use existing rindexer.yaml path"];
+    let indexer_options = [
+        "generate starter rindexer.yaml",
+        "use existing rindexer.yaml path",
+    ];
     let indexer_idx = Select::with_theme(&theme)
         .with_prompt("Indexer config strategy")
         .items(&indexer_options)
@@ -163,7 +174,11 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .interact()
         .map_err(|err| CliError::PromptFailed(err.to_string()))?;
 
-    let needs_instance_type = is_aws && matches!(compute_engine, ComputeEngine::Ec2 | ComputeEngine::Eks | ComputeEngine::K3s);
+    let needs_instance_type = is_aws
+        && matches!(
+            compute_engine,
+            ComputeEngine::Ec2 | ComputeEngine::Eks | ComputeEngine::K3s
+        );
     let instance_type = if needs_instance_type {
         let default = "t3.small".to_string();
 
@@ -289,6 +304,9 @@ fn select_chains(theme: &ColorfulTheme) -> Result<Vec<String>> {
 /// Strip protocol prefix and trailing slash from a hostname input.
 fn sanitize_hostname(raw: &str) -> String {
     let s = raw.trim();
-    let s = s.strip_prefix("https://").or_else(|| s.strip_prefix("http://")).unwrap_or(s);
+    let s = s
+        .strip_prefix("https://")
+        .or_else(|| s.strip_prefix("http://"))
+        .unwrap_or(s);
     s.trim_end_matches('/').to_string()
 }

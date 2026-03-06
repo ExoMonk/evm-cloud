@@ -6,7 +6,11 @@ use crate::output::{self, ColorMode};
 
 const REQUIRED_TOOLS: &[&str] = &["kind", "kubectl", "helm", "docker"];
 
-pub(crate) fn check_all(profile: super::Profile, check_ports: bool, color: ColorMode) -> Result<()> {
+pub(crate) fn check_all(
+    profile: super::Profile,
+    check_ports: bool,
+    color: ColorMode,
+) -> Result<()> {
     check_tools(color)?;
     check_docker_running()?;
     check_docker_memory(profile, color);

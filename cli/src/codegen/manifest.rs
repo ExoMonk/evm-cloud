@@ -134,14 +134,23 @@ impl ResolvedConfig {
 
         let mut d = HashMap::new();
         // Core
-        d.insert("infrastructure_provider".into(), hcl_str(config.database.provider.as_str()));
+        d.insert(
+            "infrastructure_provider".into(),
+            hcl_str(config.database.provider.as_str()),
+        );
         d.insert("database_mode".into(), hcl_str(&config.database.mode));
         d.insert("compute_engine".into(), hcl_str(engine.as_str()));
         d.insert("workload_mode".into(), hcl_str(workload_mode.as_str()));
         d.insert("secrets_mode".into(), hcl_str(&secrets_mode_val));
         d.insert("ingress_mode".into(), hcl_str(ingress_mode.as_str()));
-        d.insert("erpc_hostname".into(), hcl_str(config.ingress.domain.as_deref().unwrap_or("")));
-        d.insert("ingress_tls_email".into(), hcl_str(config.ingress.tls_email.as_deref().unwrap_or("")));
+        d.insert(
+            "erpc_hostname".into(),
+            hcl_str(config.ingress.domain.as_deref().unwrap_or("")),
+        );
+        d.insert(
+            "ingress_tls_email".into(),
+            hcl_str(config.ingress.tls_email.as_deref().unwrap_or("")),
+        );
         // Deployment
         if let Some(ref dt) = config.project.deployment_target {
             d.insert("deployment_target".into(), hcl_str(dt));
@@ -184,7 +193,10 @@ impl ResolvedConfig {
         if !is_bare_metal {
             d.insert("networking_enabled".into(), VarDefault::Bool(true));
             d.insert("aws_region".into(), hcl_str(region));
-            d.insert("network_availability_zones".into(), VarDefault::Hcl(format!("[\"{region}a\", \"{region}b\"]")));
+            d.insert(
+                "network_availability_zones".into(),
+                VarDefault::Hcl(format!("[\"{region}a\", \"{region}b\"]")),
+            );
             d.insert("network_enable_nat_gateway".into(), VarDefault::Bool(true));
             if let Some(ref net) = config.networking {
                 if let Some(ref cidr) = net.vpc_cidr {
@@ -198,47 +210,106 @@ impl ResolvedConfig {
                 }
             }
             if engine == ComputeEngine::Ec2 {
-                d.insert("ec2_instance_type".into(), hcl_str(config.compute.instance_type.as_deref().unwrap_or("t3.small")));
+                d.insert(
+                    "ec2_instance_type".into(),
+                    hcl_str(
+                        config
+                            .compute
+                            .instance_type
+                            .as_deref()
+                            .unwrap_or("t3.small"),
+                    ),
+                );
                 if let Some(ref ec2) = config.compute.ec2 {
-                    if let Some(ref v) = ec2.rpc_proxy_mem_limit { d.insert("ec2_rpc_proxy_mem_limit".into(), hcl_str(v)); }
-                    if let Some(ref v) = ec2.indexer_mem_limit { d.insert("ec2_indexer_mem_limit".into(), hcl_str(v)); }
-                    if let Some(v) = ec2.secret_recovery_window_in_days { d.insert("ec2_secret_recovery_window_in_days".into(), VarDefault::Number(v)); }
+                    if let Some(ref v) = ec2.rpc_proxy_mem_limit {
+                        d.insert("ec2_rpc_proxy_mem_limit".into(), hcl_str(v));
+                    }
+                    if let Some(ref v) = ec2.indexer_mem_limit {
+                        d.insert("ec2_indexer_mem_limit".into(), hcl_str(v));
+                    }
+                    if let Some(v) = ec2.secret_recovery_window_in_days {
+                        d.insert(
+                            "ec2_secret_recovery_window_in_days".into(),
+                            VarDefault::Number(v),
+                        );
+                    }
                 }
             }
             if engine == ComputeEngine::K3s {
-                d.insert("k3s_instance_type".into(), hcl_str(config.compute.instance_type.as_deref().unwrap_or("t3.small")));
+                d.insert(
+                    "k3s_instance_type".into(),
+                    hcl_str(
+                        config
+                            .compute
+                            .instance_type
+                            .as_deref()
+                            .unwrap_or("t3.small"),
+                    ),
+                );
                 if let Some(ref k) = config.compute.k3s {
-                    if let Some(ref v) = k.version { d.insert("k3s_version".into(), hcl_str(v)); }
+                    if let Some(ref v) = k.version {
+                        d.insert("k3s_version".into(), hcl_str(v));
+                    }
                 }
             }
         } else {
             // Bare metal extras
             if let Some(ref bm) = config.bare_metal {
-                if let Some(ref v) = bm.rpc_proxy_mem_limit { d.insert("bare_metal_rpc_proxy_mem_limit".into(), hcl_str(v)); }
-                if let Some(ref v) = bm.indexer_mem_limit { d.insert("bare_metal_indexer_mem_limit".into(), hcl_str(v)); }
-                if let Some(ref v) = bm.secrets_encryption { d.insert("bare_metal_secrets_encryption".into(), hcl_str(v)); }
+                if let Some(ref v) = bm.rpc_proxy_mem_limit {
+                    d.insert("bare_metal_rpc_proxy_mem_limit".into(), hcl_str(v));
+                }
+                if let Some(ref v) = bm.indexer_mem_limit {
+                    d.insert("bare_metal_indexer_mem_limit".into(), hcl_str(v));
+                }
+                if let Some(ref v) = bm.secrets_encryption {
+                    d.insert("bare_metal_secrets_encryption".into(), hcl_str(v));
+                }
             }
         }
         // Database
-        d.insert("indexer_storage_backend".into(), hcl_str(&config.database.storage_backend));
+        d.insert(
+            "indexer_storage_backend".into(),
+            hcl_str(&config.database.storage_backend),
+        );
         if is_postgres {
             d.insert("postgres_enabled".into(), VarDefault::Bool(true));
         }
         if is_managed_postgres {
             if let Some(ref pg) = config.postgres {
-                if let Some(ref v) = pg.instance_class { d.insert("postgres_instance_class".into(), hcl_str(v)); }
-                if let Some(ref v) = pg.engine_version { d.insert("postgres_engine_version".into(), hcl_str(v)); }
-                if let Some(ref v) = pg.db_name { d.insert("postgres_db_name".into(), hcl_str(v)); }
-                if let Some(ref v) = pg.db_username { d.insert("postgres_db_username".into(), hcl_str(v)); }
-                if let Some(v) = pg.backup_retention { d.insert("postgres_backup_retention".into(), VarDefault::Number(v)); }
-                if let Some(v) = pg.manage_master_user_password { d.insert("postgres_manage_master_user_password".into(), VarDefault::Bool(v)); }
-                if let Some(v) = pg.force_ssl { d.insert("postgres_force_ssl".into(), VarDefault::Bool(v)); }
+                if let Some(ref v) = pg.instance_class {
+                    d.insert("postgres_instance_class".into(), hcl_str(v));
+                }
+                if let Some(ref v) = pg.engine_version {
+                    d.insert("postgres_engine_version".into(), hcl_str(v));
+                }
+                if let Some(ref v) = pg.db_name {
+                    d.insert("postgres_db_name".into(), hcl_str(v));
+                }
+                if let Some(ref v) = pg.db_username {
+                    d.insert("postgres_db_username".into(), hcl_str(v));
+                }
+                if let Some(v) = pg.backup_retention {
+                    d.insert("postgres_backup_retention".into(), VarDefault::Number(v));
+                }
+                if let Some(v) = pg.manage_master_user_password {
+                    d.insert(
+                        "postgres_manage_master_user_password".into(),
+                        VarDefault::Bool(v),
+                    );
+                }
+                if let Some(v) = pg.force_ssl {
+                    d.insert("postgres_force_ssl".into(), VarDefault::Bool(v));
+                }
             }
         }
         // Container images
         if let Some(ref c) = config.containers {
-            if let Some(ref v) = c.rpc_proxy_image { d.insert("rpc_proxy_image".into(), hcl_str(v)); }
-            if let Some(ref v) = c.indexer_image { d.insert("indexer_image".into(), hcl_str(v)); }
+            if let Some(ref v) = c.rpc_proxy_image {
+                d.insert("rpc_proxy_image".into(), hcl_str(v));
+            }
+            if let Some(ref v) = c.indexer_image {
+                d.insert("indexer_image".into(), hcl_str(v));
+            }
         }
         // Secrets details
         if let Some(ref v) = config.secrets.kms_key_id {
@@ -257,32 +328,71 @@ impl ResolvedConfig {
         if is_monitoring {
             d.insert("monitoring_enabled".into(), VarDefault::Bool(true));
             if let Some(ref mon) = config.monitoring {
-                if let Some(ref v) = mon.kube_prometheus_stack_version { d.insert("kube_prometheus_stack_version".into(), hcl_str(v)); }
-                if let Some(v) = mon.grafana_ingress_enabled { d.insert("grafana_ingress_enabled".into(), VarDefault::Bool(v)); }
-                if let Some(ref v) = mon.grafana_hostname { d.insert("grafana_hostname".into(), hcl_str(v)); }
-                if let Some(ref v) = mon.alertmanager_route_target { d.insert("alertmanager_route_target".into(), hcl_str(v)); }
-                if let Some(ref v) = mon.alertmanager_slack_channel { d.insert("alertmanager_slack_channel".into(), hcl_str(v)); }
-                if let Some(v) = mon.loki_enabled { d.insert("loki_enabled".into(), VarDefault::Bool(v)); }
-                if let Some(ref v) = mon.loki_chart_version { d.insert("loki_chart_version".into(), hcl_str(v)); }
-                if let Some(ref v) = mon.promtail_chart_version { d.insert("promtail_chart_version".into(), hcl_str(v)); }
-                if let Some(v) = mon.loki_persistence_enabled { d.insert("loki_persistence_enabled".into(), VarDefault::Bool(v)); }
-                if let Some(ref v) = mon.clickhouse_metrics_url { d.insert("clickhouse_metrics_url".into(), hcl_str(v)); }
+                if let Some(ref v) = mon.kube_prometheus_stack_version {
+                    d.insert("kube_prometheus_stack_version".into(), hcl_str(v));
+                }
+                if let Some(v) = mon.grafana_ingress_enabled {
+                    d.insert("grafana_ingress_enabled".into(), VarDefault::Bool(v));
+                }
+                if let Some(ref v) = mon.grafana_hostname {
+                    d.insert("grafana_hostname".into(), hcl_str(v));
+                }
+                if let Some(ref v) = mon.alertmanager_route_target {
+                    d.insert("alertmanager_route_target".into(), hcl_str(v));
+                }
+                if let Some(ref v) = mon.alertmanager_slack_channel {
+                    d.insert("alertmanager_slack_channel".into(), hcl_str(v));
+                }
+                if let Some(v) = mon.loki_enabled {
+                    d.insert("loki_enabled".into(), VarDefault::Bool(v));
+                }
+                if let Some(ref v) = mon.loki_chart_version {
+                    d.insert("loki_chart_version".into(), hcl_str(v));
+                }
+                if let Some(ref v) = mon.promtail_chart_version {
+                    d.insert("promtail_chart_version".into(), hcl_str(v));
+                }
+                if let Some(v) = mon.loki_persistence_enabled {
+                    d.insert("loki_persistence_enabled".into(), VarDefault::Bool(v));
+                }
+                if let Some(ref v) = mon.clickhouse_metrics_url {
+                    d.insert("clickhouse_metrics_url".into(), hcl_str(v));
+                }
             }
         }
         // Indexer / RPC
-        d.insert("rpc_proxy_enabled".into(), VarDefault::Bool(rpc_proxy_enabled));
+        d.insert(
+            "rpc_proxy_enabled".into(),
+            VarDefault::Bool(rpc_proxy_enabled),
+        );
         d.insert("indexer_enabled".into(), VarDefault::Bool(true));
         let indexer_rpc_url = if rpc_proxy_enabled {
             "http://erpc:4000".to_string()
         } else {
-            config.rpc.endpoints.values().next().cloned().unwrap_or_default()
+            config
+                .rpc
+                .endpoints
+                .values()
+                .next()
+                .cloned()
+                .unwrap_or_default()
         };
         d.insert("indexer_rpc_url".into(), hcl_str(&indexer_rpc_url));
         // Config content: Easy mode inlines via tfvars.json; empty default prevents TF prompt
         d.insert("erpc_config_yaml".into(), hcl_str(""));
         d.insert("rindexer_config_yaml".into(), hcl_str(""));
 
-        Self { is_bare_metal, is_postgres, is_managed_postgres, is_k8s, is_monitoring, engine, ingress_mode, secrets_mode_val, user_defaults: d }
+        Self {
+            is_bare_metal,
+            is_postgres,
+            is_managed_postgres,
+            is_k8s,
+            is_monitoring,
+            engine,
+            ingress_mode,
+            secrets_mode_val,
+            user_defaults: d,
+        }
     }
 
     pub(crate) fn from_init_answers(answers: &InitAnswers) -> Self {
@@ -298,8 +408,16 @@ impl ResolvedConfig {
         let workload_mode = answers
             .workload_mode
             .unwrap_or_else(|| WorkloadMode::default_for_engine(engine));
-        let secrets_mode = if is_bare_metal || engine == ComputeEngine::K3s { "inline" } else { "provider" };
-        let storage_backend = if is_postgres { "postgres" } else { "clickhouse" };
+        let secrets_mode = if is_bare_metal || engine == ComputeEngine::K3s {
+            "inline"
+        } else {
+            "provider"
+        };
+        let storage_backend = if is_postgres {
+            "postgres"
+        } else {
+            "clickhouse"
+        };
         let database_mode = match answers.database_profile {
             DatabaseProfile::ManagedRds | DatabaseProfile::ManagedClickhouse => "managed",
             _ => "self_hosted",
@@ -309,26 +427,44 @@ impl ResolvedConfig {
         let mut d = HashMap::new();
         // Core
         d.insert("project_name".into(), hcl_str(&answers.project_name));
-        d.insert("infrastructure_provider".into(), hcl_str(answers.infrastructure_provider.as_str()));
+        d.insert(
+            "infrastructure_provider".into(),
+            hcl_str(answers.infrastructure_provider.as_str()),
+        );
         d.insert("database_mode".into(), hcl_str(database_mode));
         d.insert("compute_engine".into(), hcl_str(engine.as_str()));
         d.insert("workload_mode".into(), hcl_str(workload_mode.as_str()));
         d.insert("secrets_mode".into(), hcl_str(secrets_mode));
         d.insert("ingress_mode".into(), hcl_str(ingress_mode.as_str()));
-        d.insert("erpc_hostname".into(), hcl_str(answers.erpc_hostname.as_deref().unwrap_or("")));
-        d.insert("ingress_tls_email".into(), hcl_str(answers.ingress_tls_email.as_deref().unwrap_or("")));
+        d.insert(
+            "erpc_hostname".into(),
+            hcl_str(answers.erpc_hostname.as_deref().unwrap_or("")),
+        );
+        d.insert(
+            "ingress_tls_email".into(),
+            hcl_str(answers.ingress_tls_email.as_deref().unwrap_or("")),
+        );
         // Cloud-specific
         if !is_bare_metal {
             let region = answers.region.as_deref().unwrap_or("us-east-1");
             d.insert("networking_enabled".into(), VarDefault::Bool(true));
             d.insert("aws_region".into(), hcl_str(region));
-            d.insert("network_availability_zones".into(), VarDefault::Hcl(format!("[\"{region}a\", \"{region}b\"]")));
+            d.insert(
+                "network_availability_zones".into(),
+                VarDefault::Hcl(format!("[\"{region}a\", \"{region}b\"]")),
+            );
             d.insert("network_enable_nat_gateway".into(), VarDefault::Bool(true));
             if engine == ComputeEngine::Ec2 {
-                d.insert("ec2_instance_type".into(), hcl_str(answers.instance_type.as_deref().unwrap_or("t3.small")));
+                d.insert(
+                    "ec2_instance_type".into(),
+                    hcl_str(answers.instance_type.as_deref().unwrap_or("t3.small")),
+                );
             }
             if engine == ComputeEngine::K3s {
-                d.insert("k3s_instance_type".into(), hcl_str(answers.instance_type.as_deref().unwrap_or("t3.small")));
+                d.insert(
+                    "k3s_instance_type".into(),
+                    hcl_str(answers.instance_type.as_deref().unwrap_or("t3.small")),
+                );
             }
         }
         // Database
@@ -337,22 +473,38 @@ impl ResolvedConfig {
             d.insert("postgres_enabled".into(), VarDefault::Bool(true));
         }
         // Indexer / RPC
-        d.insert("rpc_proxy_enabled".into(), VarDefault::Bool(answers.generate_erpc_config));
+        d.insert(
+            "rpc_proxy_enabled".into(),
+            VarDefault::Bool(answers.generate_erpc_config),
+        );
         d.insert("indexer_enabled".into(), VarDefault::Bool(true));
         let indexer_rpc_url = if answers.generate_erpc_config {
             "http://erpc:4000"
         } else {
-            answers.rpc_endpoints.values().next().map(|s| s.as_str()).unwrap_or("")
+            answers
+                .rpc_endpoints
+                .values()
+                .next()
+                .map(|s| s.as_str())
+                .unwrap_or("")
         };
         d.insert("indexer_rpc_url".into(), hcl_str(indexer_rpc_url));
         // Config paths: Power mode uses file() wrapper, default to standard paths
         d.insert("erpc_config_yaml".into(), hcl_str("config/erpc.yaml"));
-        d.insert("rindexer_config_yaml".into(), hcl_str("config/rindexer.yaml"));
+        d.insert(
+            "rindexer_config_yaml".into(),
+            hcl_str("config/rindexer.yaml"),
+        );
 
         Self {
-            is_bare_metal, is_postgres, is_managed_postgres, is_k8s,
+            is_bare_metal,
+            is_postgres,
+            is_managed_postgres,
+            is_k8s,
             is_monitoring: false, // init wizard doesn't configure monitoring
-            engine, ingress_mode, secrets_mode_val: secrets_mode.to_string(),
+            engine,
+            ingress_mode,
+            secrets_mode_val: secrets_mode.to_string(),
             user_defaults: d,
         }
     }
@@ -363,7 +515,9 @@ impl ResolvedConfig {
             Condition::BareMetal => self.is_bare_metal,
             Condition::Cloud => !self.is_bare_metal,
             Condition::Engine(engines) => engines.contains(&self.engine.as_str()),
-            Condition::CloudEngine(engines) => !self.is_bare_metal && engines.contains(&self.engine.as_str()),
+            Condition::CloudEngine(engines) => {
+                !self.is_bare_metal && engines.contains(&self.engine.as_str())
+            }
             Condition::Postgres => self.is_postgres,
             Condition::ByodbPostgres => self.is_postgres && !self.is_managed_postgres,
             Condition::Clickhouse => !self.is_postgres,
@@ -621,7 +775,10 @@ pub(crate) fn render_variables_tf(resolved: &ResolvedConfig, mode: GenerationMod
         .filter(|v| resolved.matches(&v.condition))
         // Power mode: FilesetMap vars don't get a variable declaration — the
         // expression is used inline in main.tf (e.g. rindexer_abis uses fileset()).
-        .filter(|v| !(mode == GenerationMode::Power && matches!(v.passthrough, PassthroughMode::FilesetMap { .. })))
+        .filter(|v| {
+            !(mode == GenerationMode::Power
+                && matches!(v.passthrough, PassthroughMode::FilesetMap { .. }))
+        })
         .map(|v| v.render_variable_block(mode))
         .collect();
     format!("{}\n", blocks.join("\n\n"))
@@ -634,10 +791,7 @@ pub(crate) fn render_module_args(
     module_source: &str,
 ) -> String {
     let entries = manifest();
-    let mut lines = vec![
-        format!("  source = \"{module_source}\""),
-        String::new(),
-    ];
+    let mut lines = vec![format!("  source = \"{module_source}\""), String::new()];
     for entry in &entries {
         if !resolved.matches(&entry.condition) {
             continue;
@@ -654,8 +808,8 @@ pub(crate) fn render_module_args(
 mod tests {
     use super::*;
     use crate::config::schema::InfrastructureProvider;
-    use crate::init_answers::{DatabaseProfile, IndexerConfigStrategy, InitAnswers};
     use crate::init_answers::InitMode;
+    use crate::init_answers::{DatabaseProfile, IndexerConfigStrategy, InitAnswers};
     use std::collections::BTreeMap;
 
     // -----------------------------------------------------------------------
@@ -768,7 +922,10 @@ mode = "inline"
             workload_mode: None,
             database_profile: DatabaseProfile::ByodbClickhouse,
             chains: vec!["polygon".to_string()],
-            rpc_endpoints: BTreeMap::from([("polygon".to_string(), "https://rpc.example".to_string())]),
+            rpc_endpoints: BTreeMap::from([(
+                "polygon".to_string(),
+                "https://rpc.example".to_string(),
+            )]),
             indexer_config: IndexerConfigStrategy::Generate,
             generate_erpc_config: true,
             ingress_mode: IngressMode::None,
@@ -788,7 +945,10 @@ mode = "inline"
             workload_mode: None,
             database_profile: DatabaseProfile::ManagedRds,
             chains: vec!["ethereum".to_string()],
-            rpc_endpoints: BTreeMap::from([("ethereum".to_string(), "https://rpc.example".to_string())]),
+            rpc_endpoints: BTreeMap::from([(
+                "ethereum".to_string(),
+                "https://rpc.example".to_string(),
+            )]),
             indexer_config: IndexerConfigStrategy::Generate,
             generate_erpc_config: true,
             ingress_mode: IngressMode::None,
@@ -808,7 +968,10 @@ mode = "inline"
             workload_mode: None,
             database_profile: DatabaseProfile::ByodbClickhouse,
             chains: vec!["polygon".to_string()],
-            rpc_endpoints: BTreeMap::from([("polygon".to_string(), "https://rpc.example".to_string())]),
+            rpc_endpoints: BTreeMap::from([(
+                "polygon".to_string(),
+                "https://rpc.example".to_string(),
+            )]),
             indexer_config: IndexerConfigStrategy::Generate,
             generate_erpc_config: true,
             ingress_mode: IngressMode::None,
@@ -844,7 +1007,13 @@ mode = "inline"
             .lines()
             .filter_map(|line| {
                 let trimmed = line.trim();
-                if trimmed.contains(" = ") && !trimmed.starts_with("source") && !trimmed.starts_with("module") && !trimmed.starts_with("//") && !trimmed.starts_with("#") && !trimmed.starts_with("required_version") {
+                if trimmed.contains(" = ")
+                    && !trimmed.starts_with("source")
+                    && !trimmed.starts_with("module")
+                    && !trimmed.starts_with("//")
+                    && !trimmed.starts_with("#")
+                    && !trimmed.starts_with("required_version")
+                {
                     let name = trimmed.split('=').next().map(|s| s.trim().to_string());
                     name.filter(|n| !n.is_empty() && !n.contains('{') && !n.contains('"'))
                 } else {
@@ -870,21 +1039,47 @@ mode = "inline"
         let names = extract_var_names(&render_variables_tf(&resolved, GenerationMode::Easy));
 
         let expected = vec![
-            "project_name", "infrastructure_provider", "database_mode", "compute_engine",
-            "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "project_name",
+            "infrastructure_provider",
+            "database_mode",
+            "compute_engine",
+            "workload_mode",
+            "secrets_mode",
+            "ingress_mode",
+            "erpc_hostname",
+            "ingress_tls_email",
             "ssh_private_key_path",
-            "networking_enabled", "aws_region", "ssh_public_key",
-            "network_availability_zones", "network_enable_nat_gateway",
+            "networking_enabled",
+            "aws_region",
+            "ssh_public_key",
+            "network_availability_zones",
+            "network_enable_nat_gateway",
             "ec2_instance_type",
             "indexer_storage_backend",
-            "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
-            "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
-            "erpc_config_yaml", "rindexer_config_yaml", "rindexer_abis",
-            "deployment_target", "runtime_arch", "streaming_mode",
-            "rpc_proxy_image", "indexer_image",
-            "ec2_rpc_proxy_mem_limit", "ec2_indexer_mem_limit", "ec2_secret_recovery_window_in_days",
-            "network_environment", "network_vpc_cidr", "network_enable_vpc_endpoints",
-            "secrets_manager_secret_arn", "secrets_manager_kms_key_id", "eso_chart_version",
+            "indexer_clickhouse_url",
+            "indexer_clickhouse_user",
+            "indexer_clickhouse_password",
+            "indexer_clickhouse_db",
+            "rpc_proxy_enabled",
+            "indexer_enabled",
+            "indexer_rpc_url",
+            "erpc_config_yaml",
+            "rindexer_config_yaml",
+            "rindexer_abis",
+            "deployment_target",
+            "runtime_arch",
+            "streaming_mode",
+            "rpc_proxy_image",
+            "indexer_image",
+            "ec2_rpc_proxy_mem_limit",
+            "ec2_indexer_mem_limit",
+            "ec2_secret_recovery_window_in_days",
+            "network_environment",
+            "network_vpc_cidr",
+            "network_enable_vpc_endpoints",
+            "secrets_manager_secret_arn",
+            "secrets_manager_kms_key_id",
+            "eso_chart_version",
         ];
         assert_eq!(names, expected, "aws+clickhouse+ec2 easy");
     }
@@ -896,21 +1091,48 @@ mode = "inline"
         let names = extract_var_names(&render_variables_tf(&resolved, GenerationMode::Easy));
 
         let expected = vec![
-            "project_name", "infrastructure_provider", "database_mode", "compute_engine",
-            "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "project_name",
+            "infrastructure_provider",
+            "database_mode",
+            "compute_engine",
+            "workload_mode",
+            "secrets_mode",
+            "ingress_mode",
+            "erpc_hostname",
+            "ingress_tls_email",
             "ssh_private_key_path",
-            "networking_enabled", "aws_region", "ssh_public_key",
-            "network_availability_zones", "network_enable_nat_gateway",
-            "k3s_instance_type", "k3s_api_allowed_cidrs",
-            "indexer_storage_backend", "postgres_enabled",
-            "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
-            "erpc_config_yaml", "rindexer_config_yaml", "rindexer_abis",
-            "deployment_target", "runtime_arch", "streaming_mode",
-            "rpc_proxy_image", "indexer_image",
+            "networking_enabled",
+            "aws_region",
+            "ssh_public_key",
+            "network_availability_zones",
+            "network_enable_nat_gateway",
+            "k3s_instance_type",
+            "k3s_api_allowed_cidrs",
+            "indexer_storage_backend",
+            "postgres_enabled",
+            "rpc_proxy_enabled",
+            "indexer_enabled",
+            "indexer_rpc_url",
+            "erpc_config_yaml",
+            "rindexer_config_yaml",
+            "rindexer_abis",
+            "deployment_target",
+            "runtime_arch",
+            "streaming_mode",
+            "rpc_proxy_image",
+            "indexer_image",
             "ingress_class_name",
-            "network_environment", "network_vpc_cidr", "network_enable_vpc_endpoints",
-            "postgres_instance_class", "postgres_engine_version", "postgres_db_name", "postgres_db_username",
-            "postgres_backup_retention", "postgres_manage_master_user_password", "postgres_master_password", "postgres_force_ssl",
+            "network_environment",
+            "network_vpc_cidr",
+            "network_enable_vpc_endpoints",
+            "postgres_instance_class",
+            "postgres_engine_version",
+            "postgres_db_name",
+            "postgres_db_username",
+            "postgres_backup_retention",
+            "postgres_manage_master_user_password",
+            "postgres_master_password",
+            "postgres_force_ssl",
             "k3s_version",
             "monitoring_enabled",
         ];
@@ -924,17 +1146,38 @@ mode = "inline"
         let names = extract_var_names(&render_variables_tf(&resolved, GenerationMode::Easy));
 
         let expected = vec![
-            "project_name", "infrastructure_provider", "database_mode", "compute_engine",
-            "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "project_name",
+            "infrastructure_provider",
+            "database_mode",
+            "compute_engine",
+            "workload_mode",
+            "secrets_mode",
+            "ingress_mode",
+            "erpc_hostname",
+            "ingress_tls_email",
             "ssh_private_key_path",
-            "bare_metal_host", "bare_metal_ssh_user", "bare_metal_ssh_port",
+            "bare_metal_host",
+            "bare_metal_ssh_user",
+            "bare_metal_ssh_port",
             "indexer_storage_backend",
-            "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
-            "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
-            "erpc_config_yaml", "rindexer_config_yaml", "rindexer_abis",
-            "deployment_target", "runtime_arch", "streaming_mode",
-            "rpc_proxy_image", "indexer_image",
-            "bare_metal_rpc_proxy_mem_limit", "bare_metal_indexer_mem_limit", "bare_metal_secrets_encryption",
+            "indexer_clickhouse_url",
+            "indexer_clickhouse_user",
+            "indexer_clickhouse_password",
+            "indexer_clickhouse_db",
+            "rpc_proxy_enabled",
+            "indexer_enabled",
+            "indexer_rpc_url",
+            "erpc_config_yaml",
+            "rindexer_config_yaml",
+            "rindexer_abis",
+            "deployment_target",
+            "runtime_arch",
+            "streaming_mode",
+            "rpc_proxy_image",
+            "indexer_image",
+            "bare_metal_rpc_proxy_mem_limit",
+            "bare_metal_indexer_mem_limit",
+            "bare_metal_secrets_encryption",
         ];
         assert_eq!(names, expected, "bare_metal+clickhouse easy");
     }
@@ -948,21 +1191,46 @@ mode = "inline"
         // Power mode: no rindexer_abis (uses fileset inline)
         // power_answers sets secrets_mode = "provider" (aws + non-k3s)
         let expected = vec![
-            "project_name", "infrastructure_provider", "database_mode", "compute_engine",
-            "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "project_name",
+            "infrastructure_provider",
+            "database_mode",
+            "compute_engine",
+            "workload_mode",
+            "secrets_mode",
+            "ingress_mode",
+            "erpc_hostname",
+            "ingress_tls_email",
             "ssh_private_key_path",
-            "networking_enabled", "aws_region", "ssh_public_key",
-            "network_availability_zones", "network_enable_nat_gateway",
+            "networking_enabled",
+            "aws_region",
+            "ssh_public_key",
+            "network_availability_zones",
+            "network_enable_nat_gateway",
             "ec2_instance_type",
             "indexer_storage_backend",
-            "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
-            "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
-            "erpc_config_yaml", "rindexer_config_yaml",
-            "deployment_target", "runtime_arch", "streaming_mode",
-            "rpc_proxy_image", "indexer_image",
-            "ec2_rpc_proxy_mem_limit", "ec2_indexer_mem_limit", "ec2_secret_recovery_window_in_days",
-            "network_environment", "network_vpc_cidr", "network_enable_vpc_endpoints",
-            "secrets_manager_secret_arn", "secrets_manager_kms_key_id", "eso_chart_version",
+            "indexer_clickhouse_url",
+            "indexer_clickhouse_user",
+            "indexer_clickhouse_password",
+            "indexer_clickhouse_db",
+            "rpc_proxy_enabled",
+            "indexer_enabled",
+            "indexer_rpc_url",
+            "erpc_config_yaml",
+            "rindexer_config_yaml",
+            "deployment_target",
+            "runtime_arch",
+            "streaming_mode",
+            "rpc_proxy_image",
+            "indexer_image",
+            "ec2_rpc_proxy_mem_limit",
+            "ec2_indexer_mem_limit",
+            "ec2_secret_recovery_window_in_days",
+            "network_environment",
+            "network_vpc_cidr",
+            "network_enable_vpc_endpoints",
+            "secrets_manager_secret_arn",
+            "secrets_manager_kms_key_id",
+            "eso_chart_version",
         ];
         assert_eq!(names, expected, "aws+clickhouse+ec2 power");
     }
@@ -975,21 +1243,47 @@ mode = "inline"
 
         // k3s → secrets_mode = "inline", is_k8s = true, ManagedRds → is_managed_postgres = true
         let expected = vec![
-            "project_name", "infrastructure_provider", "database_mode", "compute_engine",
-            "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "project_name",
+            "infrastructure_provider",
+            "database_mode",
+            "compute_engine",
+            "workload_mode",
+            "secrets_mode",
+            "ingress_mode",
+            "erpc_hostname",
+            "ingress_tls_email",
             "ssh_private_key_path",
-            "networking_enabled", "aws_region", "ssh_public_key",
-            "network_availability_zones", "network_enable_nat_gateway",
-            "k3s_instance_type", "k3s_api_allowed_cidrs",
-            "indexer_storage_backend", "postgres_enabled",
-            "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
-            "erpc_config_yaml", "rindexer_config_yaml",
-            "deployment_target", "runtime_arch", "streaming_mode",
-            "rpc_proxy_image", "indexer_image",
+            "networking_enabled",
+            "aws_region",
+            "ssh_public_key",
+            "network_availability_zones",
+            "network_enable_nat_gateway",
+            "k3s_instance_type",
+            "k3s_api_allowed_cidrs",
+            "indexer_storage_backend",
+            "postgres_enabled",
+            "rpc_proxy_enabled",
+            "indexer_enabled",
+            "indexer_rpc_url",
+            "erpc_config_yaml",
+            "rindexer_config_yaml",
+            "deployment_target",
+            "runtime_arch",
+            "streaming_mode",
+            "rpc_proxy_image",
+            "indexer_image",
             "ingress_class_name",
-            "network_environment", "network_vpc_cidr", "network_enable_vpc_endpoints",
-            "postgres_instance_class", "postgres_engine_version", "postgres_db_name", "postgres_db_username",
-            "postgres_backup_retention", "postgres_manage_master_user_password", "postgres_master_password", "postgres_force_ssl",
+            "network_environment",
+            "network_vpc_cidr",
+            "network_enable_vpc_endpoints",
+            "postgres_instance_class",
+            "postgres_engine_version",
+            "postgres_db_name",
+            "postgres_db_username",
+            "postgres_backup_retention",
+            "postgres_manage_master_user_password",
+            "postgres_master_password",
+            "postgres_force_ssl",
             "k3s_version",
             "monitoring_enabled",
         ];
@@ -1003,17 +1297,37 @@ mode = "inline"
         let names = extract_var_names(&render_variables_tf(&resolved, GenerationMode::Power));
 
         let expected = vec![
-            "project_name", "infrastructure_provider", "database_mode", "compute_engine",
-            "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "project_name",
+            "infrastructure_provider",
+            "database_mode",
+            "compute_engine",
+            "workload_mode",
+            "secrets_mode",
+            "ingress_mode",
+            "erpc_hostname",
+            "ingress_tls_email",
             "ssh_private_key_path",
-            "bare_metal_host", "bare_metal_ssh_user", "bare_metal_ssh_port",
+            "bare_metal_host",
+            "bare_metal_ssh_user",
+            "bare_metal_ssh_port",
             "indexer_storage_backend",
-            "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
-            "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
-            "erpc_config_yaml", "rindexer_config_yaml",
-            "deployment_target", "runtime_arch", "streaming_mode",
-            "rpc_proxy_image", "indexer_image",
-            "bare_metal_rpc_proxy_mem_limit", "bare_metal_indexer_mem_limit", "bare_metal_secrets_encryption",
+            "indexer_clickhouse_url",
+            "indexer_clickhouse_user",
+            "indexer_clickhouse_password",
+            "indexer_clickhouse_db",
+            "rpc_proxy_enabled",
+            "indexer_enabled",
+            "indexer_rpc_url",
+            "erpc_config_yaml",
+            "rindexer_config_yaml",
+            "deployment_target",
+            "runtime_arch",
+            "streaming_mode",
+            "rpc_proxy_image",
+            "indexer_image",
+            "bare_metal_rpc_proxy_mem_limit",
+            "bare_metal_indexer_mem_limit",
+            "bare_metal_secrets_encryption",
         ];
         assert_eq!(names, expected, "bare_metal+clickhouse power");
     }
@@ -1022,24 +1336,54 @@ mode = "inline"
     fn snapshot_easy_aws_clickhouse_ec2_module_arg_names() {
         let config = easy_config_aws_clickhouse_ec2();
         let resolved = ResolvedConfig::from_evm_config(&config);
-        let names = extract_module_arg_names(&render_module_args(&resolved, GenerationMode::Easy, "test-source"));
+        let names = extract_module_arg_names(&render_module_args(
+            &resolved,
+            GenerationMode::Easy,
+            "test-source",
+        ));
 
         let expected = vec![
-            "project_name", "infrastructure_provider", "database_mode", "compute_engine",
-            "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "project_name",
+            "infrastructure_provider",
+            "database_mode",
+            "compute_engine",
+            "workload_mode",
+            "secrets_mode",
+            "ingress_mode",
+            "erpc_hostname",
+            "ingress_tls_email",
             "ssh_private_key_path",
-            "networking_enabled", "aws_region", "ssh_public_key",
-            "network_availability_zones", "network_enable_nat_gateway",
+            "networking_enabled",
+            "aws_region",
+            "ssh_public_key",
+            "network_availability_zones",
+            "network_enable_nat_gateway",
             "ec2_instance_type",
             "indexer_storage_backend",
-            "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
-            "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
-            "erpc_config_yaml", "rindexer_config_yaml", "rindexer_abis",
-            "deployment_target", "runtime_arch", "streaming_mode",
-            "rpc_proxy_image", "indexer_image",
-            "ec2_rpc_proxy_mem_limit", "ec2_indexer_mem_limit", "ec2_secret_recovery_window_in_days",
-            "network_environment", "network_vpc_cidr", "network_enable_vpc_endpoints",
-            "secrets_manager_secret_arn", "secrets_manager_kms_key_id", "eso_chart_version",
+            "indexer_clickhouse_url",
+            "indexer_clickhouse_user",
+            "indexer_clickhouse_password",
+            "indexer_clickhouse_db",
+            "rpc_proxy_enabled",
+            "indexer_enabled",
+            "indexer_rpc_url",
+            "erpc_config_yaml",
+            "rindexer_config_yaml",
+            "rindexer_abis",
+            "deployment_target",
+            "runtime_arch",
+            "streaming_mode",
+            "rpc_proxy_image",
+            "indexer_image",
+            "ec2_rpc_proxy_mem_limit",
+            "ec2_indexer_mem_limit",
+            "ec2_secret_recovery_window_in_days",
+            "network_environment",
+            "network_vpc_cidr",
+            "network_enable_vpc_endpoints",
+            "secrets_manager_secret_arn",
+            "secrets_manager_kms_key_id",
+            "eso_chart_version",
         ];
         assert_eq!(names, expected, "module args aws+clickhouse+ec2 easy");
     }
@@ -1048,20 +1392,45 @@ mode = "inline"
     fn snapshot_easy_bare_metal_module_arg_names() {
         let config = easy_config_bare_metal_clickhouse();
         let resolved = ResolvedConfig::from_evm_config(&config);
-        let names = extract_module_arg_names(&render_module_args(&resolved, GenerationMode::Easy, "test-source"));
+        let names = extract_module_arg_names(&render_module_args(
+            &resolved,
+            GenerationMode::Easy,
+            "test-source",
+        ));
 
         let expected = vec![
-            "project_name", "infrastructure_provider", "database_mode", "compute_engine",
-            "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "project_name",
+            "infrastructure_provider",
+            "database_mode",
+            "compute_engine",
+            "workload_mode",
+            "secrets_mode",
+            "ingress_mode",
+            "erpc_hostname",
+            "ingress_tls_email",
             "ssh_private_key_path",
-            "bare_metal_host", "bare_metal_ssh_user", "bare_metal_ssh_port",
+            "bare_metal_host",
+            "bare_metal_ssh_user",
+            "bare_metal_ssh_port",
             "indexer_storage_backend",
-            "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
-            "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
-            "erpc_config_yaml", "rindexer_config_yaml", "rindexer_abis",
-            "deployment_target", "runtime_arch", "streaming_mode",
-            "rpc_proxy_image", "indexer_image",
-            "bare_metal_rpc_proxy_mem_limit", "bare_metal_indexer_mem_limit", "bare_metal_secrets_encryption",
+            "indexer_clickhouse_url",
+            "indexer_clickhouse_user",
+            "indexer_clickhouse_password",
+            "indexer_clickhouse_db",
+            "rpc_proxy_enabled",
+            "indexer_enabled",
+            "indexer_rpc_url",
+            "erpc_config_yaml",
+            "rindexer_config_yaml",
+            "rindexer_abis",
+            "deployment_target",
+            "runtime_arch",
+            "streaming_mode",
+            "rpc_proxy_image",
+            "indexer_image",
+            "bare_metal_rpc_proxy_mem_limit",
+            "bare_metal_indexer_mem_limit",
+            "bare_metal_secrets_encryption",
         ];
         assert_eq!(names, expected, "module args bare_metal easy");
     }
@@ -1079,7 +1448,11 @@ mode = "inline"
         }
     }
 
-    fn test_resolved(is_bare_metal: bool, is_postgres: bool, engine: ComputeEngine) -> ResolvedConfig {
+    fn test_resolved(
+        is_bare_metal: bool,
+        is_postgres: bool,
+        engine: ComputeEngine,
+    ) -> ResolvedConfig {
         let is_k8s = matches!(engine, ComputeEngine::K3s | ComputeEngine::Eks);
         ResolvedConfig {
             is_bare_metal,
@@ -1267,8 +1640,14 @@ mode = "inline"
         for line in hcl.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("variable \"") {
-                assert!(trimmed.ends_with('{'), "variable block opening missing brace: {trimmed}");
-                assert!(trimmed.contains('"'), "variable block missing quoted name: {trimmed}");
+                assert!(
+                    trimmed.ends_with('{'),
+                    "variable block opening missing brace: {trimmed}"
+                );
+                assert!(
+                    trimmed.contains('"'),
+                    "variable block missing quoted name: {trimmed}"
+                );
             }
         }
     }

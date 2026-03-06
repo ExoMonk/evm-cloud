@@ -5,14 +5,8 @@ use sha2::{Digest, Sha256};
 
 fn main() {
     let scripts = [
-        (
-            "K3S_DEPLOY_SHA256",
-            "../deployers/k3s/deploy.sh",
-        ),
-        (
-            "K3S_TEARDOWN_SHA256",
-            "../deployers/k3s/teardown.sh",
-        ),
+        ("K3S_DEPLOY_SHA256", "../deployers/k3s/deploy.sh"),
+        ("K3S_TEARDOWN_SHA256", "../deployers/k3s/teardown.sh"),
         (
             "K3S_RENDER_VALUES_SHA256",
             "../deployers/k3s/scripts/render-values.sh",
@@ -21,10 +15,7 @@ fn main() {
             "EKS_POPULATE_VALUES_SHA256",
             "../deployers/eks/scripts/populate-values-from-config-bundle.sh",
         ),
-        (
-            "COMPOSE_DEPLOY_SHA256",
-            "../deployers/compose/deploy.sh",
-        ),
+        ("COMPOSE_DEPLOY_SHA256", "../deployers/compose/deploy.sh"),
     ];
 
     let chart_root = Path::new("../deployers/charts");
@@ -36,8 +27,8 @@ fn main() {
     for (const_name, rel_path) in scripts {
         println!("cargo:rerun-if-changed={rel_path}");
 
-        let content = fs::read(rel_path)
-            .unwrap_or_else(|err| panic!("failed to read {rel_path}: {err}"));
+        let content =
+            fs::read(rel_path).unwrap_or_else(|err| panic!("failed to read {rel_path}: {err}"));
         let digest = Sha256::digest(content);
         generated.push_str(&format!("const {const_name}: &str = \"{digest:x}\";\n"));
     }
@@ -50,9 +41,8 @@ fn main() {
             .expect("chart file under ../deployers");
         let rel_display = rel.to_string_lossy().replace('\\', "/");
         println!("cargo:rerun-if-changed={}", file.display());
-        let abs = fs::canonicalize(&file).unwrap_or_else(|err| {
-            panic!("failed to canonicalize {}: {err}", file.display())
-        });
+        let abs = fs::canonicalize(&file)
+            .unwrap_or_else(|err| panic!("failed to canonicalize {}: {err}", file.display()));
         let abs_lit = abs.to_string_lossy().replace('\\', "\\\\");
         generated.push_str(&format!(
             "    ({rel_display:?}, include_str!({abs_lit:?})),\n"

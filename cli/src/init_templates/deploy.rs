@@ -15,7 +15,10 @@ pub(crate) fn render_secrets_example(answers: &InitAnswers) -> String {
     // --- SSH / host access ---
     if is_bare_metal {
         lines.push("# Bare metal host access".to_string());
-        lines.push(r#"bare_metal_host             = ""  # IP or hostname of the target server"#.to_string());
+        lines.push(
+            r#"bare_metal_host             = ""  # IP or hostname of the target server"#
+                .to_string(),
+        );
         lines.push(r#"ssh_private_key_path        = "~/.ssh/id_rsa""#.to_string());
         lines.push(r#"bare_metal_ssh_user         = "ubuntu"  # change to root/ec2-user if your host differs"#.to_string());
         lines.push(r#"bare_metal_ssh_port         = 22"#.to_string());
@@ -24,13 +27,19 @@ pub(crate) fn render_secrets_example(answers: &InitAnswers) -> String {
         match engine {
             ComputeEngine::Ec2 => {
                 lines.push("# EC2 SSH access".to_string());
-                lines.push(r#"ssh_public_key             = ""  # contents of ~/.ssh/id_rsa.pub"#.to_string());
+                lines.push(
+                    r#"ssh_public_key             = ""  # contents of ~/.ssh/id_rsa.pub"#
+                        .to_string(),
+                );
                 lines.push(r#"ssh_private_key_path       = "~/.ssh/id_rsa""#.to_string());
                 lines.push(String::new());
             }
             ComputeEngine::K3s => {
                 lines.push("# K3s SSH access".to_string());
-                lines.push(r#"ssh_public_key             = ""  # contents of ~/.ssh/id_rsa.pub"#.to_string());
+                lines.push(
+                    r#"ssh_public_key             = ""  # contents of ~/.ssh/id_rsa.pub"#
+                        .to_string(),
+                );
                 lines.push(r#"ssh_private_key_path       = "~/.ssh/id_rsa""#.to_string());
                 lines.push(r#"k3s_api_allowed_cidrs      = ["0.0.0.0/0"]  # restrict to your IP in production"#.to_string());
                 lines.push(String::new());
@@ -46,13 +55,19 @@ pub(crate) fn render_secrets_example(answers: &InitAnswers) -> String {
     match answers.database_profile {
         DatabaseProfile::ByodbClickhouse | DatabaseProfile::ManagedClickhouse => {
             lines.push("# ClickHouse credentials (BYODB)".to_string());
-            lines.push(r#"indexer_clickhouse_url      = ""  # e.g. clickhouse://host:9000/default"#.to_string());
+            lines.push(
+                r#"indexer_clickhouse_url      = ""  # e.g. clickhouse://host:9000/default"#
+                    .to_string(),
+            );
             lines.push(r#"indexer_clickhouse_password = """#.to_string());
             lines.push(String::new());
         }
         DatabaseProfile::ByodbPostgres => {
             lines.push("# Postgres credentials (BYODB)".to_string());
-            lines.push(r#"indexer_postgres_url       = ""  # e.g. postgres://user:pass@host:5432/db"#.to_string());
+            lines.push(
+                r#"indexer_postgres_url       = ""  # e.g. postgres://user:pass@host:5432/db"#
+                    .to_string(),
+            );
             lines.push(String::new());
         }
         DatabaseProfile::ManagedRds => {

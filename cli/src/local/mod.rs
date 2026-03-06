@@ -137,12 +137,8 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
     let (fork_url, chain_id) = resolve_fork_mode(&args.rpc, args.fresh, mainnet, color)?;
 
     // Load or generate rindexer config
-    let (rindexer_yaml, abis) = resolve_rindexer_config(
-        args.config_dir.as_deref(),
-        args.fresh,
-        chain_id,
-        color,
-    )?;
+    let (rindexer_yaml, abis) =
+        resolve_rindexer_config(args.config_dir.as_deref(), args.fresh, chain_id, color)?;
 
     // Prerequisites
     let needs_port_check = !cluster::cluster_exists()?;
@@ -157,7 +153,10 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
     if args.persist {
         let data_dir = config::data_dir();
         std::fs::create_dir_all(&data_dir).ok();
-        output::subline(&format!("Persistence enabled — data stored in {data_dir}"), color);
+        output::subline(
+            &format!("Persistence enabled — data stored in {data_dir}"),
+            color,
+        );
     }
 
     // Deploy services
@@ -251,11 +250,20 @@ fn run_down(color: ColorMode) -> Result<()> {
 
 fn run_status(color: ColorMode) -> Result<()> {
     if !cluster::cluster_exists()? {
-        output::error(&format!("No {} cluster found. Run `evm-cloud local up` first.", cluster::name()), color);
+        output::error(
+            &format!(
+                "No {} cluster found. Run `evm-cloud local up` first.",
+                cluster::name()
+            ),
+            color,
+        );
         return Ok(());
     }
 
-    output::headline(&format!("🏰 evm-cloud local stack — {}", cluster::name()), color);
+    output::headline(
+        &format!("🏰 evm-cloud local stack — {}", cluster::name()),
+        color,
+    );
 
     let anvil_ok = health::wait_for_anvil(4).is_ok();
     let erpc_ok = health::wait_for_http("http://localhost:4000", 4).is_ok();
@@ -340,7 +348,10 @@ fn resolve_fork_mode(
     let chain_id = health::probe_chain_id(&rpc_url)?;
 
     if mainnet {
-        output::subline(&format!("Mainnet mode — chain_id={chain_id}, no Anvil"), color);
+        output::subline(
+            &format!("Mainnet mode — chain_id={chain_id}, no Anvil"),
+            color,
+        );
     } else {
         output::subline(&format!("Fork mode — chain_id={chain_id}"), color);
     }
@@ -373,8 +384,14 @@ fn resolve_rindexer_config(
         ),
         color,
     );
-    output::subline("Default starter tracks USDC using config/abis/ERC20.json", color);
-    output::subline(&format!("Using rindexer config: {}", default_path.display()), color);
+    output::subline(
+        "Default starter tracks USDC using config/abis/ERC20.json",
+        color,
+    );
+    output::subline(
+        &format!("Using rindexer config: {}", default_path.display()),
+        color,
+    );
     config::load_user_rindexer_config(&default_path)
 }
 

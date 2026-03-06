@@ -112,7 +112,10 @@ mod tests {
     fn normalizes_optional_v_prefix() {
         assert_eq!(normalize_version("v0.1.0").as_deref(), Some("0.1.0"));
         assert_eq!(normalize_version("0.1.0").as_deref(), Some("0.1.0"));
-        assert_eq!(normalize_version("v0.1.0-alpha2").as_deref(), Some("0.1.0-alpha2"));
+        assert_eq!(
+            normalize_version("v0.1.0-alpha2").as_deref(),
+            Some("0.1.0-alpha2")
+        );
     }
 
     #[test]
@@ -120,7 +123,10 @@ mod tests {
         assert!(normalize_version("").is_none());
         assert!(normalize_version("v").is_none());
         assert!(normalize_version("latest").is_none());
-        assert_eq!(normalize_version("0.1.0+build").as_deref(), Some("0.1.0+build"));
+        assert_eq!(
+            normalize_version("0.1.0+build").as_deref(),
+            Some("0.1.0+build")
+        );
     }
 
     #[test]

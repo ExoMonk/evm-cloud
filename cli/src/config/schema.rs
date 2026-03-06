@@ -94,8 +94,12 @@ impl ComputeEngine {
     /// Returns the valid compute engines for a given infrastructure provider.
     pub(crate) fn valid_for_provider(provider: InfrastructureProvider) -> &'static [ComputeEngine] {
         match provider {
-            InfrastructureProvider::Aws => &[ComputeEngine::Ec2, ComputeEngine::Eks, ComputeEngine::K3s],
-            InfrastructureProvider::BareMetal => &[ComputeEngine::K3s, ComputeEngine::DockerCompose],
+            InfrastructureProvider::Aws => {
+                &[ComputeEngine::Ec2, ComputeEngine::Eks, ComputeEngine::K3s]
+            }
+            InfrastructureProvider::BareMetal => {
+                &[ComputeEngine::K3s, ComputeEngine::DockerCompose]
+            }
         }
     }
 }

@@ -8,11 +8,26 @@ use crate::handoff::WorkloadHandoff;
 
 include!(concat!(env!("OUT_DIR"), "/script_checksums.rs"));
 
-const K3S_DEPLOY: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../deployers/k3s/deploy.sh"));
-const K3S_TEARDOWN: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../deployers/k3s/teardown.sh"));
-const K3S_RENDER_VALUES: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../deployers/k3s/scripts/render-values.sh"));
-const EKS_POPULATE_VALUES: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../deployers/eks/scripts/populate-values-from-config-bundle.sh"));
-const COMPOSE_DEPLOY: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../deployers/compose/deploy.sh"));
+const K3S_DEPLOY: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../deployers/k3s/deploy.sh"
+));
+const K3S_TEARDOWN: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../deployers/k3s/teardown.sh"
+));
+const K3S_RENDER_VALUES: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../deployers/k3s/scripts/render-values.sh"
+));
+const EKS_POPULATE_VALUES: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../deployers/eks/scripts/populate-values-from-config-bundle.sh"
+));
+const COMPOSE_DEPLOY: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../deployers/compose/deploy.sh"
+));
 
 pub(super) struct ExtractedScripts {
     pub(super) k3s_deploy: PathBuf,
@@ -85,7 +100,13 @@ fn extract_chart_assets(tmp_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn write_script(tmp_dir: &Path, relative_path: &str, contents: &str, expected_sha256: &str, script_name: &str) -> Result<PathBuf> {
+fn write_script(
+    tmp_dir: &Path,
+    relative_path: &str,
+    contents: &str,
+    expected_sha256: &str,
+    script_name: &str,
+) -> Result<PathBuf> {
     if !contents.starts_with("#!") {
         return Err(CliError::HandoffInvalid {
             field: script_name.to_string(),
@@ -176,7 +197,11 @@ impl TempWorkspace {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("clock before unix epoch")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("evm-cloud-deployer-{}-{}", std::process::id(), suffix));
+        let path = std::env::temp_dir().join(format!(
+            "evm-cloud-deployer-{}-{}",
+            std::process::id(),
+            suffix
+        ));
 
         fs::create_dir_all(&path).map_err(|source| CliError::Io {
             source,

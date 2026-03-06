@@ -26,10 +26,8 @@ pub(crate) fn cluster_reachable() -> Result<bool> {
 }
 
 fn create_cluster(config_yaml: &str, color: ColorMode) -> Result<()> {
-    let tmp = std::env::temp_dir().join(format!(
-        "evm-cloud-kind-config-{}.yaml",
-        std::process::id()
-    ));
+    let tmp =
+        std::env::temp_dir().join(format!("evm-cloud-kind-config-{}.yaml", std::process::id()));
     fs::write(&tmp, config_yaml).map_err(|source| CliError::Io {
         source,
         path: tmp.clone(),
@@ -74,7 +72,10 @@ fn create_cluster(config_yaml: &str, color: ColorMode) -> Result<()> {
 
 pub(crate) fn delete_cluster(color: ColorMode) -> Result<()> {
     if !cluster_exists()? {
-        output::warn(&format!("No {CLUSTER_NAME} cluster found. Nothing to do."), color);
+        output::warn(
+            &format!("No {CLUSTER_NAME} cluster found. Nothing to do."),
+            color,
+        );
         return Ok(());
     }
 
@@ -99,11 +100,7 @@ pub(crate) fn delete_cluster(color: ColorMode) -> Result<()> {
     })
 }
 
-pub(crate) fn ensure_cluster(
-    config_yaml: &str,
-    force: bool,
-    color: ColorMode,
-) -> Result<()> {
+pub(crate) fn ensure_cluster(config_yaml: &str, force: bool, color: ColorMode) -> Result<()> {
     let exists = cluster_exists()?;
 
     if exists && force {

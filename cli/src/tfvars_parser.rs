@@ -46,7 +46,9 @@ fn extract_value(raw: &str) -> String {
 }
 
 /// Read and parse the first existing tfvars file from `candidates`.
-pub(crate) fn parse_first_existing(candidates: &[std::path::PathBuf]) -> Result<HashMap<String, String>> {
+pub(crate) fn parse_first_existing(
+    candidates: &[std::path::PathBuf],
+) -> Result<HashMap<String, String>> {
     for path in candidates {
         if !path.is_file() {
             continue;
@@ -61,7 +63,9 @@ pub(crate) fn parse_first_existing(candidates: &[std::path::PathBuf]) -> Result<
 }
 
 /// Read and merge all existing tfvars files from `candidates` (first-wins per key).
-pub(crate) fn parse_all_existing(candidates: &[std::path::PathBuf]) -> Result<HashMap<String, String>> {
+pub(crate) fn parse_all_existing(
+    candidates: &[std::path::PathBuf],
+) -> Result<HashMap<String, String>> {
     let mut merged = HashMap::new();
     for path in candidates {
         if !path.is_file() {

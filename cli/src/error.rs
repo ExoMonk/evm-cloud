@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum CliError {
-    #[error("terraform not found on PATH. Install: https://developer.hashicorp.com/terraform/install")]
+    #[error(
+        "terraform not found on PATH. Install: https://developer.hashicorp.com/terraform/install"
+    )]
     TerraformNotFound,
 
     #[error("terraform version {found} is below minimum required {minimum}")]
@@ -166,7 +168,9 @@ pub(crate) enum CliError {
     #[error("deployer thread panicked")]
     DeployerThreadPanicked,
 
-    #[error("missing required file `{file}` for deploy. Provide --config-dir or create `config/{file}`")]
+    #[error(
+        "missing required file `{file}` for deploy. Provide --config-dir or create `config/{file}`"
+    )]
     DeployConfigFileMissing { file: String },
 
     #[error("interactive prompt failed: {0}")]

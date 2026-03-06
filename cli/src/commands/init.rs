@@ -51,7 +51,11 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
             if example.aliases.is_empty() {
                 println!("{}", example.canonical);
             } else {
-                println!("{}\taliases={}", example.canonical, example.aliases.join(","));
+                println!(
+                    "{}\taliases={}",
+                    example.canonical,
+                    example.aliases.join(",")
+                );
             }
         }
         return Ok(());
@@ -77,7 +81,11 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
                     output::info(&format!("- {}", item.canonical), color);
                 } else {
                     output::info(
-                        &format!("- {} (aliases: {})", item.canonical, item.aliases.join(", ")),
+                        &format!(
+                            "- {} (aliases: {})",
+                            item.canonical,
+                            item.aliases.join(", ")
+                        ),
                         color,
                     );
                 }
@@ -96,7 +104,8 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
             output::subline("🎉 Generated evm-cloud.toml project metadata", color);
         }
 
-        if args.dir.join("rindexer.yaml").exists() || args.dir.join("config/rindexer.yaml").exists() {
+        if args.dir.join("rindexer.yaml").exists() || args.dir.join("config/rindexer.yaml").exists()
+        {
             output::subline("🦀 Rindexer Linked rindexer.yaml", color);
         }
     }
@@ -126,7 +135,9 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
             }
 
             match preflight.project_kind {
-                ProjectKind::EasyToml => easy_mode::prepare_workspace(&preflight.resolved_root, color)?,
+                ProjectKind::EasyToml => {
+                    easy_mode::prepare_workspace(&preflight.resolved_root, color)?
+                }
                 ProjectKind::RawTerraform => {
                     output::checkline("Terraform project ready", color);
                     preflight.resolved_root.clone()
@@ -155,7 +166,10 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
     if args.skip_terraform_init {
         output::headline(
-            &format!("🏰 ✅ Project initialized - {}", output::duration_human(started.elapsed())),
+            &format!(
+                "🏰 ✅ Project initialized - {}",
+                output::duration_human(started.elapsed())
+            ),
             color,
         );
         return Ok(());
@@ -171,7 +185,10 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
     }
 
     output::headline(
-        &format!("🏰 ✅ Project initialized - {}", output::duration_human(started.elapsed())),
+        &format!(
+            "🏰 ✅ Project initialized - {}",
+            output::duration_human(started.elapsed())
+        ),
         color,
     );
 

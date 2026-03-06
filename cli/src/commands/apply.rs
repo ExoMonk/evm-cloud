@@ -1,6 +1,6 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use std::fs;
 
 use clap::Args;
 
@@ -12,7 +12,10 @@ use crate::post_deploy;
 use crate::preflight::{self, ProjectKind};
 
 pub(crate) fn ensure_non_interactive_terraform(args: &mut Vec<String>) {
-    if args.iter().any(|arg| arg == "-input=false" || arg == "-input=true") {
+    if args
+        .iter()
+        .any(|arg| arg == "-input=false" || arg == "-input=true")
+    {
         return;
     }
     args.push("-input=false".to_string());
@@ -98,7 +101,10 @@ pub(crate) fn run(args: ApplyArgs, color: ColorMode) -> Result<()> {
         json: args.json,
         color,
     })? {
-        InfraPhaseOutcome::DryRun { log_path, output_path } => {
+        InfraPhaseOutcome::DryRun {
+            log_path,
+            output_path,
+        } => {
             if !args.json {
                 output::checkline("Ran terraform plan", color);
                 output::headline(
@@ -117,7 +123,11 @@ pub(crate) fn run(args: ApplyArgs, color: ColorMode) -> Result<()> {
             output::warn("Apply cancelled", color);
             return Ok(());
         }
-        InfraPhaseOutcome::Applied { handoff, log_path, output_path } => {
+        InfraPhaseOutcome::Applied {
+            handoff,
+            log_path,
+            output_path,
+        } => {
             let handoff = *handoff;
             if args.json {
                 if let Some(ref h) = handoff {
@@ -153,7 +163,10 @@ pub(crate) fn run(args: ApplyArgs, color: ColorMode) -> Result<()> {
             if let Some(ref h) = handoff {
                 post_deploy::print_summary(h, color);
             } else {
-                output::warn("workload_handoff unavailable; skipping rich post-deploy summary", color);
+                output::warn(
+                    "workload_handoff unavailable; skipping rich post-deploy summary",
+                    color,
+                );
             }
 
             eprintln!("      👉🏻 Logs: {}", log_path.display());

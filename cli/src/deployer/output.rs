@@ -4,7 +4,8 @@ use crate::output::ColorMode;
 /// Paint text orange (ANSI yellow/33) when color is enabled.
 fn orange(text: &str, mode: ColorMode) -> String {
     if matches!(mode, ColorMode::Never)
-        || (matches!(mode, ColorMode::Auto) && !std::io::IsTerminal::is_terminal(&std::io::stderr()))
+        || (matches!(mode, ColorMode::Auto)
+            && !std::io::IsTerminal::is_terminal(&std::io::stderr()))
     {
         text.to_string()
     } else {
@@ -14,12 +15,15 @@ fn orange(text: &str, mode: ColorMode) -> String {
 
 /// Map a raw `[evm-cloud] ...` message to a curated CLI status line.
 /// Returns `None` for messages that should be suppressed.
-pub(super) fn format_deploy_line(msg: &str, engine: ComputeEngine, color: ColorMode, rindexer_idx: &mut u32) -> Option<String> {
+pub(super) fn format_deploy_line(
+    msg: &str,
+    engine: ComputeEngine,
+    color: ColorMode,
+    rindexer_idx: &mut u32,
+) -> Option<String> {
     let icon = match engine {
         ComputeEngine::K3s => "🛟",
-        ComputeEngine::Ec2
-        | ComputeEngine::DockerCompose
-        | ComputeEngine::Eks => "⛴️",
+        ComputeEngine::Ec2 | ComputeEngine::DockerCompose | ComputeEngine::Eks => "⛴️",
     };
 
     // --- k3s lines ---
@@ -32,7 +36,10 @@ pub(super) fn format_deploy_line(msg: &str, engine: ComputeEngine, color: ColorM
     // ClusterSecretStore: <name> applied.
     if let Some(rest) = msg.strip_prefix("ClusterSecretStore ") {
         if let Some(name) = rest.strip_suffix(" applied.") {
-            return Some(format!("     {icon} ClusterSecretStore: {}", orange(name, color)));
+            return Some(format!(
+                "     {icon} ClusterSecretStore: {}",
+                orange(name, color)
+            ));
         }
     }
     if msg.starts_with("Cloudflare origin TLS secret created") {
@@ -47,7 +54,8 @@ pub(super) fn format_deploy_line(msg: &str, engine: ComputeEngine, color: ColorM
         return Some("     ✔ cert-manager".to_string());
     }
     // kube-prometheus-stack
-    if msg == "kube-prometheus-stack installed." || msg == "kube-prometheus-stack already present." {
+    if msg == "kube-prometheus-stack installed." || msg == "kube-prometheus-stack already present."
+    {
         return Some("     ✔ kube-prometheus-stack".to_string());
     }
     // Loki
@@ -75,7 +83,11 @@ pub(super) fn format_deploy_line(msg: &str, engine: ComputeEngine, color: ColorM
     if let Some(rest) = msg.strip_prefix("Deploying rindexer instance (") {
         if let Some(name) = rest.strip_suffix(")...") {
             *rindexer_idx += 1;
-            return Some(format!("     {icon} rindexer #{}: {}", rindexer_idx, orange(name, color)));
+            return Some(format!(
+                "     {icon} rindexer #{}: {}",
+                rindexer_idx,
+                orange(name, color)
+            ));
         }
     }
     // <name> deployed. (rindexer completion)

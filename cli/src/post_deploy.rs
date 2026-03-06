@@ -4,15 +4,25 @@ use crate::output::ColorMode;
 
 /// Sanitize a project name into a valid k8s namespace (DNS-1123 label):
 /// lowercase, alphanumeric + hyphens, max 63 chars, no leading/trailing hyphens.
-fn sanitize_namespace(project_name: &str) -> String {
+pub(crate) fn sanitize_namespace(project_name: &str) -> String {
     let s: String = project_name
         .trim()
         .to_lowercase()
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let s = s.trim_matches('-').replace("--", "-");
-    if s.len() > 63 { s[..63].trim_end_matches('-').to_string() } else { s }
+    if s.len() > 63 {
+        s[..63].trim_end_matches('-').to_string()
+    } else {
+        s
+    }
 }
 
 struct SummaryRow {
@@ -20,14 +30,14 @@ struct SummaryRow {
     value: String,
 }
 
-fn non_empty(value: Option<&str>) -> Option<String> {
+pub(crate) fn non_empty(value: Option<&str>) -> Option<String> {
     value
         .map(str::trim)
         .filter(|v| !v.is_empty())
         .map(ToOwned::to_owned)
 }
 
-fn build_https_url(raw: String) -> String {
+pub(crate) fn build_https_url(raw: String) -> String {
     if raw.starts_with("http://") || raw.starts_with("https://") {
         raw
     } else {
@@ -49,7 +59,7 @@ fn push_row(rows: &mut Vec<SummaryRow>, label: &'static str, value: Option<Strin
     }
 }
 
-fn format_postgres_url(handoff: &WorkloadHandoff) -> Option<String> {
+pub(crate) fn format_postgres_url(handoff: &WorkloadHandoff) -> Option<String> {
     let pg = handoff.data.postgres.as_ref()?;
     let host = non_empty(pg.host.as_deref())?;
     let port = non_empty(pg.port.as_deref()).unwrap_or_else(|| "5432".to_string());
@@ -57,14 +67,15 @@ fn format_postgres_url(handoff: &WorkloadHandoff) -> Option<String> {
     Some(format!("postgresql://{host}:{port}/{db_name}"))
 }
 
-fn erpc_url(handoff: &WorkloadHandoff) -> Option<String> {
+pub(crate) fn erpc_url(handoff: &WorkloadHandoff) -> Option<String> {
     non_empty(handoff.ingress.erpc_hostname.as_deref()).map(build_https_url)
 }
 
-fn grafana_line(handoff: &WorkloadHandoff) -> Option<String> {
+pub(crate) fn grafana_line(handoff: &WorkloadHandoff) -> Option<String> {
     let monitoring = handoff.services.monitoring.as_ref()?;
     let url = non_empty(monitoring.grafana_hostname.as_deref()).map(build_https_url)?;
-    let has_custom_secret = non_empty(monitoring.grafana_admin_password_secret_name.as_deref()).is_some();
+    let has_custom_secret =
+        non_empty(monitoring.grafana_admin_password_secret_name.as_deref()).is_some();
     if has_custom_secret {
         Some(format!("{url} (admin/<custom-secret>)"))
     } else {
@@ -72,7 +83,7 @@ fn grafana_line(handoff: &WorkloadHandoff) -> Option<String> {
     }
 }
 
-fn aws_region(handoff: &WorkloadHandoff) -> Option<String> {
+pub(crate) fn aws_region(handoff: &WorkloadHandoff) -> Option<String> {
     handoff
         .extra
         .get("aws_region")
@@ -80,14 +91,14 @@ fn aws_region(handoff: &WorkloadHandoff) -> Option<String> {
         .and_then(|value| non_empty(Some(value)))
 }
 
-fn ssh_user_for(engine: ComputeEngine) -> &'static str {
+pub(crate) fn ssh_user_for(engine: ComputeEngine) -> &'static str {
     match engine {
         ComputeEngine::Ec2 => "ec2-user",
         ComputeEngine::K3s | ComputeEngine::DockerCompose | ComputeEngine::Eks => "ubuntu",
     }
 }
 
-fn server_target(handoff: &WorkloadHandoff) -> Option<String> {
+pub(crate) fn server_target(handoff: &WorkloadHandoff) -> Option<String> {
     let user = ssh_user_for(handoff.compute_engine);
 
     if handoff.compute_engine == ComputeEngine::K3s {
@@ -115,7 +126,7 @@ fn server_target(handoff: &WorkloadHandoff) -> Option<String> {
         })
 }
 
-fn logs_command(handoff: &WorkloadHandoff) -> String {
+pub(crate) fn logs_command(handoff: &WorkloadHandoff) -> String {
     let ns = sanitize_namespace(&handoff.project_name);
     match handoff.compute_engine {
         ComputeEngine::K3s => {
@@ -143,10 +154,11 @@ fn logs_command(handoff: &WorkloadHandoff) -> String {
 }
 
 fn uses_kubectl_wrapper(handoff: &WorkloadHandoff, has_k3s_kubeconfig: bool) -> bool {
-    (handoff.compute_engine == ComputeEngine::K3s && has_k3s_kubeconfig) || handoff.compute_engine == ComputeEngine::Eks
+    (handoff.compute_engine == ComputeEngine::K3s && has_k3s_kubeconfig)
+        || handoff.compute_engine == ComputeEngine::Eks
 }
 
-fn k3s_total_nodes(handoff: &WorkloadHandoff) -> Option<usize> {
+pub(crate) fn k3s_total_nodes(handoff: &WorkloadHandoff) -> Option<usize> {
     if handoff.compute_engine != ComputeEngine::K3s {
         return None;
     }
@@ -210,7 +222,11 @@ pub(crate) fn print_summary(handoff: &WorkloadHandoff, _mode: ColorMode) {
         push_row(
             &mut rows,
             "ClickHouse",
-            handoff.data.clickhouse.as_ref().and_then(|ch| non_empty(ch.url.as_deref())),
+            handoff
+                .data
+                .clickhouse
+                .as_ref()
+                .and_then(|ch| non_empty(ch.url.as_deref())),
         );
     }
 
@@ -226,26 +242,26 @@ pub(crate) fn print_summary(handoff: &WorkloadHandoff, _mode: ColorMode) {
         .is_some();
 
     if uses_kubectl_wrapper(handoff, has_k3s_kubeconfig) {
-        push_row(
-            &mut rows,
-            "Kubeconfig commands",
-            Some(String::new()),
-        );
+        push_row(&mut rows, "Kubeconfig commands", Some(String::new()));
     }
 
     if let Some(total_nodes) = k3s_total_nodes(handoff) {
-        push_row(&mut rows, "Nodes", Some(format!("{total_nodes} node{}", if total_nodes == 1 { "" } else { "s" })));
+        push_row(
+            &mut rows,
+            "Nodes",
+            Some(format!(
+                "{total_nodes} node{}",
+                if total_nodes == 1 { "" } else { "s" }
+            )),
+        );
         push_row(&mut rows, "Get nodes", get_nodes_command(handoff));
     }
 
     if (handoff.compute_engine == ComputeEngine::K3s && !has_k3s_kubeconfig)
-        || (handoff.compute_engine == ComputeEngine::Eks && !uses_kubectl_wrapper(handoff, has_k3s_kubeconfig))
+        || (handoff.compute_engine == ComputeEngine::Eks
+            && !uses_kubectl_wrapper(handoff, has_k3s_kubeconfig))
     {
-        push_row(
-            &mut rows,
-            "Pods",
-            Some(format!("kubectl get pods -n {ns}")),
-        );
+        push_row(&mut rows, "Pods", Some(format!("kubectl get pods -n {ns}")));
     }
 
     if !uses_kubectl_wrapper(handoff, has_k3s_kubeconfig) {
@@ -261,12 +277,8 @@ pub(crate) fn print_summary(handoff: &WorkloadHandoff, _mode: ColorMode) {
         }
 
         if row.label == "Kubeconfig commands" {
-            eprintln!(
-                "         🛟 Pods      evm-cloud kubectl get pods -n {ns}"
-            );
-            eprintln!(
-                "         🛟 Logs      evm-cloud kubectl logs -n {ns} -l app=rindexer -f"
-            );
+            eprintln!("         🛟 Pods      evm-cloud kubectl get pods -n {ns}");
+            eprintln!("         🛟 Logs      evm-cloud kubectl logs -n {ns} -l app=rindexer -f");
         }
     }
 }
@@ -277,7 +289,10 @@ mod tests {
 
     use crate::handoff::parse_handoff_value;
 
-    use super::{erpc_url, format_postgres_url, get_nodes_command, k3s_total_nodes, logs_command, sanitize_namespace, server_target};
+    use super::{
+        erpc_url, format_postgres_url, get_nodes_command, k3s_total_nodes, logs_command,
+        sanitize_namespace, server_target,
+    };
 
     #[test]
     fn sanitizes_project_name_to_namespace() {
@@ -321,7 +336,10 @@ mod tests {
         }))
         .expect("handoff must parse");
 
-        assert_eq!(erpc_url(&handoff).as_deref(), Some("https://rpc.example.com"));
+        assert_eq!(
+            erpc_url(&handoff).as_deref(),
+            Some("https://rpc.example.com")
+        );
     }
 
     #[test]

@@ -16,10 +16,12 @@ pub(crate) fn load(path: &Path) -> Result<EvmCloudConfig> {
         details: err.to_string(),
     })?;
 
-    let version = config.schema_version.ok_or_else(|| CliError::ConfigValidation {
-        field: "schema_version".to_string(),
-        message: "missing required field; expected schema_version = 1".to_string(),
-    })?;
+    let version = config
+        .schema_version
+        .ok_or_else(|| CliError::ConfigValidation {
+            field: "schema_version".to_string(),
+            message: "missing required field; expected schema_version = 1".to_string(),
+        })?;
 
     if version != 1 {
         return Err(CliError::UnsupportedSchemaVersion { found: version });

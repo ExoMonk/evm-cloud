@@ -54,10 +54,13 @@ pub(crate) fn bootstrap_example_to_dir(
         path: destination_dir.to_path_buf(),
     })?;
 
-    let source_root = selected.path.canonicalize().map_err(|source| CliError::Io {
-        source,
-        path: selected.path.clone(),
-    })?;
+    let source_root = selected
+        .path
+        .canonicalize()
+        .map_err(|source| CliError::Io {
+            source,
+            path: selected.path.clone(),
+        })?;
 
     let source_files = collect_source_files(&source_root, &source_root)?;
 
@@ -98,7 +101,8 @@ pub(crate) fn bootstrap_example_to_dir(
 
     rewrite_module_source(destination_dir)?;
 
-    let wrote_power_metadata = ensure_power_mode_metadata(destination_dir, &selected.canonical, force)?;
+    let wrote_power_metadata =
+        ensure_power_mode_metadata(destination_dir, &selected.canonical, force)?;
 
     Ok(BootstrapResult {
         canonical: selected.canonical,
@@ -174,11 +178,12 @@ fn fetch_examples_repo_root_from_github() -> Result<PathBuf> {
         .collect::<Vec<_>>();
     children.sort();
 
-    let repo_root = children.into_iter().next().ok_or_else(|| {
-        CliError::ExampleArchiveInvalid {
+    let repo_root = children
+        .into_iter()
+        .next()
+        .ok_or_else(|| CliError::ExampleArchiveInvalid {
             details: "downloaded GitHub archive is missing repository root directory".to_string(),
-        }
-    })?;
+        })?;
 
     if !repo_root.join(EXAMPLES_DIR).is_dir() {
         return Err(CliError::ExampleArchiveInvalid {
@@ -250,7 +255,11 @@ fn extract_archive(archive_path: &Path, extract_root: &Path) -> Result<()> {
     })
 }
 
-fn ensure_power_mode_metadata(destination_dir: &Path, example_name: &str, force: bool) -> Result<bool> {
+fn ensure_power_mode_metadata(
+    destination_dir: &Path,
+    example_name: &str,
+    force: bool,
+) -> Result<bool> {
     let marker_path = destination_dir.join(".evm-cloud").join("mode");
     let toml_path = destination_dir.join("evm-cloud.toml");
 
@@ -310,7 +319,8 @@ fn derive_power_metadata(destination_dir: &Path, example_name: &str) -> Result<P
         project_name: example_name.replace('_', "-"),
         region: "us-east-1".to_string(),
         compute_engine: infer_compute_engine_from_name(example_name).to_string(),
-        instance_type: default_instance_type(infer_compute_engine_from_name(example_name)).to_string(),
+        instance_type: default_instance_type(infer_compute_engine_from_name(example_name))
+            .to_string(),
         database_mode: "self_hosted".to_string(),
         database_provider: "aws".to_string(),
         indexer_config_path: if destination_dir.join("config/rindexer.yaml").is_file() {
@@ -428,7 +438,10 @@ fn primary_tfvars_file(root: &Path) -> Result<Option<PathBuf>> {
                     .unwrap_or(false)
         })
         .filter(|path| {
-            let name = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
+            let name = path
+                .file_name()
+                .and_then(|v| v.to_str())
+                .unwrap_or_default();
             !name.ends_with(".auto.tfvars") && !name.ends_with(".tfvars.example")
         })
         .collect::<Vec<_>>();
@@ -704,9 +717,9 @@ fn collect_source_files(root: &Path, cursor: &Path) -> Result<Vec<PathBuf>> {
         }
 
         if file_type.is_file() {
-            let relative = path.strip_prefix(root).map_err(|_| {
-                CliError::ExamplePathEscape { path: path.clone() }
-            })?;
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|_| CliError::ExamplePathEscape { path: path.clone() })?;
             files.push(relative.to_path_buf());
         }
     }
@@ -826,7 +839,9 @@ mod tests {
         assert!(is_excluded_path(Path::new(".terraform/providers/file")));
         assert!(is_excluded_path(Path::new("terraform.tfstate")));
         assert!(is_excluded_path(Path::new("terraform.tfstate.backup")));
-        assert!(is_excluded_path(Path::new("terraform.tfstate.1772475822.backup")));
+        assert!(is_excluded_path(Path::new(
+            "terraform.tfstate.1772475822.backup"
+        )));
         assert!(is_excluded_path(Path::new("secrets.auto.tfvars")));
         assert!(is_excluded_path(Path::new("dev.auto.tfvars.json")));
         assert!(is_excluded_path(Path::new(".git/config")));
@@ -836,8 +851,8 @@ mod tests {
     #[test]
     fn writes_power_mode_metadata_files() {
         let dir = temp_dir("power-metadata");
-        let wrote = ensure_power_mode_metadata(&dir, "minimal_aws_rds", false)
-            .expect("write metadata");
+        let wrote =
+            ensure_power_mode_metadata(&dir, "minimal_aws_rds", false).expect("write metadata");
         assert!(wrote);
 
         let mode = fs::read_to_string(dir.join(".evm-cloud/mode")).expect("read mode");
@@ -867,8 +882,8 @@ mod tests {
         );
         write(&dir.join("config/rindexer.yaml"), "name: test\n");
 
-        let metadata = derive_power_metadata(&dir, "minimal_aws_k3s_byo_clickhouse")
-            .expect("derive metadata");
+        let metadata =
+            derive_power_metadata(&dir, "minimal_aws_k3s_byo_clickhouse").expect("derive metadata");
 
         assert_eq!(metadata.project_name, "evm-cloud-k3s");
         assert_eq!(metadata.region, "us-west-2");
