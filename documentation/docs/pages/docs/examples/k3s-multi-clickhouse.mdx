@@ -74,7 +74,7 @@ cd evm-cloud/examples/prod_aws_k3s_multi_byo_clickhouse
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars:
 #   ssh_public_key           = "ssh-ed25519 AAAA..."
-#   k3s_ssh_private_key_path = "~/.ssh/evm-cloud"
+#   ssh_private_key_path = "~/.ssh/evm-cloud"
 #   indexer_clickhouse_url   = "https://your-instance.clickhouse.cloud:8443"
 #   indexer_clickhouse_password = "your-password"
 ```
@@ -162,7 +162,7 @@ See the [Observability Guide](../guides/observability) for full setup and dashbo
 |----------|------|---------|-------------|
 | `k3s_instance_type` | string | `t3.small` | EC2 instance size for k3s server node |
 | `k3s_worker_nodes` | list(object) | 1 backfill worker | Worker nodes to join the cluster (see below) |
-| `k3s_ssh_private_key_path` | string | - | Path to SSH private key for provisioner |
+| `ssh_private_key_path` | string | - | Path to SSH private key for provisioner |
 | `k3s_version` | string | `v1.30.4+k3s1` | k3s release version |
 | `k3s_api_allowed_cidrs` | list(string) | - | CIDRs allowed to reach k3s API (port 6443) |
 | `indexer_instances` | list(object) | - | Indexer workloads: name, config_key, node_role, workload_type |

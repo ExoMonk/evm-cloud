@@ -32,7 +32,7 @@ terraform apply -var-file=my-ec2.tfvars
 
 Terraform detects the content hash change, uploads new config files via SSH, and force-recreates Docker Compose containers. The EC2 instance is **not** recreated -- only the configs and containers are updated.
 
-> **Requires:** `ec2_ssh_private_key_path` must be set (path to SSH private key matching `ssh_public_key`). Set it in `secrets.auto.tfvars`.
+> **Requires:** `ssh_private_key_path` must be set (path to SSH private key matching `ssh_public_key`). Set it in `secrets.auto.tfvars`.
 
 > **Note:** `lifecycle { ignore_changes = [user_data] }` on the EC2 instance prevents instance recreation on config changes. A separate `null_resource` with a config hash trigger handles the update via SSH.
 

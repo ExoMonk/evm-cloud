@@ -241,7 +241,7 @@ helm template my-release deployers/charts/indexer/ -f values.yaml
 **Check:**
 - Is the host reachable? `ping <bare_metal_host>`
 - Is SSH running? `ssh -p <port> <user>@<host>`
-- Is the SSH key correct? Check `bare_metal_ssh_private_key_path` points to the right file
+- Is the SSH key correct? Check `ssh_private_key_path` points to the right file
 - Does the user have sudo? Bare metal provisioner needs `sudo` for Docker operations
 
 ### Docker not installed

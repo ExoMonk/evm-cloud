@@ -97,7 +97,7 @@ cd evm-cloud/examples/baremetal_k3s_byo_db
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars:
 #   bare_metal_host                 = "203.0.113.42"
-#   bare_metal_ssh_private_key_path = "~/.ssh/id_ed25519"
+#   ssh_private_key_path = "~/.ssh/id_ed25519"
 #   indexer_postgres_url            = "postgres://user:pass@host:5432/db"
 ```
 
@@ -143,7 +143,7 @@ evm-cloud kubectl get pods -n evm-cloud
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `bare_metal_host` | string | - | IP or hostname of your VPS |
-| `bare_metal_ssh_private_key_path` | string | - | SSH private key for provisioning (sensitive) |
+| `ssh_private_key_path` | string | - | SSH private key for provisioning (sensitive) |
 | `indexer_postgres_url` | string | - | PostgreSQL connection string (sensitive) |
 | `k3s_version` | string | `v1.30.4+k3s1` | Pinned k3s version |
 | `bare_metal_ssh_user` | string | `"ubuntu"` | SSH user for the VPS |

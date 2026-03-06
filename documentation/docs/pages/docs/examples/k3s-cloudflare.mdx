@@ -71,7 +71,7 @@ cd evm-cloud/examples/aws_k3s_cloudflare_ingress
 
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars with your values:
-#   ssh_public_key, k3s_ssh_private_key_path, k3s_api_allowed_cidrs,
+#   ssh_public_key, ssh_private_key_path, k3s_api_allowed_cidrs,
 #   erpc_hostname, ingress_cloudflare_origin_cert, ingress_cloudflare_origin_key,
 #   indexer_clickhouse_url, indexer_clickhouse_password
 ```
@@ -140,7 +140,7 @@ curl --connect-timeout 5 http://<EC2_IP>:4000  # timeout expected
 | `ingress_cloudflare_origin_cert` | string | - | CF origin certificate PEM (sensitive) |
 | `ingress_cloudflare_origin_key` | string | - | CF origin private key PEM (sensitive) |
 | `k3s_instance_type` | string | `"t3.medium"` | EC2 instance size |
-| `k3s_ssh_private_key_path` | string | - | Path to SSH private key |
+| `ssh_private_key_path` | string | - | Path to SSH private key |
 | `k3s_api_allowed_cidrs` | list(string) | - | CIDRs for SSH + k3s API access |
 | `indexer_clickhouse_url` | string | - | ClickHouse HTTP endpoint (sensitive) |
 | `indexer_clickhouse_password` | string | - | ClickHouse password (sensitive) |

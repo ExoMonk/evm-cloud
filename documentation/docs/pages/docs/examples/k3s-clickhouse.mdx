@@ -53,7 +53,7 @@ cd evm-cloud/examples/minimal_aws_k3s_byo_clickhouse
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars:
 #   ssh_public_key           = "ssh-ed25519 AAAA..."
-#   k3s_ssh_private_key_path = "~/.ssh/evm-cloud"
+#   ssh_private_key_path = "~/.ssh/evm-cloud"
 #   indexer_clickhouse_url   = "https://your-instance.clickhouse.cloud:8443"
 #   indexer_clickhouse_password = "your-password"
 ```
@@ -92,7 +92,7 @@ terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/s
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `k3s_instance_type` | string | - | EC2 instance size for k3s node |
-| `k3s_ssh_private_key_path` | string | - | Path to SSH private key for provisioner |
+| `ssh_private_key_path` | string | - | Path to SSH private key for provisioner |
 | `k3s_version` | string | - | k3s release version |
 | `k3s_api_allowed_cidrs` | list(string) | - | CIDRs allowed to reach k3s API (port 6443) |
 | `ssh_public_key` | string | - | SSH public key content for EC2 key pair |

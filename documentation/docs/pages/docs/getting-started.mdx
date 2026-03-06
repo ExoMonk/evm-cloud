@@ -100,7 +100,7 @@ Edit `secrets.auto.tfvars` with your values:
 ```hcl
 # SSH keys
 ssh_public_key              = "ssh-ed25519 AAAA... your-email"
-ec2_ssh_private_key_path    = "~/.ssh/evm-cloud"
+ssh_private_key_path        = "~/.ssh/evm-cloud"
 
 # ClickHouse connection (from ClickHouse Cloud or your own instance)
 indexer_clickhouse_url      = "https://your-instance.clickhouse.cloud:8443"

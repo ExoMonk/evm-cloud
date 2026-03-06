@@ -78,7 +78,7 @@ Required when `compute_engine = "ec2"`.
 | Variable | Type | Default | Sensitive | Description |
 |----------|------|---------|-----------|-------------|
 | `ssh_public_key` | `string` | `""` | Yes | SSH public key content for the EC2 key pair. Required for EC2 and k3s. |
-| `ec2_ssh_private_key_path` | `string` | `""` | No | Path to SSH private key for config updates. Required when `workload_mode = "terraform"`. |
+| `ssh_private_key_path` | `string` | `""` | No | Path to SSH private key file used for provisioning and config updates. Required for EC2, K3s, and bare metal deployments. |
 | `ec2_instance_type` | `string` | `"t3.small"` | No | EC2 instance type. See [sizing guide](#instance-sizing) below. |
 | `ec2_rpc_proxy_mem_limit` | `string` | `"1g"` | No | Docker memory limit for eRPC container. |
 | `ec2_indexer_mem_limit` | `string` | `"2g"` | No | Docker memory limit for rindexer container. |
@@ -94,7 +94,7 @@ Required when `compute_engine = "k3s"`.
 |----------|------|---------|-----------|-------------|
 | `k3s_instance_type` | `string` | `"t3.small"` | No | EC2 instance type for the k3s host. |
 | `k3s_version` | `string` | `"v1.30.4+k3s1"` | No | Pinned k3s version. |
-| `k3s_ssh_private_key_path` | `string` | `""` | Yes | Path to SSH private key for host provisioning. |
+| `ssh_private_key_path` | `string` | `""` | Yes | Path to SSH private key file used for provisioning and config updates. Required for EC2, K3s, and bare metal deployments. |
 | `k3s_api_allowed_cidrs` | `list(string)` | `[]` | No | CIDRs allowed to access k3s API (port 6443). Defaults to VPC CIDR. **Add your IP for Terraform provisioning.** |
 | `k3s_worker_nodes` | `list(object)` | `[]` | No | Worker nodes to join the k3s cluster. See below. |
 | `ssh_public_key` | `string` | `""` | Yes | SSH public key for the k3s EC2 key pair. |
@@ -332,7 +332,7 @@ Required when `infrastructure_provider = "bare_metal"`.
 |----------|------|---------|-------------|
 | `bare_metal_host` | `string` | `""` | IP or hostname of your VPS. |
 | `bare_metal_ssh_user` | `string` | `"ubuntu"` | SSH user. |
-| `bare_metal_ssh_private_key_path` | `string` | `""` | Path to SSH private key. |
+| `ssh_private_key_path` | `string` | `""` | Path to SSH private key file used for provisioning and config updates. Required for EC2, K3s, and bare metal deployments. |
 | `bare_metal_ssh_port` | `number` | `22` | SSH port. |
 | `bare_metal_rpc_proxy_mem_limit` | `string` | `"1g"` | Docker memory limit for eRPC. |
 | `bare_metal_indexer_mem_limit` | `string` | `"2g"` | Docker memory limit for rindexer. |
