@@ -59,14 +59,14 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
     if let Some(example) = &args.example {
         if args.config.is_some() {
-            return Err(CliError::Message(
-                "`--example` cannot be combined with `--config` in v1".to_string(),
-            ));
+            return Err(CliError::FlagConflict {
+                message: "`--example` cannot be combined with `--config` in v1".to_string(),
+            });
         }
         if args.mode.is_some() {
-            return Err(CliError::Message(
-                "`--example` cannot be combined with `--mode` in v1".to_string(),
-            ));
+            return Err(CliError::FlagConflict {
+                message: "`--example` cannot be combined with `--mode` in v1".to_string(),
+            });
         }
 
         if example == examples::bare_example_sentinel() {
@@ -82,9 +82,9 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
                     );
                 }
             }
-            return Err(CliError::Message(
-                "missing value for `--example`".to_string(),
-            ));
+            return Err(CliError::FlagConflict {
+                message: "missing value for `--example`".to_string(),
+            });
         }
 
         let bootstrap = examples::bootstrap_example_to_dir(example, &args.dir, args.force)?;
@@ -111,9 +111,9 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
     let terraform_dir = match preflight {
         Ok(preflight) => {
             if args.config.is_some() && !args.force {
-                return Err(CliError::Message(
-                    "`--config` is only applied during scaffolding. Existing project detected; re-run with `--force` to regenerate managed files, or omit `--config` to run terraform init only.".to_string(),
-                ));
+                return Err(CliError::FlagConflict {
+                    message: "`--config` is only applied during scaffolding. Existing project detected; re-run with `--force` to regenerate, or omit `--config` to run terraform init only.".to_string(),
+                });
             }
 
             if args.force {

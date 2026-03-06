@@ -26,7 +26,18 @@ trap "rm -f '$HANDOFF_FILE' '$KUBECONFIG_PATH'" EXIT
 
 cat "$HANDOFF" > "$HANDOFF_FILE"
 
+# Sanitize a project name into a valid k8s namespace (DNS-1123 label)
+sanitize_namespace() {
+  echo "$1" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed 's/[^a-z0-9-]/-/g' \
+    | sed 's/--*/-/g' \
+    | sed 's/^-//;s/-$//' \
+    | cut -c1-63
+}
+
 PROJECT=$(jq -r '.project_name' "$HANDOFF_FILE")
+NS=$(sanitize_namespace "$PROJECT")
 
 # Extract kubeconfig
 KUBECONFIG_B64=$(jq -r '.runtime.k3s.kubeconfig_base64 // empty' "$HANDOFF_FILE")
@@ -42,22 +53,21 @@ export KUBECONFIG="$KUBECONFIG_PATH"
 echo "[evm-cloud] Tearing down workloads..."
 
 # Uninstall eRPC
-helm uninstall "${PROJECT}-erpc" --wait 2>/dev/null && echo "  Removed ${PROJECT}-erpc" || true
+helm uninstall "${PROJECT}-erpc" -n "${NS}" --wait 2>/dev/null && echo "  Removed ${PROJECT}-erpc" || true
 
 # Uninstall indexer instances (multi-instance aware)
 INSTANCES=$(jq -c '.services.indexer.instances // [{"name":"indexer"}]' "$HANDOFF_FILE")
 for INSTANCE in $(echo "$INSTANCES" | jq -c '.[]'); do
   NAME=$(echo "$INSTANCE" | jq -r '.name')
-  helm uninstall "${PROJECT}-${NAME}" --wait 2>/dev/null && echo "  Removed ${PROJECT}-${NAME}" || true
+  helm uninstall "${PROJECT}-${NAME}" -n "${NS}" --wait 2>/dev/null && echo "  Removed ${PROJECT}-${NAME}" || true
 done
 
 # Clean up ingress resources (best-effort, regardless of current ingress mode)
 INGRESS_MODE=$(jq -r '.ingress.mode // "none"' "$HANDOFF_FILE")
 echo "[evm-cloud] Cleaning ingress resources (mode: $INGRESS_MODE)..."
 
-# Remove Cloudflare TLS secret from likely namespaces (historical + current)
-kubectl delete secret cloudflare-origin-tls 2>/dev/null && echo "  Removed cloudflare-origin-tls secret (default)" || true
-kubectl delete secret cloudflare-origin-tls -n "${PROJECT}" 2>/dev/null && echo "  Removed cloudflare-origin-tls secret (${PROJECT})" || true
+# Remove Cloudflare TLS secret from project + monitoring namespaces
+kubectl delete secret cloudflare-origin-tls -n "${NS}" 2>/dev/null && echo "  Removed cloudflare-origin-tls secret (${NS})" || true
 
 # Remove cert-manager issuers first (cluster-scoped)
 kubectl delete clusterissuer letsencrypt-prod letsencrypt-staging 2>/dev/null || true
@@ -72,5 +82,8 @@ helm uninstall ingress-nginx -n ingress-nginx --wait 2>/dev/null && echo "  Remo
 kubectl delete configmap ingress-nginx-custom-headers -n ingress-nginx 2>/dev/null || true
 kubectl delete namespace cert-manager --ignore-not-found=true 2>/dev/null || true
 kubectl delete namespace ingress-nginx --ignore-not-found=true 2>/dev/null || true
+
+# Remove the project namespace (all remaining resources within it will be garbage collected)
+kubectl delete namespace "${NS}" --ignore-not-found=true 2>/dev/null || true
 
 echo "[evm-cloud] Teardown complete. Safe to run 'terraform destroy'."

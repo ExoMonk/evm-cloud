@@ -3,6 +3,7 @@ use std::path::Path;
 
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
+use crate::config::schema::{ComputeEngine, InfrastructureProvider, IngressMode, WorkloadMode};
 use crate::error::{CliError, Result};
 use crate::init_answers::{load_from_config, DatabaseProfile, IndexerConfigStrategy, InitAnswers, InitMode};
 
@@ -45,41 +46,44 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .with_prompt("Project name")
         .default("evm-cloud-demo".to_string())
         .interact_text()
-        .map_err(|err| CliError::Message(err.to_string()))?;
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
 
-    let provider_options = ["aws", "bare_metal"];
+    let provider_options = [InfrastructureProvider::Aws, InfrastructureProvider::BareMetal];
+    let provider_labels: Vec<&str> = provider_options.iter().map(|p| p.as_str()).collect();
     let provider_idx = Select::with_theme(&theme)
         .with_prompt("Infrastructure provider")
-        .items(&provider_options)
+        .items(&provider_labels)
         .default(0)
         .interact()
-        .map_err(|err| CliError::Message(err.to_string()))?;
-    let infrastructure_provider = provider_options[provider_idx].to_string();
-    let is_aws = infrastructure_provider == "aws";
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+    let infrastructure_provider = provider_options[provider_idx];
+    let is_aws = infrastructure_provider == InfrastructureProvider::Aws;
 
-    let compute_options: Vec<&str> = if is_aws {
-        vec!["ec2", "eks", "k3s"]
+    let compute_options: Vec<ComputeEngine> = if is_aws {
+        vec![ComputeEngine::Ec2, ComputeEngine::Eks, ComputeEngine::K3s]
     } else {
-        vec!["k3s", "docker_compose"]
+        vec![ComputeEngine::K3s, ComputeEngine::DockerCompose]
     };
+    let compute_labels: Vec<&str> = compute_options.iter().map(|e| e.as_str()).collect();
     let compute_idx = Select::with_theme(&theme)
         .with_prompt("Compute engine")
-        .items(&compute_options)
+        .items(&compute_labels)
         .default(0)
         .interact()
-        .map_err(|err| CliError::Message(err.to_string()))?;
-    let compute_engine = compute_options[compute_idx].to_string();
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+    let compute_engine = compute_options[compute_idx];
 
     // k3s/eks always use external deployers; ec2/docker_compose can choose.
-    let workload_mode = if matches!(compute_engine.as_str(), "ec2" | "docker_compose") {
-        let wm_options = ["terraform", "external"];
+    let workload_mode = if matches!(compute_engine, ComputeEngine::Ec2 | ComputeEngine::DockerCompose) {
+        let wm_options = [WorkloadMode::Terraform, WorkloadMode::External];
+        let wm_labels: Vec<&str> = wm_options.iter().map(|m| m.as_str()).collect();
         let wm_idx = Select::with_theme(&theme)
             .with_prompt("Workload deployment mode (terraform = TF provisioners manage compose; external = CLI deployer)")
-            .items(&wm_options)
+            .items(&wm_labels)
             .default(0)
             .interact()
-            .map_err(|err| CliError::Message(err.to_string()))?;
-        Some(wm_options[wm_idx].to_string())
+            .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+        Some(wm_options[wm_idx])
     } else {
         None // k3s/eks → always "external", inferred downstream
     };
@@ -90,7 +94,7 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
                 .with_prompt("AWS region")
                 .default("us-east-1".to_string())
                 .interact_text()
-                .map_err(|err| CliError::Message(err.to_string()))?,
+                .map_err(|err| CliError::PromptFailed(err.to_string()))?,
         )
     } else {
         None
@@ -107,7 +111,7 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .items(&db_options)
         .default(0)
         .interact()
-        .map_err(|err| CliError::Message(err.to_string()))?;
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
 
     let database_profile = match db_idx {
         0 => DatabaseProfile::ByodbClickhouse,
@@ -123,7 +127,7 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         let endpoint: String = Input::with_theme(&theme)
             .with_prompt(format!("RPC endpoint for {chain}"))
             .interact_text()
-            .map_err(|err| CliError::Message(err.to_string()))?;
+            .map_err(|err| CliError::PromptFailed(err.to_string()))?;
 
         if endpoint.trim().is_empty() {
             return Err(CliError::ConfigValidation {
@@ -141,7 +145,7 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .items(&indexer_options)
         .default(0)
         .interact()
-        .map_err(|err| CliError::Message(err.to_string()))?;
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
 
     let indexer_config = if indexer_idx == 0 {
         IndexerConfigStrategy::Generate
@@ -149,7 +153,7 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         let path: String = Input::with_theme(&theme)
             .with_prompt("Path to existing rindexer.yaml")
             .interact_text()
-            .map_err(|err| CliError::Message(err.to_string()))?;
+            .map_err(|err| CliError::PromptFailed(err.to_string()))?;
         IndexerConfigStrategy::Existing(path.into())
     };
 
@@ -157,25 +161,55 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         .with_prompt("Generate starter erpc.yaml")
         .default(true)
         .interact()
-        .map_err(|err| CliError::Message(err.to_string()))?;
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
 
-    let needs_instance_type = is_aws && matches!(compute_engine.as_str(), "ec2" | "eks" | "k3s");
+    let needs_instance_type = is_aws && matches!(compute_engine, ComputeEngine::Ec2 | ComputeEngine::Eks | ComputeEngine::K3s);
     let instance_type = if needs_instance_type {
-        let default = match mode {
-            InitMode::Easy => "t3.micro",
-            InitMode::Power => "t3.small",
-        }
-        .to_string();
+        let default = "t3.small".to_string();
 
         Some(
             Input::with_theme(&theme)
                 .with_prompt("Instance type")
                 .default(default)
                 .interact_text()
-                .map_err(|err| CliError::Message(err.to_string()))?,
+                .map_err(|err| CliError::PromptFailed(err.to_string()))?,
         )
     } else {
         None
+    };
+
+    // Ingress / TLS — filter options by compute engine
+    let ingress_options = IngressMode::options_for_engine(compute_engine);
+    let ingress_labels: Vec<&str> = ingress_options.iter().map(|m| m.as_str()).collect();
+    let ingress_idx = Select::with_theme(&theme)
+        .with_prompt("Ingress mode (none=no TLS, cloudflare=CF proxy, caddy=Let's Encrypt, ingress_nginx=k8s)")
+        .items(&ingress_labels)
+        .default(0)
+        .interact()
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+    let ingress_mode = ingress_options[ingress_idx];
+
+    let (erpc_hostname, ingress_tls_email) = if !ingress_mode.requires_hostname() {
+        (None, None)
+    } else {
+        let raw_hostname: String = Input::with_theme(&theme)
+            .with_prompt("Public hostname for eRPC (e.g. rpc.example.com)")
+            .interact_text()
+            .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+        let hostname = sanitize_hostname(&raw_hostname);
+
+        let email = if ingress_mode.requires_tls_email() {
+            Some(
+                Input::with_theme(&theme)
+                    .with_prompt("Email for Let's Encrypt certificate")
+                    .interact_text()
+                    .map_err(|err| CliError::PromptFailed(err.to_string()))?,
+            )
+        } else {
+            None
+        };
+
+        (Some(hostname), email)
     };
 
     Ok(InitAnswers {
@@ -191,6 +225,9 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         rpc_endpoints,
         indexer_config,
         generate_erpc_config,
+        ingress_mode,
+        erpc_hostname,
+        ingress_tls_email,
     })
 }
 
@@ -224,7 +261,7 @@ fn select_chains(theme: &ColorfulTheme) -> Result<Vec<String>> {
             .items(&items)
             .default(cursor)
             .interact()
-            .map_err(|err| CliError::Message(err.to_string()))?;
+            .map_err(|err| CliError::PromptFailed(err.to_string()))?;
 
         let done_index = items.len() - 1;
         if choice == done_index {
@@ -247,4 +284,11 @@ fn select_chains(theme: &ColorfulTheme) -> Result<Vec<String>> {
         selected[choice] = !selected[choice];
         cursor = done_index;
     }
+}
+
+/// Strip protocol prefix and trailing slash from a hostname input.
+fn sanitize_hostname(raw: &str) -> String {
+    let s = raw.trim();
+    let s = s.strip_prefix("https://").or_else(|| s.strip_prefix("http://")).unwrap_or(s);
+    s.trim_end_matches('/').to_string()
 }

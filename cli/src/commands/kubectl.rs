@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 use base64::Engine;
 use clap::Args;
 
+use crate::config::schema::ComputeEngine;
 use crate::error::{CliError, Result};
 use crate::handoff::{self, WorkloadHandoff};
 use crate::preflight::{self, ProjectKind};
@@ -24,9 +25,9 @@ pub(crate) fn run(args: KubectlArgs) -> Result<()> {
     let args = normalize_embedded_wrapper_flags(args)?;
 
     if args.kubectl_args.is_empty() {
-        return Err(CliError::Message(
-            "missing kubectl arguments, e.g. `evm-cloud kubectl -- get nodes`".to_string(),
-        ));
+        return Err(CliError::FlagConflict {
+            message: "missing kubectl arguments, e.g. `evm-cloud kubectl -- get nodes`".to_string(),
+        });
     }
 
     let kubectl_binary = which::which("kubectl").map_err(|_| CliError::PrerequisiteNotFound {
@@ -53,33 +54,7 @@ pub(crate) fn run(args: KubectlArgs) -> Result<()> {
             details: err.to_string(),
         })?;
 
-    if status.success() {
-        return Ok(());
-    }
-
-    if let Some(code) = status.code() {
-        return Err(CliError::ToolFailed {
-            tool: "kubectl".to_string(),
-            details: format!("exited with status code {code}"),
-        });
-    }
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        return Err(CliError::ToolFailed {
-            tool: "kubectl".to_string(),
-            details: format!("terminated by signal {:?}", status.signal()),
-        });
-    }
-
-    #[cfg(not(unix))]
-    {
-        Err(CliError::ToolFailed {
-            tool: "kubectl".to_string(),
-            details: "terminated unexpectedly".to_string(),
-        })
-    }
+    crate::error::tool_exit_status(status, "kubectl")
 }
 
 fn resolve_or_generate_kubeconfig_path(canonical_dir: &Path, explicit: Option<PathBuf>) -> Result<PathBuf> {
@@ -121,8 +96,8 @@ fn generate_kubeconfig(start_dir: &Path, target_path: &Path) -> Result<()> {
         })?;
     }
 
-    match handoff.compute_engine.as_str() {
-        "k3s" => {
+    match handoff.compute_engine {
+        ComputeEngine::K3s => {
             let encoded = handoff
                 .runtime
                 .k3s
@@ -130,25 +105,47 @@ fn generate_kubeconfig(start_dir: &Path, target_path: &Path) -> Result<()> {
                 .and_then(|runtime| runtime.kubeconfig_base64.as_ref())
                 .map(|value| value.trim())
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| CliError::Message(
-                    "workload_handoff.runtime.k3s.kubeconfig_base64 is missing; cannot generate kubeconfig"
-                        .to_string(),
-                ))?;
+                .ok_or_else(|| CliError::HandoffInvalid {
+                    field: "runtime.k3s.kubeconfig_base64".to_string(),
+                    details: "missing; cannot generate kubeconfig".to_string(),
+                })?;
 
             let decoded = base64::engine::general_purpose::STANDARD
                 .decode(encoded)
-                .map_err(|err| CliError::Message(format!("invalid base64 kubeconfig payload: {err}")))?;
+                .map_err(|err| CliError::HandoffInvalid {
+                    field: "runtime.k3s.kubeconfig_base64".to_string(),
+                    details: format!("invalid base64 payload: {err}"),
+                })?;
 
-            fs::write(target_path, decoded).map_err(|source| CliError::Io {
-                source,
-                path: target_path.to_path_buf(),
-            })?;
+            // Write with restricted permissions — kubeconfig contains cluster credentials
+            #[cfg(unix)]
+            {
+                use std::io::Write;
+                use std::os::unix::fs::OpenOptionsExt;
+                let mut f = fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .mode(0o600)
+                    .open(target_path)
+                    .map_err(|source| CliError::Io { source, path: target_path.to_path_buf() })?;
+                f.write_all(&decoded)
+                    .map_err(|source| CliError::Io { source, path: target_path.to_path_buf() })?;
+            }
+            #[cfg(not(unix))]
+            {
+                fs::write(target_path, decoded).map_err(|source| CliError::Io {
+                    source,
+                    path: target_path.to_path_buf(),
+                })?;
+            }
+
             Ok(())
         }
-        "eks" => generate_eks_kubeconfig(&handoff, &project_root, target_path),
-        other => Err(CliError::Message(format!(
-            "auto kubeconfig generation is only supported for k3s/eks; current compute_engine is `{other}`"
-        ))),
+        ComputeEngine::Eks => generate_eks_kubeconfig(&handoff, &project_root, target_path),
+        other => Err(CliError::KubeconfigUnsupportedEngine {
+            compute_engine: other.to_string(),
+        }),
     }
 }
 
@@ -160,10 +157,10 @@ fn generate_eks_kubeconfig(handoff: &WorkloadHandoff, project_root: &Path, targe
         .and_then(|runtime| runtime.cluster_name.as_ref())
         .map(|name| name.trim())
         .filter(|name| !name.is_empty())
-        .ok_or_else(|| CliError::Message(
-            "workload_handoff.runtime.eks.cluster_name is missing; cannot generate kubeconfig"
-                .to_string(),
-        ))?;
+        .ok_or_else(|| CliError::HandoffInvalid {
+            field: "runtime.eks.cluster_name".to_string(),
+            details: "missing; cannot generate kubeconfig".to_string(),
+        })?;
 
     let aws = which::which("aws").map_err(|_| CliError::PrerequisiteNotFound {
         tool: "aws".to_string(),
@@ -193,44 +190,21 @@ fn generate_eks_kubeconfig(handoff: &WorkloadHandoff, project_root: &Path, targe
         details: err.to_string(),
     })?;
 
-    if status.success() {
-        return Ok(());
-    }
+    crate::error::tool_exit_status(status, "aws eks update-kubeconfig")?;
 
-    if let Some(code) = status.code() {
-        return Err(CliError::ToolFailed {
-            tool: "aws eks update-kubeconfig".to_string(),
-            details: format!("exited with status code {code}"),
-        });
-    }
-
+    // Restrict permissions — kubeconfig contains cluster credentials
     #[cfg(unix)]
     {
-        use std::os::unix::process::ExitStatusExt;
-        return Err(CliError::ToolFailed {
-            tool: "aws eks update-kubeconfig".to_string(),
-            details: format!("terminated by signal {:?}", status.signal()),
-        });
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(target_path, fs::Permissions::from_mode(0o600))
+            .map_err(|source| CliError::Io { source, path: target_path.to_path_buf() })?;
     }
 
-    #[cfg(not(unix))]
-    {
-        Err(CliError::ToolFailed {
-            tool: "aws eks update-kubeconfig".to_string(),
-            details: "terminated unexpectedly".to_string(),
-        })
-    }
+    Ok(())
 }
 
 fn load_handoff(runner: &TerraformRunner, terraform_dir: &Path) -> Result<WorkloadHandoff> {
-    match runner.output_named_json(terraform_dir, "workload_handoff") {
-        Ok(value) => handoff::parse_handoff_value(value),
-        Err(CliError::TerraformOutputMissing { .. }) => {
-            let full_output = runner.output_json(terraform_dir)?;
-            handoff::parse_from_full_output(full_output, "evm_cloud")
-        }
-        Err(err) => Err(err),
-    }
+    handoff::load_from_state(runner, terraform_dir, "evm_cloud")
 }
 
 fn absolutize_path(base_dir: &Path, candidate: PathBuf) -> PathBuf {
@@ -252,12 +226,12 @@ fn normalize_embedded_wrapper_flags(mut args: KubectlArgs) -> Result<KubectlArgs
             let value = args
                 .kubectl_args
                 .get(index + 1)
-                .ok_or_else(|| CliError::Message("`--dir` requires a value".to_string()))?;
+                .ok_or_else(|| CliError::FlagConflict { message: "`--dir` requires a value".to_string() })?;
 
             if args.dir != PathBuf::from(".") {
-                return Err(CliError::Message(
-                    "duplicate `--dir` provided (use it only once)".to_string(),
-                ));
+                return Err(CliError::FlagConflict {
+                    message: "duplicate `--dir` provided (use it only once)".to_string(),
+                });
             }
 
             args.dir = PathBuf::from(value);
@@ -267,9 +241,9 @@ fn normalize_embedded_wrapper_flags(mut args: KubectlArgs) -> Result<KubectlArgs
 
         if let Some(value) = current.strip_prefix("--dir=") {
             if args.dir != PathBuf::from(".") {
-                return Err(CliError::Message(
-                    "duplicate `--dir` provided (use it only once)".to_string(),
-                ));
+                return Err(CliError::FlagConflict {
+                    message: "duplicate `--dir` provided (use it only once)".to_string(),
+                });
             }
 
             args.dir = PathBuf::from(value);
@@ -281,12 +255,12 @@ fn normalize_embedded_wrapper_flags(mut args: KubectlArgs) -> Result<KubectlArgs
             let value = args
                 .kubectl_args
                 .get(index + 1)
-                .ok_or_else(|| CliError::Message("`--kubeconfig` requires a value".to_string()))?;
+                .ok_or_else(|| CliError::FlagConflict { message: "`--kubeconfig` requires a value".to_string() })?;
 
             if args.kubeconfig.is_some() {
-                return Err(CliError::Message(
-                    "duplicate `--kubeconfig` provided (use it only once)".to_string(),
-                ));
+                return Err(CliError::FlagConflict {
+                    message: "duplicate `--kubeconfig` provided (use it only once)".to_string(),
+                });
             }
 
             args.kubeconfig = Some(PathBuf::from(value));
@@ -296,9 +270,9 @@ fn normalize_embedded_wrapper_flags(mut args: KubectlArgs) -> Result<KubectlArgs
 
         if let Some(value) = current.strip_prefix("--kubeconfig=") {
             if args.kubeconfig.is_some() {
-                return Err(CliError::Message(
-                    "duplicate `--kubeconfig` provided (use it only once)".to_string(),
-                ));
+                return Err(CliError::FlagConflict {
+                    message: "duplicate `--kubeconfig` provided (use it only once)".to_string(),
+                });
             }
 
             args.kubeconfig = Some(PathBuf::from(value));
@@ -319,10 +293,7 @@ fn ensure_existing_kubeconfig(path: PathBuf) -> Result<PathBuf> {
         return Ok(path);
     }
 
-    Err(CliError::Message(format!(
-        "kubeconfig not found at {}",
-        path.display()
-    )))
+    Err(CliError::KubeconfigNotFound { path })
 }
 
 fn kubeconfig_candidates(dir: &Path) -> Vec<PathBuf> {

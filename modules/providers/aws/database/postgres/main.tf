@@ -53,6 +53,7 @@ module "rds" {
 
   monitoring_interval          = 60
   create_monitoring_role       = true
+  monitoring_role_name         = "${var.project_name}-${var.environment}-rds-monitoring"
   performance_insights_enabled = true
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]

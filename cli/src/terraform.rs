@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::error::{CliError, Result};
 
 const BASELINE_MIN_VERSION: (u32, u32, u32) = (1, 14, 6);
+pub(crate) const REQUIRED_VERSION_CONSTRAINT: &str = ">= 1.14.6";
 const DEFAULT_TERRAFORM_PARALLELISM: &str = "-parallelism=3";
 type VersionTuple = (u32, u32, u32);
 type VersionFloor = (VersionTuple, String);
@@ -119,7 +120,10 @@ impl TerraformRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-            .map_err(|err| CliError::Other(err.into()))?;
+            .map_err(|source| CliError::CommandSpawn {
+                command: "terraform".to_string(),
+                source,
+            })?;
 
         if output.status.success() {
             let parsed = serde_json::from_slice::<Value>(&output.stdout)?;
@@ -159,7 +163,10 @@ impl TerraformRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .output()
-            .map_err(|err| CliError::Other(err.into()))?;
+            .map_err(|source| CliError::CommandSpawn {
+                command: "terraform".to_string(),
+                source,
+            })?;
 
         map_status(output.status)?;
         let parsed = serde_json::from_slice::<Value>(&output.stdout)?;
@@ -178,7 +185,10 @@ impl TerraformRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-            .map_err(|err| CliError::Other(err.into()))?;
+            .map_err(|source| CliError::CommandSpawn {
+                command: "terraform".to_string(),
+                source,
+            })?;
 
         if let Some(path) = log_path {
             append_terraform_log(path, args, &output.stdout, &output.stderr)?;
@@ -265,26 +275,11 @@ fn append_terraform_log(path: &Path, args: &[String], stdout: &[u8], stderr: &[u
 }
 
 pub(crate) fn map_status(status: ExitStatus) -> Result<()> {
-    if status.success() {
-        return Ok(());
-    }
-
-    if let Some(code) = status.code() {
-        return Err(CliError::TerraformFailed { code });
-    }
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        Err(CliError::TerraformSignaled {
-            signal: status.signal(),
-        })
-    }
-
-    #[cfg(not(unix))]
-    {
-        Err(CliError::TerraformSignaled { signal: None })
-    }
+    crate::error::map_exit_status(
+        status,
+        |code| CliError::TerraformFailed { code },
+        |signal| CliError::TerraformSignaled { signal },
+    )
 }
 
 fn probe_terraform_version(binary_path: &Path) -> Result<String> {
@@ -293,7 +288,10 @@ fn probe_terraform_version(binary_path: &Path) -> Result<String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .map_err(|err| CliError::Other(err.into()))?;
+        .map_err(|source| CliError::CommandSpawn {
+                command: "terraform".to_string(),
+                source,
+            })?;
 
     if json_attempt.status.success() {
         let parsed: TerraformVersionJson = serde_json::from_slice(&json_attempt.stdout).map_err(|err| {
@@ -309,7 +307,10 @@ fn probe_terraform_version(binary_path: &Path) -> Result<String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .map_err(|err| CliError::Other(err.into()))?;
+        .map_err(|source| CliError::CommandSpawn {
+                command: "terraform".to_string(),
+                source,
+            })?;
 
     if !text_attempt.status.success() {
         return Err(CliError::TerraformVersionProbeFailed {

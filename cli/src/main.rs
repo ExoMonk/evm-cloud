@@ -15,6 +15,7 @@ mod output;
 mod post_deploy;
 mod preflight;
 mod terraform;
+mod tfvars_parser;
 mod version_guard;
 
 use clap::{Parser, Subcommand};

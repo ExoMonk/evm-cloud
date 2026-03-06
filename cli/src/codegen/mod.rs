@@ -3,14 +3,15 @@ use std::path::Path;
 
 use crate::error::{CliError, Result};
 
+pub(crate) mod manifest;
 pub(crate) mod scaffold;
 pub(crate) mod tfvars;
 
 pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<()> {
-    let parent = path.parent().ok_or_else(|| CliError::Message(format!(
-        "cannot resolve parent directory for {}",
-        path.display()
-    )))?;
+    let parent = path.parent().ok_or_else(|| CliError::Io {
+        source: std::io::Error::new(std::io::ErrorKind::NotFound, "no parent directory"),
+        path: path.to_path_buf(),
+    })?;
 
     fs::create_dir_all(parent).map_err(|source| CliError::Io {
         source,
@@ -25,7 +26,7 @@ pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<()> {
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|err| CliError::Message(format!("system clock error: {err}")))?
+            .map_err(|err| CliError::SystemClock(err.to_string()))?
             .as_nanos(),
     );
 

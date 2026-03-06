@@ -109,9 +109,6 @@ pub(crate) enum CliError {
     #[error("deploy lock already held at {path}")]
     DeployLockBusy { path: PathBuf },
 
-    #[error("deploy flag conflict: {message}")]
-    DeployFlagConflict { message: String },
-
     #[error("deployer process failed with exit code {code}")]
     DeployerFailed { code: i32 },
 
@@ -145,17 +142,96 @@ pub(crate) enum CliError {
     #[error("{tool} failed: {details}")]
     ToolFailed { tool: String, details: String },
 
-    #[error("{0}")]
-    Message(String),
+    #[error("system clock error: {0}")]
+    SystemClock(String),
+
+    #[error("flag conflict: {message}")]
+    FlagConflict { message: String },
+
+    #[error("kubeconfig not found at {path}")]
+    KubeconfigNotFound { path: PathBuf },
+
+    #[error("kubeconfig generation is only supported for k3s/eks; current compute_engine is `{compute_engine}`")]
+    KubeconfigUnsupportedEngine { compute_engine: String },
+
+    #[error("failed to fetch examples from GitHub: {details}")]
+    ExampleFetchFailed { details: String },
+
+    #[error("example archive invalid: {details}")]
+    ExampleArchiveInvalid { details: String },
+
+    #[error("example path escapes root: {path}")]
+    ExamplePathEscape { path: PathBuf },
+
+    #[error("deployer thread panicked")]
+    DeployerThreadPanicked,
+
+    #[error("missing required file `{file}` for deploy. Provide --config-dir or create `config/{file}`")]
+    DeployConfigFileMissing { file: String },
+
+    #[error("interactive prompt failed: {0}")]
+    PromptFailed(String),
+
+    #[error("failed to spawn `{command}`: {source}")]
+    CommandSpawn {
+        command: String,
+        source: std::io::Error,
+    },
 
     #[error("io error at {path}: {source}")]
     Io {
         source: std::io::Error,
         path: PathBuf,
     },
-
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
 }
 
 pub(crate) type Result<T> = std::result::Result<T, CliError>;
+
+/// Map a process exit status to a `CliError`.
+///
+/// `on_code` receives the non-zero exit code.
+/// `on_signal` receives the optional signal number (Unix only; `None` on other platforms).
+pub(crate) fn map_exit_status(
+    status: std::process::ExitStatus,
+    on_code: impl FnOnce(i32) -> CliError,
+    on_signal: impl FnOnce(Option<i32>) -> CliError,
+) -> Result<()> {
+    if status.success() {
+        return Ok(());
+    }
+
+    if let Some(code) = status.code() {
+        return Err(on_code(code));
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        Err(on_signal(status.signal()))
+    }
+
+    #[cfg(not(unix))]
+    {
+        Err(on_signal(None))
+    }
+}
+
+/// Convenience wrapper for external tool exit status → `CliError::ToolFailed`.
+pub(crate) fn tool_exit_status(status: std::process::ExitStatus, tool: &str) -> Result<()> {
+    let tool_for_code = tool.to_string();
+    let tool_for_signal = tool_for_code.clone();
+    map_exit_status(
+        status,
+        |code| CliError::ToolFailed {
+            tool: tool_for_code,
+            details: format!("exited with status code {code}"),
+        },
+        |signal| CliError::ToolFailed {
+            tool: tool_for_signal,
+            details: match signal {
+                Some(sig) => format!("terminated by signal {sig}"),
+                None => "terminated unexpectedly".to_string(),
+            },
+        },
+    )
+}

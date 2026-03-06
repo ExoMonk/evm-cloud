@@ -1,6 +1,7 @@
 pub(crate) mod apply;
 pub(crate) mod deploy;
 pub(crate) mod destroy;
+pub(crate) mod infra;
 pub(crate) mod init;
 pub(crate) mod kubectl;
 pub(crate) mod logs;

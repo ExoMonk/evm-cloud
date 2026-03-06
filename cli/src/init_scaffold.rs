@@ -1,7 +1,9 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::codegen::write_atomic;
 use crate::config::loader;
+use crate::config::schema::{ComputeEngine, WorkloadMode};
 use crate::error::{CliError, Result};
 use crate::init_answers::{IndexerConfigStrategy, InitAnswers, InitMode};
 use crate::init_templates;
@@ -69,14 +71,11 @@ pub(crate) fn scaffold_project(project_root: &Path, answers: &InitAnswers, force
     )?;
 
     // Generate docker-compose.yml for external mode with compose-based engines.
-    let workload_mode = answers.workload_mode.as_deref().unwrap_or(
-        match answers.compute_engine.as_str() {
-            "k3s" | "eks" => "external",
-            _ => "terraform",
-        },
-    );
-    if workload_mode == "external"
-        && matches!(answers.compute_engine.as_str(), "ec2" | "docker_compose")
+    let workload_mode = answers
+        .workload_mode
+        .unwrap_or_else(|| WorkloadMode::default_for_engine(answers.compute_engine));
+    if workload_mode == WorkloadMode::External
+        && matches!(answers.compute_engine, ComputeEngine::Ec2 | ComputeEngine::DockerCompose)
     {
         write_atomic(
             &project_root.join("config").join("docker-compose.yml"),
@@ -182,7 +181,7 @@ fn ensure_line(lines: &mut Vec<String>, line: &str) {
 fn backup_existing_managed(project_root: &Path, managed_files: &[&str]) -> Result<()> {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|err| CliError::Message(format!("system clock error: {err}")))?
+        .map_err(|err| CliError::SystemClock(err.to_string()))?
         .as_secs();
 
     let backup_root = project_root.join(".evm-cloud").join("backups").join(timestamp.to_string());
@@ -214,35 +213,3 @@ fn backup_existing_managed(project_root: &Path, managed_files: &[&str]) -> Resul
     Ok(())
 }
 
-fn write_atomic(path: &Path, content: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|source| CliError::Io {
-            source,
-            path: parent.to_path_buf(),
-        })?;
-    }
-
-    let temp_path = temp_path_for(path);
-    fs::write(&temp_path, content).map_err(|source| CliError::Io {
-        source,
-        path: temp_path.clone(),
-    })?;
-
-    fs::rename(&temp_path, path).map_err(|source| CliError::Io {
-        source,
-        path: path.to_path_buf(),
-    })
-}
-
-fn temp_path_for(path: &Path) -> PathBuf {
-    let mut name = path
-        .file_name()
-        .and_then(|v| v.to_str())
-        .unwrap_or("tmp")
-        .to_string();
-    name.push_str(".tmp");
-
-    path.parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(name)
-}

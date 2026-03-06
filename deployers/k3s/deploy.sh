@@ -62,11 +62,25 @@ trap "rm -rf '$HANDOFF_FILE' '$KUBECONFIG_PATH' '$VALUES_DIR'" EXIT
 cat "$HANDOFF" > "$HANDOFF_FILE"
 chmod 0600 "$HANDOFF_FILE"
 
+# --- Helpers ---
+
+# Sanitize a project name into a valid k8s namespace (DNS-1123 label):
+#   lowercase, alphanumeric + hyphens, max 63 chars, no leading/trailing hyphens.
+sanitize_namespace() {
+  echo "$1" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed 's/[^a-z0-9-]/-/g' \
+    | sed 's/--*/-/g' \
+    | sed 's/^-//;s/-$//' \
+    | cut -c1-63
+}
+
 # --- Parse handoff ---
 
 ENGINE=$(jq -r '.compute_engine' "$HANDOFF_FILE")
 MODE=$(jq -r '.mode' "$HANDOFF_FILE")
 PROJECT=$(jq -r '.project_name' "$HANDOFF_FILE")
+NS=$(sanitize_namespace "$PROJECT")
 
 if [[ "$ENGINE" != "k3s" ]]; then
   echo "ERROR: handoff compute_engine must be 'k3s', got '$ENGINE'" >&2
@@ -226,8 +240,8 @@ if [[ "$INGRESS_MODE" != "none" ]]; then
   REQUEST_BODY_MAX=$(jq -r '.ingress.request_body_max_size // "1m"' "$HANDOFF_FILE")
   echo "[evm-cloud] Ingress mode: ${INGRESS_MODE} (erpc_hostname: ${ERPC_HOSTNAME})"
 
-  # Ensure namespace exists
-  kubectl create namespace "${PROJECT}" --dry-run=client -o yaml | kubectl apply -f -
+  # Ensure project namespace exists
+  kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
 
   # Install ingress-nginx if needed (cloudflare + ingress_nginx modes on k3s)
   if [[ "$INGRESS_MODE" == "cloudflare" || "$INGRESS_MODE" == "ingress_nginx" ]]; then
@@ -372,12 +386,12 @@ ISSUEREOF
       --cert=<(echo "$CF_ORIGIN_CERT") \
       --key=<(echo "$CF_ORIGIN_KEY") \
       --dry-run=client -o yaml)
-    # Apply to default namespace (for eRPC ingress)
-    echo "$CF_TLS_YAML" | kubectl apply -f -
+    # Apply to project namespace (for eRPC ingress)
+    echo "$CF_TLS_YAML" | kubectl apply -n "${NS}" -f -
     # Apply to monitoring namespace (for Grafana ingress)
     kubectl create namespace monitoring 2>/dev/null || true
     echo "$CF_TLS_YAML" | kubectl apply -n monitoring -f -
-    echo "[evm-cloud] Cloudflare origin TLS secret created (default + monitoring)."
+    echo "[evm-cloud] Cloudflare origin TLS secret created (${NS} + monitoring)."
   fi
 fi
 
@@ -576,7 +590,7 @@ fi
 if [[ "$RPC_PROXY_ENABLED" == "true" ]]; then
   echo "[evm-cloud] Deploying eRPC (${PROJECT}-erpc)..."
   helm upgrade --install "${PROJECT}-erpc" "${CHARTS_DIR}/rpc-proxy/" \
-    -f "${VALUES_DIR}/rpc-proxy-values.yaml" --rollback-on-failure --timeout 300s --create-namespace
+    -n "${NS}" -f "${VALUES_DIR}/rpc-proxy-values.yaml" --rollback-on-failure --timeout 300s
   echo "[evm-cloud] eRPC deployed."
 fi
 
@@ -608,7 +622,7 @@ if [[ "$INDEXER_ENABLED" == "true" ]]; then
 
     echo "[evm-cloud] Deploying rindexer instance (${PROJECT}-${NAME})..."
     if ! helm upgrade --install "${PROJECT}-${NAME}" "${CHARTS_DIR}/indexer/" \
-      -f "$VALUES_FILE" $HELM_EXTRA_ARGS --rollback-on-failure --timeout 300s --create-namespace; then
+      -n "${NS}" -f "$VALUES_FILE" $HELM_EXTRA_ARGS --rollback-on-failure --timeout 300s; then
       echo "ERROR: Failed to deploy ${PROJECT}-${NAME}" >&2
       DEPLOY_FAILED=1
     else

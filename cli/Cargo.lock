@@ -216,9 +216,8 @@ dependencies = [
 
 [[package]]
 name = "evm-cloud"
-version = "0.0.1-alpha4"
+version = "0.0.1-alpha5"
 dependencies = [
- "anyhow",
  "base64",
  "clap",
  "dialoguer",
@@ -226,6 +225,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "toml",

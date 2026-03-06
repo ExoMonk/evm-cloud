@@ -120,7 +120,7 @@ fn fetch_examples_repo_root_from_github() -> Result<PathBuf> {
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|err| CliError::Message(format!("system clock error: {err}")))?
+            .map_err(|err| CliError::SystemClock(err.to_string()))?
             .as_nanos()
     ));
 
@@ -145,10 +145,9 @@ fn fetch_examples_repo_root_from_github() -> Result<PathBuf> {
     }
 
     if selected_url.is_none() {
-        return Err(CliError::Message(format!(
-            "failed to fetch examples from GitHub (tag and main fallback exhausted): {}",
-            last_error.unwrap_or_else(|| "unknown download error".to_string())
-        )));
+        return Err(CliError::ExampleFetchFailed {
+            details: last_error.unwrap_or_else(|| "unknown download error".to_string()),
+        });
     }
 
     let extract_root = temp_root.join("extract");
@@ -176,14 +175,18 @@ fn fetch_examples_repo_root_from_github() -> Result<PathBuf> {
     children.sort();
 
     let repo_root = children.into_iter().next().ok_or_else(|| {
-        CliError::Message("downloaded GitHub archive is missing repository root directory".to_string())
+        CliError::ExampleArchiveInvalid {
+            details: "downloaded GitHub archive is missing repository root directory".to_string(),
+        }
     })?;
 
     if !repo_root.join(EXAMPLES_DIR).is_dir() {
-        return Err(CliError::Message(format!(
-            "downloaded repository missing `{EXAMPLES_DIR}` directory: {}",
-            repo_root.display()
-        )));
+        return Err(CliError::ExampleArchiveInvalid {
+            details: format!(
+                "downloaded repository missing `{EXAMPLES_DIR}` directory: {}",
+                repo_root.display()
+            ),
+        });
     }
 
     Ok(repo_root)
@@ -220,10 +223,9 @@ fn download_archive(url: &str, destination: &Path) -> Result<()> {
     }
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    Err(CliError::Message(format!(
-        "failed to download examples archive from {url}: {}",
-        stderr.trim()
-    )))
+    Err(CliError::ExampleFetchFailed {
+        details: format!("download from {url}: {}", stderr.trim()),
+    })
 }
 
 fn extract_archive(archive_path: &Path, extract_root: &Path) -> Result<()> {
@@ -243,11 +245,9 @@ fn extract_archive(archive_path: &Path, extract_root: &Path) -> Result<()> {
     }
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    Err(CliError::Message(format!(
-        "failed to extract examples archive {}: {}",
-        archive_path.display(),
-        stderr.trim()
-    )))
+    Err(CliError::ExampleArchiveInvalid {
+        details: format!("extract {}: {}", archive_path.display(), stderr.trim()),
+    })
 }
 
 fn ensure_power_mode_metadata(destination_dir: &Path, example_name: &str, force: bool) -> Result<bool> {
@@ -695,10 +695,7 @@ fn collect_source_files(root: &Path, cursor: &Path) -> Result<Vec<PathBuf>> {
             path: path.clone(),
         })?;
         if !canonical.starts_with(root) {
-            return Err(CliError::Message(format!(
-                "example path escapes root: {}",
-                path.display()
-            )));
+            return Err(CliError::ExamplePathEscape { path });
         }
 
         if file_type.is_dir() {
@@ -707,11 +704,8 @@ fn collect_source_files(root: &Path, cursor: &Path) -> Result<Vec<PathBuf>> {
         }
 
         if file_type.is_file() {
-            let relative = path.strip_prefix(root).map_err(|err| {
-                CliError::Message(format!(
-                    "failed to compute relative example path {}: {err}",
-                    path.display()
-                ))
+            let relative = path.strip_prefix(root).map_err(|_| {
+                CliError::ExamplePathEscape { path: path.clone() }
             })?;
             files.push(relative.to_path_buf());
         }
@@ -723,7 +717,7 @@ fn collect_source_files(root: &Path, cursor: &Path) -> Result<Vec<PathBuf>> {
 fn backup_existing_for_example(destination_dir: &Path, source_files: &[PathBuf]) -> Result<()> {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|err| CliError::Message(format!("system clock error: {err}")))?
+        .map_err(|err| CliError::SystemClock(err.to_string()))?
         .as_secs();
 
     let backup_root = destination_dir

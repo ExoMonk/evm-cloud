@@ -1,14 +1,12 @@
 use std::fs;
 
-use crate::config::schema::EvmCloudConfig;
+use crate::config::schema::{ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode};
 use crate::error::{CliError, Result};
 
 pub(crate) fn validate(config: &EvmCloudConfig) -> Result<()> {
     validate_non_empty("project.name", &config.project.name)?;
 
-    let is_aws = config.database.provider == "aws";
-
-    if is_aws {
+    if config.database.provider == InfrastructureProvider::Aws {
         if let Some(ref region) = config.project.region {
             validate_non_empty("project.region", region)?;
         } else {
@@ -24,8 +22,8 @@ pub(crate) fn validate(config: &EvmCloudConfig) -> Result<()> {
     }
 
     validate_non_empty("database.mode", &config.database.mode)?;
-    validate_non_empty("database.provider", &config.database.provider)?;
-    validate_non_empty("ingress.mode", &config.ingress.mode)?;
+    validate_engine_provider(config.compute.engine, config.database.provider)?;
+    validate_ingress_engine(config.ingress.mode, config.compute.engine)?;
     validate_non_empty("secrets.mode", &config.secrets.mode)?;
 
     if config.indexer.chains.is_empty() {
@@ -57,6 +55,40 @@ fn validate_non_empty(field: &str, value: &str) -> Result<()> {
         return Err(CliError::ConfigValidation {
             field: field.to_string(),
             message: "must be non-empty".to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_engine_provider(engine: ComputeEngine, provider: InfrastructureProvider) -> Result<()> {
+    let valid = ComputeEngine::valid_for_provider(provider);
+    if !valid.contains(&engine) {
+        let allowed: Vec<&str> = valid.iter().map(ComputeEngine::as_str).collect();
+        return Err(CliError::ConfigValidation {
+            field: "compute.engine".to_string(),
+            message: format!(
+                "`{}` is not valid for provider `{}`. Valid engines: {}",
+                engine.as_str(),
+                provider.as_str(),
+                allowed.join(", "),
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn validate_ingress_engine(ingress: IngressMode, engine: ComputeEngine) -> Result<()> {
+    let valid = IngressMode::options_for_engine(engine);
+    if !valid.contains(&ingress) {
+        let allowed: Vec<&str> = valid.iter().map(IngressMode::as_str).collect();
+        return Err(CliError::ConfigValidation {
+            field: "ingress.mode".to_string(),
+            message: format!(
+                "`{}` is not valid for compute engine `{}`. Valid modes: {}",
+                ingress.as_str(),
+                engine.as_str(),
+                allowed.join(", "),
+            ),
         });
     }
     Ok(())

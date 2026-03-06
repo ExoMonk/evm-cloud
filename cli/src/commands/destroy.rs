@@ -4,6 +4,8 @@ use std::time::Instant;
 
 use clap::Args;
 
+use crate::config::schema::ComputeEngine;
+use crate::commands::apply::ensure_non_interactive_terraform;
 use crate::easy_mode;
 use crate::commands::tfvars;
 use crate::error::{CliError, Result};
@@ -13,27 +15,9 @@ use crate::preflight::{self, ProjectKind};
 use crate::terraform::TerraformRunner;
 
 fn is_kube_destroy_target(runner: &TerraformRunner, terraform_dir: &std::path::Path) -> bool {
-    let parsed_handoff = match runner.output_named_json(terraform_dir, "workload_handoff") {
-        Ok(value) => handoff::parse_handoff_value(value).ok(),
-        Err(CliError::TerraformOutputMissing { .. }) => runner
-            .output_json(terraform_dir)
-            .ok()
-            .and_then(|output| handoff::parse_from_full_output(output, "evm_cloud").ok()),
-        Err(_) => None,
-    };
-
-    let Some(parsed) = parsed_handoff else {
-        return false;
-    };
-
-    parsed.compute_engine == "k3s" || parsed.compute_engine == "eks"
-}
-
-fn ensure_non_interactive_terraform(args: &mut Vec<String>) {
-    if args.iter().any(|arg| arg == "-input=false" || arg == "-input=true") {
-        return;
-    }
-    args.push("-input=false".to_string());
+    handoff::try_load_from_state(runner, terraform_dir, "evm_cloud")
+        .map(|h| matches!(h.compute_engine, ComputeEngine::K3s | ComputeEngine::Eks))
+        .unwrap_or(false)
 }
 
 #[derive(Args)]
@@ -68,16 +52,16 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
     };
 
     if !args.yes {
-        return Err(CliError::Message(
-            "destroy requires explicit acknowledgment: pass --yes".to_string(),
-        ));
+        return Err(CliError::FlagConflict {
+            message: "destroy requires explicit acknowledgment: pass --yes".to_string(),
+        });
     }
 
     let non_interactive = !std::io::stdin().is_terminal();
     if non_interactive && !args.auto_approve {
-        return Err(CliError::Message(
-            "non-interactive shell detected: destroy requires --yes --auto-approve".to_string(),
-        ));
+        return Err(CliError::FlagConflict {
+            message: "non-interactive shell detected: destroy requires --yes --auto-approve".to_string(),
+        });
     }
 
     if non_interactive {
@@ -96,7 +80,7 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
 
     if !args.auto_approve {
         let confirmed = output::confirmline("Destroy infrastructure?", color)
-            .map_err(|err| CliError::Other(err.into()))?;
+            .map_err(|err| CliError::PromptFailed(err.to_string()))?;
 
         if !confirmed {
             output::warn("Destroy cancelled", color);
