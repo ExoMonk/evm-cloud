@@ -27,7 +27,7 @@ pub(crate) enum InfraPhaseOutcome {
     },
     Cancelled,
     Applied {
-        handoff: Option<WorkloadHandoff>,
+        handoff: Box<Option<WorkloadHandoff>>,
         log_path: PathBuf,
         output_path: PathBuf,
     },
@@ -124,7 +124,7 @@ pub(crate) fn run_infra_phase(opts: InfraPhaseOpts<'_>) -> Result<InfraPhaseOutc
     }
 
     Ok(InfraPhaseOutcome::Applied {
-        handoff: parsed_handoff,
+        handoff: Box::new(parsed_handoff),
         log_path,
         output_path,
     })

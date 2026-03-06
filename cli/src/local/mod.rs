@@ -200,11 +200,9 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
 
     // Health checks
     let mut all_healthy = true;
-    if !mainnet {
-        if health::wait_for_anvil(30).is_err() {
-            output::warn("Anvil health check timed out", color);
-            all_healthy = false;
-        }
+    if !mainnet && health::wait_for_anvil(30).is_err() {
+        output::warn("Anvil health check timed out", color);
+        all_healthy = false;
     }
     if health::wait_for_http("http://localhost:4000", 30).is_err() {
         output::warn("eRPC health check timed out", color);

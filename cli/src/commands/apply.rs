@@ -118,6 +118,7 @@ pub(crate) fn run(args: ApplyArgs, color: ColorMode) -> Result<()> {
             return Ok(());
         }
         InfraPhaseOutcome::Applied { handoff, log_path, output_path } => {
+            let handoff = *handoff;
             if args.json {
                 if let Some(ref h) = handoff {
                     println!(

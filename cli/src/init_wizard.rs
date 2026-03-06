@@ -13,7 +13,7 @@ pub(crate) fn collect_answers(
     mode_override: Option<InitMode>,
 ) -> Result<InitAnswers> {
     if non_interactive {
-        let path = config_path.ok_or_else(|| CliError::NonInteractiveRequiresConfig)?;
+        let path = config_path.ok_or(CliError::NonInteractiveRequiresConfig)?;
         return load_from_config(path, mode_override);
     }
 

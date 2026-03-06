@@ -24,10 +24,10 @@ pub(super) fn format_deploy_line(msg: &str, engine: ComputeEngine, color: ColorM
 
     // --- k3s lines ---
     if msg == "Cluster reachable." {
-        return Some(format!("     ✔ k3s cluster reachable"));
+        return Some("     ✔ k3s cluster reachable".to_string());
     }
     if msg == "ESO is ready." {
-        return Some(format!("     ✔ ESO is ready"));
+        return Some("     ✔ ESO is ready".to_string());
     }
     // ClusterSecretStore: <name> applied.
     if let Some(rest) = msg.strip_prefix("ClusterSecretStore ") {
@@ -36,27 +36,27 @@ pub(super) fn format_deploy_line(msg: &str, engine: ComputeEngine, color: ColorM
         }
     }
     if msg.starts_with("Cloudflare origin TLS secret created") {
-        return Some(format!("     ✔ Cloudflare origin TLS secret created"));
+        return Some("     ✔ Cloudflare origin TLS secret created".to_string());
     }
     // ingress-nginx
     if msg == "ingress-nginx installed." || msg == "ingress-nginx already present." {
-        return Some(format!("     ✔ ingress-nginx"));
+        return Some("     ✔ ingress-nginx".to_string());
     }
     // cert-manager
     if msg == "cert-manager installed." || msg == "cert-manager CRDs already present." {
-        return Some(format!("     ✔ cert-manager"));
+        return Some("     ✔ cert-manager".to_string());
     }
     // kube-prometheus-stack
     if msg == "kube-prometheus-stack installed." || msg == "kube-prometheus-stack already present." {
-        return Some(format!("     ✔ kube-prometheus-stack"));
+        return Some("     ✔ kube-prometheus-stack".to_string());
     }
     // Loki
     if msg == "Loki installed." || msg == "Loki already present." {
-        return Some(format!("     ✔ Loki"));
+        return Some("     ✔ Loki".to_string());
     }
     // Promtail
     if msg == "Promtail installed." || msg == "Promtail already present." {
-        return Some(format!("     ✔ Promtail"));
+        return Some("     ✔ Promtail".to_string());
     }
     // Dashboards deployed.
     if msg == "Dashboards deployed." {
@@ -88,13 +88,13 @@ pub(super) fn format_deploy_line(msg: &str, engine: ComputeEngine, color: ColorM
 
     // --- compose/docker lines ---
     if msg == "SSH connectivity verified." {
-        return Some(format!("     ✔ SSH connectivity verified"));
+        return Some("     ✔ SSH connectivity verified".to_string());
     }
     if msg == "Uploaded configs." {
-        return Some(format!("     ✔ Configs uploaded"));
+        return Some("     ✔ Configs uploaded".to_string());
     }
     if msg == "Secrets pulled to .env" {
-        return Some(format!("     ✔ Secrets pulled"));
+        return Some("     ✔ Secrets pulled".to_string());
     }
     if msg == "Restarting containers..." {
         return Some(format!("     {icon} Restarting containers..."));

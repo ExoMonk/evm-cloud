@@ -123,7 +123,7 @@ impl ResolvedConfig {
         let is_managed_postgres = is_postgres && config.database.mode == "managed";
         let ingress_mode = config.ingress.mode;
         let secrets_mode_val = config.secrets.mode.clone();
-        let is_monitoring = config.monitoring.as_ref().map_or(false, |m| m.enabled);
+        let is_monitoring = config.monitoring.as_ref().is_some_and(|m| m.enabled);
 
         let workload_mode = config
             .compute
@@ -149,7 +149,7 @@ impl ResolvedConfig {
         if let Some(ref ra) = config.project.runtime_arch {
             d.insert("runtime_arch".into(), hcl_str(ra));
         }
-        if let Some(ref st) = config.streaming.as_ref().map(|s| s.mode.as_str()) {
+        if let Some(st) = config.streaming.as_ref().map(|s| s.mode.as_str()) {
             d.insert("streaming_mode".into(), hcl_str(st));
         }
         // Ingress details
@@ -393,9 +393,10 @@ pub(crate) fn manifest() -> Vec<VarEntry> {
         VarEntry { name: "ingress_mode",             hcl_type: HclType::String, sensitive: false, condition: Condition::Always,     default: None, passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: true },
         VarEntry { name: "erpc_hostname",            hcl_type: HclType::String, sensitive: false, condition: Condition::Always,     default: None, passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: true },
         VarEntry { name: "ingress_tls_email",        hcl_type: HclType::String, sensitive: false, condition: Condition::Always,     default: None, passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: true },
+        // ── SSH ──
+        VarEntry { name: "ssh_private_key_path",            hcl_type: HclType::String, sensitive: true,  condition: Condition::Always,    default: None, passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: false },
         // ── Bare metal ──
         VarEntry { name: "bare_metal_host",                 hcl_type: HclType::String, sensitive: true,  condition: Condition::BareMetal, default: None,                             passthrough: PassthroughMode::Direct, group_break: true,  easy_auto_tfvars: false },
-        VarEntry { name: "bare_metal_ssh_private_key_path", hcl_type: HclType::String, sensitive: true,  condition: Condition::BareMetal, default: None,                             passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: false },
         VarEntry { name: "bare_metal_ssh_user",             hcl_type: HclType::String, sensitive: false, condition: Condition::BareMetal, default: Some(VarDefault::Str("ubuntu")),  passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: true },
         VarEntry { name: "bare_metal_ssh_port",             hcl_type: HclType::Number, sensitive: false, condition: Condition::BareMetal, default: Some(VarDefault::Number(22)),     passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: true },
         // ── Cloud (non-bare-metal) ──
@@ -406,10 +407,8 @@ pub(crate) fn manifest() -> Vec<VarEntry> {
         VarEntry { name: "network_enable_nat_gateway",      hcl_type: HclType::Bool,   sensitive: false, condition: Condition::Cloud,            default: None,                             passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: true },
         // ── EC2-specific ──
         VarEntry { name: "ec2_instance_type",               hcl_type: HclType::String, sensitive: false, condition: Condition::Engine(&["ec2"]), default: None, passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: true },
-        VarEntry { name: "ec2_ssh_private_key_path",        hcl_type: HclType::String, sensitive: true,  condition: Condition::Engine(&["ec2"]), default: None, passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: false },
         // ── K3s-specific ──
         VarEntry { name: "k3s_instance_type",               hcl_type: HclType::String, sensitive: false, condition: Condition::CloudEngine(&["k3s"]), default: None, passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: true },
-        VarEntry { name: "k3s_ssh_private_key_path",        hcl_type: HclType::String, sensitive: true,  condition: Condition::CloudEngine(&["k3s"]), default: None, passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: false },
         VarEntry { name: "k3s_api_allowed_cidrs",           hcl_type: HclType::List("string"), sensitive: false, condition: Condition::CloudEngine(&["k3s"]), default: Some(VarDefault::EmptyList), passthrough: PassthroughMode::Direct, group_break: false, easy_auto_tfvars: false },
         // ── Database ──
         VarEntry { name: "indexer_storage_backend",         hcl_type: HclType::String, sensitive: false, condition: Condition::Always,     default: None,                                passthrough: PassthroughMode::Direct, group_break: true,  easy_auto_tfvars: true },
@@ -873,9 +872,10 @@ mode = "inline"
         let expected = vec![
             "project_name", "infrastructure_provider", "database_mode", "compute_engine",
             "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "ssh_private_key_path",
             "networking_enabled", "aws_region", "ssh_public_key",
             "network_availability_zones", "network_enable_nat_gateway",
-            "ec2_instance_type", "ec2_ssh_private_key_path",
+            "ec2_instance_type",
             "indexer_storage_backend",
             "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
             "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
@@ -898,9 +898,10 @@ mode = "inline"
         let expected = vec![
             "project_name", "infrastructure_provider", "database_mode", "compute_engine",
             "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "ssh_private_key_path",
             "networking_enabled", "aws_region", "ssh_public_key",
             "network_availability_zones", "network_enable_nat_gateway",
-            "k3s_instance_type", "k3s_ssh_private_key_path", "k3s_api_allowed_cidrs",
+            "k3s_instance_type", "k3s_api_allowed_cidrs",
             "indexer_storage_backend", "postgres_enabled",
             "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
             "erpc_config_yaml", "rindexer_config_yaml", "rindexer_abis",
@@ -925,7 +926,8 @@ mode = "inline"
         let expected = vec![
             "project_name", "infrastructure_provider", "database_mode", "compute_engine",
             "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
-            "bare_metal_host", "bare_metal_ssh_private_key_path", "bare_metal_ssh_user", "bare_metal_ssh_port",
+            "ssh_private_key_path",
+            "bare_metal_host", "bare_metal_ssh_user", "bare_metal_ssh_port",
             "indexer_storage_backend",
             "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
             "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
@@ -948,9 +950,10 @@ mode = "inline"
         let expected = vec![
             "project_name", "infrastructure_provider", "database_mode", "compute_engine",
             "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "ssh_private_key_path",
             "networking_enabled", "aws_region", "ssh_public_key",
             "network_availability_zones", "network_enable_nat_gateway",
-            "ec2_instance_type", "ec2_ssh_private_key_path",
+            "ec2_instance_type",
             "indexer_storage_backend",
             "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
             "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
@@ -974,9 +977,10 @@ mode = "inline"
         let expected = vec![
             "project_name", "infrastructure_provider", "database_mode", "compute_engine",
             "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "ssh_private_key_path",
             "networking_enabled", "aws_region", "ssh_public_key",
             "network_availability_zones", "network_enable_nat_gateway",
-            "k3s_instance_type", "k3s_ssh_private_key_path", "k3s_api_allowed_cidrs",
+            "k3s_instance_type", "k3s_api_allowed_cidrs",
             "indexer_storage_backend", "postgres_enabled",
             "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
             "erpc_config_yaml", "rindexer_config_yaml",
@@ -1001,7 +1005,8 @@ mode = "inline"
         let expected = vec![
             "project_name", "infrastructure_provider", "database_mode", "compute_engine",
             "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
-            "bare_metal_host", "bare_metal_ssh_private_key_path", "bare_metal_ssh_user", "bare_metal_ssh_port",
+            "ssh_private_key_path",
+            "bare_metal_host", "bare_metal_ssh_user", "bare_metal_ssh_port",
             "indexer_storage_backend",
             "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
             "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
@@ -1022,9 +1027,10 @@ mode = "inline"
         let expected = vec![
             "project_name", "infrastructure_provider", "database_mode", "compute_engine",
             "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
+            "ssh_private_key_path",
             "networking_enabled", "aws_region", "ssh_public_key",
             "network_availability_zones", "network_enable_nat_gateway",
-            "ec2_instance_type", "ec2_ssh_private_key_path",
+            "ec2_instance_type",
             "indexer_storage_backend",
             "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
             "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",
@@ -1047,7 +1053,8 @@ mode = "inline"
         let expected = vec![
             "project_name", "infrastructure_provider", "database_mode", "compute_engine",
             "workload_mode", "secrets_mode", "ingress_mode", "erpc_hostname", "ingress_tls_email",
-            "bare_metal_host", "bare_metal_ssh_private_key_path", "bare_metal_ssh_user", "bare_metal_ssh_port",
+            "ssh_private_key_path",
+            "bare_metal_host", "bare_metal_ssh_user", "bare_metal_ssh_port",
             "indexer_storage_backend",
             "indexer_clickhouse_url", "indexer_clickhouse_user", "indexer_clickhouse_password", "indexer_clickhouse_db",
             "rpc_proxy_enabled", "indexer_enabled", "indexer_rpc_url",

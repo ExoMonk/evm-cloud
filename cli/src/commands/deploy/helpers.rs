@@ -162,10 +162,7 @@ pub(super) fn resolve_ssh_vars_from_tfvars(
 
     let vars = crate::tfvars_parser::parse_all_existing(&candidates)?;
 
-    let key_path = vars
-        .get("ec2_ssh_private_key_path")
-        .or_else(|| vars.get("bare_metal_ssh_private_key_path"))
-        .cloned();
+    let key_path = vars.get("ssh_private_key_path").cloned();
 
     Ok(SshVars {
         key_path,
@@ -447,11 +444,11 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn resolves_ec2_ssh_key_from_secrets_tfvars() {
+    fn resolves_ssh_key_from_secrets_tfvars() {
         let dir = tempfile::tempdir().unwrap();
         let secrets = dir.path().join(".evm-cloud").join("secrets.auto.tfvars");
         fs::create_dir_all(secrets.parent().unwrap()).unwrap();
-        fs::write(&secrets, "ec2_ssh_private_key_path = \"/home/user/.ssh/id_rsa\"\n").unwrap();
+        fs::write(&secrets, "ssh_private_key_path = \"/home/user/.ssh/id_rsa\"\n").unwrap();
 
         let vars = resolve_ssh_vars_from_tfvars(dir.path(), &ProjectKind::EasyToml).unwrap();
         assert_eq!(vars.key_path.as_deref(), Some("/home/user/.ssh/id_rsa"));
@@ -463,7 +460,7 @@ mod tests {
         let secrets = dir.path().join("secrets.auto.tfvars");
         fs::write(
             &secrets,
-            "bare_metal_ssh_private_key_path = \"/keys/bm\"\nbare_metal_ssh_user = \"deploy\"\nbare_metal_ssh_port = \"2222\"\n",
+            "ssh_private_key_path = \"/keys/bm\"\nbare_metal_ssh_user = \"deploy\"\nbare_metal_ssh_port = \"2222\"\n",
         )
         .unwrap();
 

@@ -238,13 +238,9 @@ pub(crate) fn print_summary(handoff: &WorkloadHandoff, _mode: ColorMode) {
         push_row(&mut rows, "Get nodes", get_nodes_command(handoff));
     }
 
-    if handoff.compute_engine == ComputeEngine::K3s && !has_k3s_kubeconfig {
-        push_row(
-            &mut rows,
-            "Pods",
-            Some(format!("kubectl get pods -n {ns}")),
-        );
-    } else if handoff.compute_engine == ComputeEngine::Eks && !uses_kubectl_wrapper(handoff, has_k3s_kubeconfig) {
+    if (handoff.compute_engine == ComputeEngine::K3s && !has_k3s_kubeconfig)
+        || (handoff.compute_engine == ComputeEngine::Eks && !uses_kubectl_wrapper(handoff, has_k3s_kubeconfig))
+    {
         push_row(
             &mut rows,
             "Pods",

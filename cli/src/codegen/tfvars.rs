@@ -36,9 +36,8 @@ struct TerraformVars {
     ec2_instance_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     k3s_instance_type: Option<String>,
-    // NOTE: ssh_public_key, ec2_ssh_private_key_path, k3s_ssh_private_key_path,
-    // bare_metal_host, bare_metal_ssh_private_key_path are intentionally omitted.
-    // They are sensitive and must be provided via secrets.auto.tfvars.
+    // NOTE: ssh_public_key, ssh_private_key_path, bare_metal_host are intentionally
+    // omitted. They are sensitive and must be provided via secrets.auto.tfvars.
     // Database / storage
     indexer_storage_backend: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -195,7 +194,7 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
 
     let is_k8s = matches!(engine, ComputeEngine::K3s | ComputeEngine::Eks);
     let is_managed_postgres = is_postgres && config.database.mode == "managed";
-    let is_monitoring = config.monitoring.as_ref().map_or(false, |m| m.enabled);
+    let is_monitoring = config.monitoring.as_ref().is_some_and(|m| m.enabled);
     let ingress_mode = config.ingress.mode;
     let secrets_mode = &config.secrets.mode;
 

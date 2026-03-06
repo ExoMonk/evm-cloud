@@ -172,6 +172,7 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
                 return Ok(());
             }
             InfraPhaseOutcome::Applied { handoff, log_path: lp, output_path: op } => {
+                let handoff = *handoff;
                 if !args.json {
                     if let Some(h) = handoff.as_ref() {
                         infra::print_compute_summary(h, color);

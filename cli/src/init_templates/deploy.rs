@@ -2,11 +2,12 @@ use crate::config::schema::{ComputeEngine, IngressMode};
 use crate::init_answers::{DatabaseProfile, InitAnswers};
 
 pub(crate) fn render_secrets_example(answers: &InitAnswers) -> String {
-    let mut lines = Vec::new();
-    lines.push("# Required secrets for your configuration.".to_string());
-    lines.push("# Fill in the values below — this file is gitignored.".to_string());
-    lines.push("# A copy is kept at secrets.auto.tfvars.example for reference.".to_string());
-    lines.push(String::new());
+    let mut lines = vec![
+        "# Required secrets for your configuration.".to_string(),
+        "# Fill in the values below — this file is gitignored.".to_string(),
+        "# A copy is kept at secrets.auto.tfvars.example for reference.".to_string(),
+        String::new(),
+    ];
 
     let is_bare_metal = answers.infrastructure_provider.is_bare_metal();
     let engine = answers.compute_engine;
@@ -15,7 +16,7 @@ pub(crate) fn render_secrets_example(answers: &InitAnswers) -> String {
     if is_bare_metal {
         lines.push("# Bare metal host access".to_string());
         lines.push(r#"bare_metal_host             = ""  # IP or hostname of the target server"#.to_string());
-        lines.push(r#"bare_metal_ssh_private_key_path = "~/.ssh/id_rsa""#.to_string());
+        lines.push(r#"ssh_private_key_path        = "~/.ssh/id_rsa""#.to_string());
         lines.push(r#"bare_metal_ssh_user         = "ubuntu"  # change to root/ec2-user if your host differs"#.to_string());
         lines.push(r#"bare_metal_ssh_port         = 22"#.to_string());
         lines.push(String::new());
@@ -24,13 +25,13 @@ pub(crate) fn render_secrets_example(answers: &InitAnswers) -> String {
             ComputeEngine::Ec2 => {
                 lines.push("# EC2 SSH access".to_string());
                 lines.push(r#"ssh_public_key             = ""  # contents of ~/.ssh/id_rsa.pub"#.to_string());
-                lines.push(r#"ec2_ssh_private_key_path   = "~/.ssh/id_rsa""#.to_string());
+                lines.push(r#"ssh_private_key_path       = "~/.ssh/id_rsa""#.to_string());
                 lines.push(String::new());
             }
             ComputeEngine::K3s => {
                 lines.push("# K3s SSH access".to_string());
                 lines.push(r#"ssh_public_key             = ""  # contents of ~/.ssh/id_rsa.pub"#.to_string());
-                lines.push(r#"k3s_ssh_private_key_path   = "~/.ssh/id_rsa""#.to_string());
+                lines.push(r#"ssh_private_key_path       = "~/.ssh/id_rsa""#.to_string());
                 lines.push(r#"k3s_api_allowed_cidrs      = ["0.0.0.0/0"]  # restrict to your IP in production"#.to_string());
                 lines.push(String::new());
             }
@@ -68,7 +69,7 @@ pub(crate) fn render_secrets_example(answers: &InitAnswers) -> String {
     }
 
     // Trailing newline
-    if !lines.last().map_or(false, |l| l.is_empty()) {
+    if !lines.last().is_some_and(|l| l.is_empty()) {
         lines.push(String::new());
     }
 
