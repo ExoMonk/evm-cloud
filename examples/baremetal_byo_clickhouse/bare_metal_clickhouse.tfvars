@@ -3,7 +3,7 @@ project_name = "evm-cloud-bare-metal"
 
 # SSH connection — set real values in secrets.auto.tfvars
 # bare_metal_host                 = "203.0.113.10"
-# bare_metal_ssh_private_key_path = "~/.ssh/id_ed25519"
+# ssh_private_key_path = "~/.ssh/id_ed25519"
 bare_metal_ssh_user = "ubuntu"
 bare_metal_ssh_port = 22
 

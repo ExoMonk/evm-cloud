@@ -16,8 +16,8 @@ variable "bare_metal_ssh_user" {
   default     = "ubuntu"
 }
 
-variable "bare_metal_ssh_private_key_path" {
-  description = "Path to SSH private key for provisioning"
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key file used for provisioning and config updates."
   type        = string
   sensitive   = true
 }

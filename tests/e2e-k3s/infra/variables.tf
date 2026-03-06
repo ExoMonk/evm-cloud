@@ -17,8 +17,8 @@ variable "ssh_public_key" {
   sensitive   = true
 }
 
-variable "k3s_ssh_private_key_path" {
-  description = "Path to SSH private key for k3s provisioner"
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key file used for provisioning and config updates."
   type        = string
   sensitive   = true
 }

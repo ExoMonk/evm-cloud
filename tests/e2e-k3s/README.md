@@ -34,7 +34,7 @@ cd tests/e2e-k3s/infra
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars:
 #   - ssh_public_key: your SSH public key
-#   - k3s_ssh_private_key_path: path to matching private key
+#   - ssh_private_key_path: path to matching private key
 #   - k3s_api_allowed_cidrs: your IP (curl -s ifconfig.me)
 
 terraform init

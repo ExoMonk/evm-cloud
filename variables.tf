@@ -182,6 +182,13 @@ variable "ssh_public_key" {
   sensitive   = true
 }
 
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key file used for provisioning and config updates. Required for EC2, K3s, and bare metal deployments."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "ec2_instance_type" {
   description = "EC2 instance type for Docker Compose compute engine."
   type        = string
@@ -198,12 +205,6 @@ variable "ec2_indexer_mem_limit" {
   description = "Docker memory limit for rindexer container on EC2 (e.g. 1g, 2g, 4g)."
   type        = string
   default     = "2g"
-}
-
-variable "ec2_ssh_private_key_path" {
-  description = "Path to SSH private key for EC2 config updates. Required when compute_engine=ec2 and workload_mode=terraform."
-  type        = string
-  default     = ""
 }
 
 variable "ec2_secret_recovery_window_in_days" {
@@ -447,12 +448,6 @@ variable "bare_metal_ssh_user" {
   default     = "ubuntu"
 }
 
-variable "bare_metal_ssh_private_key_path" {
-  description = "Path to SSH private key file. Required when infrastructure_provider=bare_metal."
-  type        = string
-  default     = ""
-}
-
 variable "bare_metal_ssh_port" {
   description = "SSH port for bare metal host."
   type        = number
@@ -477,13 +472,6 @@ variable "k3s_version" {
   description = "k3s version to install (e.g., v1.30.4+k3s1). Pinned for reproducibility."
   type        = string
   default     = "v1.30.4+k3s1"
-}
-
-variable "k3s_ssh_private_key_path" {
-  description = "Path to SSH private key for k3s host provisioning. Required when compute_engine=k3s on AWS."
-  type        = string
-  default     = ""
-  sensitive   = true
 }
 
 variable "k3s_instance_type" {

@@ -31,8 +31,8 @@ variable "ssh_public_key" {
   sensitive   = true
 }
 
-variable "k3s_ssh_private_key_path" {
-  description = "Path to SSH private key for k3s provisioner (e.g., ~/.ssh/id_ed25519)"
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key file used for provisioning and config updates."
   type        = string
   sensitive   = true
 }
@@ -160,8 +160,8 @@ variable "indexer_instances" {
     workload_type = optional(string) # "deployment" (default) or "job" (one-shot backfill)
   }))
   default = [
-    { name = "indexer" },                                                                              # live: runs on server, uses config/rindexer.yaml
-    { name = "backfill", config_key = "backfill", node_role = "indexer", workload_type = "job" },      # backfill: runs on worker as k8s Job
+    { name = "indexer" },                                                                         # live: runs on server, uses config/rindexer.yaml
+    { name = "backfill", config_key = "backfill", node_role = "indexer", workload_type = "job" }, # backfill: runs on worker as k8s Job
   ]
 }
 

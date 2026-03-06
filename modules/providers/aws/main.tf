@@ -187,7 +187,7 @@ module "ec2" {
   additional_security_group_ids = [local.networking.security_group_ids["indexer"]]
   instance_profile_name         = aws_iam_instance_profile.ec2[0].name
   ssh_public_key                = var.ssh_public_key
-  ssh_private_key_path          = var.ec2_ssh_private_key_path
+  ssh_private_key_path          = var.ssh_private_key_path
   instance_type                 = var.ec2_instance_type
   aws_region                    = var.aws_region
   tags                          = local.common_tags
@@ -279,7 +279,7 @@ module "k3s_bootstrap" {
 
   host_address         = module.k3s_host[0].host_ip
   ssh_user             = module.k3s_host[0].ssh_user
-  ssh_private_key_path = var.k3s_ssh_private_key_path
+  ssh_private_key_path = var.ssh_private_key_path
   project_name         = var.project_name
   k3s_version          = var.k3s_version
   tls_san_entries      = [module.k3s_host[0].host_ip]
@@ -316,14 +316,14 @@ module "k3s_agent" {
     name                 = node.name
     host                 = module.k3s_worker_host[node.name].host_ip
     ssh_user             = module.k3s_worker_host[node.name].ssh_user
-    ssh_private_key_path = var.k3s_ssh_private_key_path
+    ssh_private_key_path = var.ssh_private_key_path
     ssh_port             = 22
     role                 = node.role
   }]
 
   server_host                 = module.k3s_host[0].host_ip
   server_ssh_user             = module.k3s_host[0].ssh_user
-  server_ssh_private_key_path = var.k3s_ssh_private_key_path
+  server_ssh_private_key_path = var.ssh_private_key_path
   node_token                  = module.k3s_bootstrap[0].node_token
   k3s_version                 = var.k3s_version
   project_name                = var.project_name

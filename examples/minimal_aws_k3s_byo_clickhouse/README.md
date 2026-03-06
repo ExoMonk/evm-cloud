@@ -118,7 +118,7 @@ cd examples/minimal_aws_k3s_byo_clickhouse
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars:
 #   ssh_public_key             = "ssh-ed25519 AAAA..."
-#   k3s_ssh_private_key_path   = "~/.ssh/id_ed25519"
+#   ssh_private_key_path   = "~/.ssh/id_ed25519"
 #   indexer_clickhouse_password = "your-password"
 #   indexer_clickhouse_url     = "https://your-clickhouse:8443"
 

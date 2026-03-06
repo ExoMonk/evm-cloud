@@ -17,7 +17,7 @@ module "evm_cloud" {
   # Bare metal SSH connection
   bare_metal_host                 = var.bare_metal_host
   bare_metal_ssh_user             = var.bare_metal_ssh_user
-  bare_metal_ssh_private_key_path = var.bare_metal_ssh_private_key_path
+  ssh_private_key_path = var.ssh_private_key_path
   bare_metal_ssh_port             = var.bare_metal_ssh_port
   bare_metal_rpc_proxy_mem_limit  = var.bare_metal_rpc_proxy_mem_limit
   bare_metal_indexer_mem_limit    = var.bare_metal_indexer_mem_limit

@@ -30,9 +30,10 @@ variable "ssh_public_key" {
   sensitive = true
 }
 
-variable "k3s_ssh_private_key_path" {
-  type      = string
-  sensitive = true
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key file used for provisioning and config updates."
+  type        = string
+  sensitive   = true
 }
 
 variable "k3s_api_allowed_cidrs" {

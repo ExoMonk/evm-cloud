@@ -143,10 +143,11 @@ variable "ec2_indexer_mem_limit" {
   default     = "2g"
 }
 
-variable "ec2_ssh_private_key_path" {
-  description = "Path to SSH private key for EC2 config updates."
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key file used for provisioning and config updates."
   type        = string
   default     = ""
+  sensitive   = true
 }
 
 variable "ec2_secret_recovery_window_in_days" {
@@ -364,13 +365,6 @@ variable "k3s_instance_type" {
   description = "EC2 instance type for k3s host."
   type        = string
   default     = "t3.small"
-}
-
-variable "k3s_ssh_private_key_path" {
-  description = "Path to SSH private key for k3s host provisioning."
-  type        = string
-  default     = ""
-  sensitive   = true
 }
 
 variable "k3s_api_allowed_cidrs" {

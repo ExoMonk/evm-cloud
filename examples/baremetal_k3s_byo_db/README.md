@@ -63,7 +63,7 @@ cd examples/baremetal_k3s_byo_db
 cp secrets.auto.tfvars.example secrets.auto.tfvars
 # Edit secrets.auto.tfvars:
 #   bare_metal_host                 = "203.0.113.42"
-#   bare_metal_ssh_private_key_path = "~/.ssh/id_ed25519"
+#   ssh_private_key_path = "~/.ssh/id_ed25519"
 #   indexer_postgres_url            = "postgres://user:pass@host:5432/db"
 
 # 3) Initialize and apply (Phase 1)

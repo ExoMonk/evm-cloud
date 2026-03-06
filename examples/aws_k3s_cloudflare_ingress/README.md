@@ -51,7 +51,7 @@ Fill in `secrets.auto.tfvars`:
 ```hcl
 # SSH
 ssh_public_key           = "ssh-ed25519 AAAA..."
-k3s_ssh_private_key_path = "~/.ssh/id_ed25519"
+ssh_private_key_path = "~/.ssh/id_ed25519"
 k3s_api_allowed_cidrs    = ["YOUR_IP/32"]  # curl -s ifconfig.me
 
 # ClickHouse BYODB

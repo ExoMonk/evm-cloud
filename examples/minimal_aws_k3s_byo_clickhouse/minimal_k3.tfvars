@@ -19,5 +19,5 @@ indexer_clickhouse_user = "default"
 indexer_clickhouse_db   = "rindexer"
 
 # Sensitive values go in secrets.auto.tfvars:
-#   ssh_public_key, k3s_ssh_private_key_path,
+#   ssh_public_key, ssh_private_key_path,
 #   indexer_clickhouse_password, indexer_clickhouse_url

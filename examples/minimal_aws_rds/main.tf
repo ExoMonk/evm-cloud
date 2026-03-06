@@ -59,7 +59,7 @@ module "evm_cloud" {
   compute_engine                     = var.compute_engine
   workload_mode                      = var.workload_mode
   ssh_public_key                     = var.ssh_public_key
-  ec2_ssh_private_key_path           = var.ec2_ssh_private_key_path
+  ssh_private_key_path               = var.ssh_private_key_path
   ec2_instance_type                  = var.ec2_instance_type
   ec2_secret_recovery_window_in_days = 0 # Dev: immediate deletion for easy re-apply
 

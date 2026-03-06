@@ -209,7 +209,7 @@ terraform apply -var-file=minimal.tfvars
 
 Terraform detects config changes via content hash and automatically pushes updated files to the EC2 instance via SSH, then force-recreates Docker Compose containers. The EC2 instance is **not** recreated — only configs and containers are updated.
 
-> **Requires:** `ec2_ssh_private_key_path` must be set in `secrets.auto.tfvars` (path to the SSH private key matching `ssh_public_key`).
+> **Requires:** `ssh_private_key_path` must be set in `secrets.auto.tfvars` (path to the SSH private key matching `ssh_public_key`).
 
 If using `workload_mode = "external"`, use the compose deployer instead:
 

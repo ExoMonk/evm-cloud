@@ -124,23 +124,13 @@ resource "terraform_data" "provider_guardrails" {
     }
 
     precondition {
-      condition     = !(var.compute_engine == "k3s" && var.infrastructure_provider == "aws" && var.k3s_ssh_private_key_path == "")
-      error_message = "k3s_ssh_private_key_path is required when compute_engine=k3s on AWS (needed for SSH provisioning)."
-    }
-
-    precondition {
-      condition     = !(var.compute_engine == "ec2" && var.workload_mode == "terraform" && var.ec2_ssh_private_key_path == "")
-      error_message = "ec2_ssh_private_key_path is required when compute_engine=ec2 and workload_mode=terraform (needed for config updates via SSH)."
+      condition     = !(contains(["ec2", "k3s"], var.compute_engine) && var.ssh_private_key_path == "") && !(var.infrastructure_provider == "bare_metal" && var.ssh_private_key_path == "")
+      error_message = "ssh_private_key_path is required for EC2, K3s, and bare metal deployments."
     }
 
     precondition {
       condition     = !(var.infrastructure_provider == "bare_metal" && var.bare_metal_host == "")
       error_message = "bare_metal_host is required when infrastructure_provider=bare_metal."
-    }
-
-    precondition {
-      condition     = !(var.infrastructure_provider == "bare_metal" && var.bare_metal_ssh_private_key_path == "")
-      error_message = "bare_metal_ssh_private_key_path is required when infrastructure_provider=bare_metal."
     }
 
     precondition {
@@ -203,7 +193,7 @@ module "provider_aws" {
   ec2_instance_type                  = var.ec2_instance_type
   ec2_rpc_proxy_mem_limit            = var.ec2_rpc_proxy_mem_limit
   ec2_indexer_mem_limit              = var.ec2_indexer_mem_limit
-  ec2_ssh_private_key_path           = var.ec2_ssh_private_key_path
+  ssh_private_key_path               = var.ssh_private_key_path
   ec2_secret_recovery_window_in_days = var.ec2_secret_recovery_window_in_days
 
   aws_region                   = var.aws_region
@@ -251,7 +241,6 @@ module "provider_aws" {
   k3s_version              = var.k3s_version
   k3s_instance_type        = var.k3s_instance_type
   k3s_api_allowed_cidrs    = var.k3s_api_allowed_cidrs
-  k3s_ssh_private_key_path = var.k3s_ssh_private_key_path
   k3s_worker_nodes         = var.k3s_worker_nodes
 
   # Ingress / TLS
@@ -306,7 +295,7 @@ module "provider_bare_metal" {
   # SSH connection
   host_address         = var.bare_metal_host
   ssh_user             = var.bare_metal_ssh_user
-  ssh_private_key_path = var.bare_metal_ssh_private_key_path
+  ssh_private_key_path = var.ssh_private_key_path
   ssh_port             = var.bare_metal_ssh_port
 
   # RPC Proxy

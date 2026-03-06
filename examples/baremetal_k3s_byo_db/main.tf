@@ -21,7 +21,7 @@ module "evm_cloud" {
   # Bare metal SSH connection
   bare_metal_host                 = var.bare_metal_host
   bare_metal_ssh_user             = var.bare_metal_ssh_user
-  bare_metal_ssh_private_key_path = var.bare_metal_ssh_private_key_path
+  ssh_private_key_path = var.ssh_private_key_path
   bare_metal_ssh_port             = var.bare_metal_ssh_port
 
   # k3s

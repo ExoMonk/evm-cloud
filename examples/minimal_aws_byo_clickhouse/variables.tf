@@ -48,9 +48,11 @@ variable "ssh_public_key" {
   sensitive = true
 }
 
-variable "ec2_ssh_private_key_path" {
-  type    = string
-  default = ""
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key file used for provisioning and config updates."
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 variable "ec2_instance_type" {

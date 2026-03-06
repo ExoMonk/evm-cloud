@@ -22,7 +22,7 @@ module "evm_cloud" {
 
   # SSH keys — public key for EC2, private key path for k3s provisioner
   ssh_public_key           = var.ssh_public_key
-  k3s_ssh_private_key_path = var.k3s_ssh_private_key_path
+  ssh_private_key_path = var.ssh_private_key_path
   k3s_instance_type        = var.k3s_instance_type
   k3s_version              = var.k3s_version
   k3s_api_allowed_cidrs    = var.k3s_api_allowed_cidrs # Must include your IP for SSH + k3s provisioning

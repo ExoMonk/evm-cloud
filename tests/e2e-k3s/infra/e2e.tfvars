@@ -1,5 +1,5 @@
 # E2E test infrastructure defaults
-# Secrets (ssh_public_key, k3s_ssh_private_key_path, k3s_api_allowed_cidrs)
+# Secrets (ssh_public_key, ssh_private_key_path, k3s_api_allowed_cidrs)
 # go in secrets.auto.tfvars (gitignored)
 
 project_name      = "evm-cloud-e2e"

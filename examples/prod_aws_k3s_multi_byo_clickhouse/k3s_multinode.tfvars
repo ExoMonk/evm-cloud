@@ -38,6 +38,6 @@ secrets_mode                       = "provider"
 ec2_secret_recovery_window_in_days = 0 # Immediate deletion for dev/test
 
 # Sensitive values go in secrets.auto.tfvars:
-#   ssh_public_key, k3s_ssh_private_key_path,
+#   ssh_public_key, ssh_private_key_path,
 #   indexer_clickhouse_password, indexer_clickhouse_url
 # Optional: secrets_manager_secret_arn (BYOA — skip SM secret creation)

@@ -9,4 +9,4 @@ rpc_proxy_enabled = true
 indexer_enabled   = true
 
 # Sensitive values in secrets.auto.tfvars:
-#   bare_metal_host, bare_metal_ssh_private_key_path, indexer_postgres_url
+#   bare_metal_host, ssh_private_key_path, indexer_postgres_url
