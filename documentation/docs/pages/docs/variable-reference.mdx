@@ -78,7 +78,7 @@ Required when `compute_engine = "ec2"`.
 | Variable | Type | Default | Sensitive | Description |
 |----------|------|---------|-----------|-------------|
 | `ssh_public_key` | `string` | `""` | Yes | SSH public key content for the EC2 key pair. Required for EC2 and k3s. |
-| `ssh_private_key_path` | `string` | `""` | No | Path to SSH private key file used for provisioning and config updates. Required for EC2, K3s, and bare metal deployments. |
+| `ssh_private_key_path` | `string` | `""` | Yes | Path to SSH private key file used for provisioning and config updates. Required for EC2, K3s, and bare metal deployments. |
 | `ec2_instance_type` | `string` | `"t3.small"` | No | EC2 instance type. See [sizing guide](#instance-sizing) below. |
 | `ec2_rpc_proxy_mem_limit` | `string` | `"1g"` | No | Docker memory limit for eRPC container. |
 | `ec2_indexer_mem_limit` | `string` | `"2g"` | No | Docker memory limit for rindexer container. |

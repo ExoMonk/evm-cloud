@@ -32,7 +32,7 @@ The simplest evm-cloud deployment. A single EC2 instance running eRPC and rindex
 
 ## Prerequisites
 
-- Terraform >= 1.14.6
+- Terraform/OpenTofu >= 1.14.6
 - AWS CLI v2 with configured credentials (EC2, VPC, IAM, RDS, Secrets Manager)
 - SSH key pair
 
@@ -71,8 +71,8 @@ ssh -i ~/.ssh/evm-cloud ec2-user@<public-ip> 'sudo docker compose -f /opt/evm-cl
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `ec2_instance_type` | string | `t2.micro` | EC2 instance size |
-| `postgres_instance_class` | string | `db.t3.micro` | RDS instance class |
+| `ec2_instance_type` | string | `t3.small` | EC2 instance size |
+| `postgres_instance_class` | string | `db.t4g.micro` | RDS instance class |
 | `postgres_engine_version` | string | - | PostgreSQL engine version |
 | `postgres_db_name` | string | - | Database name |
 | `postgres_backup_retention` | number | - | Backup retention in days |

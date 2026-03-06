@@ -52,6 +52,10 @@ Flag conflicts:
 - `--only app` + `--dry-run` / `--auto-approve` / `--tf-args` → error (these control terraform)
 - If terraform succeeds but deployer fails, prints a recovery hint: `evm-cloud deploy --only app`
 
+:::warning
+**EKS limitation:** The CLI deployer does not currently support `compute_engine = "eks"`. For EKS deployments, use `evm-cloud deploy --only infra` (or `evm-cloud apply`) for the Terraform phase, then deploy workloads manually using the [EKS Helm deployer](./guides/external-deployers.mdx#eks-helm-deployer-deployerseks) shell script.
+:::
+
 ### `apply`
 
 Terraform plan/apply only — escape hatch when you need raw terraform control without workload deployment.
@@ -147,19 +151,23 @@ See [Local Dev Stack guide](./guides/local-dev.mdx) for full usage.
 
 When running `evm-cloud init` interactively (without `--config` or `--example`), the wizard prompts for:
 
-| Step | Question | Options | Default |
-|------|----------|---------|---------|
-| 1 | Integration mode | `easy`, `power` | `easy` |
-| 2 | Project name | free text | `evm-cloud-demo` |
-| 3 | Infrastructure provider | `aws`, `bare_metal` | `aws` |
-| 4 | Compute engine | AWS: `ec2`, `eks`, `k3s`; Bare metal: `k3s`, `docker_compose` | `ec2` / `k3s` |
-| 5 | AWS region (AWS only) | free text | `us-east-1` |
-| 6 | Database profile | `byodb_clickhouse`, `byodb_postgres`, `managed_rds`, `managed_clickhouse` | `byodb_clickhouse` |
-| 7 | Chains | multi-select: `ethereum`, `polygon`, `arbitrum`, `base`, `optimism`, `hyperliquid` | — |
-| 8 | RPC endpoint per chain | URL per selected chain | — |
-| 9 | Indexer config | `generate starter rindexer.yaml`, `use existing path` | generate |
-| 10 | Generate eRPC config | yes / no | yes |
-| 11 | Instance type (AWS only) | free text | `t3.micro` (easy) / `t3.small` (power) |
+| Step | Question | Condition | Options | Default |
+|------|----------|-----------|---------|---------|
+| 1 | Integration mode | Always | `easy`, `power` | `easy` |
+| 2 | Project name | Always | free text | `evm-cloud-demo` |
+| 3 | Infrastructure provider | Always | `aws`, `bare_metal` | `aws` |
+| 4 | Compute engine | Always | AWS: `ec2`, `eks`, `k3s`; Bare metal: `k3s`, `docker_compose` | `ec2` / `k3s` |
+| 5 | Workload mode | EC2 or Docker Compose | `terraform`, `external` | `terraform` |
+| 6 | AWS region | AWS only | free text | `us-east-1` |
+| 7 | Database profile | Always | `byodb_clickhouse`, `byodb_postgres`, `managed_rds`, `managed_clickhouse` | `byodb_clickhouse` |
+| 8 | Chains | Always | multi-select: `ethereum`, `polygon`, `arbitrum`, `base`, `optimism`, `hyperliquid` | — |
+| 9 | RPC endpoint per chain | Always | URL per selected chain | — |
+| 10 | Indexer config | Always | `generate starter rindexer.yaml`, `use existing path` | generate |
+| 11 | Generate eRPC config | Always | yes / no | yes |
+| 12 | Instance type | AWS only | free text | `t3.small` |
+| 13 | Ingress mode | Always | `none`, `cloudflare`, `caddy`, `ingress_nginx` | `none` |
+| 14 | Hostname | Ingress ≠ `none` | free text | — |
+| 15 | TLS email | `caddy` or `ingress_nginx` | email address | — |
 
 After answering, the wizard generates `evm-cloud.toml` (easy mode) or Terraform files (power mode), runs `terraform init`, `terraform fmt`, and `terraform validate`.
 

@@ -33,7 +33,7 @@ evm-cloud deploy      # provisions infra + deploys workloads
     -> Database (PostgreSQL, ClickHouse — managed or BYO)
     -> Secrets management (AWS Secrets Manager, inline, or ESO)
     -> Monitoring (Prometheus + Grafana)
-    -> TLS termination (Caddy or ALB)
+    -> TLS termination (Cloudflare, Caddy, or ingress-nginx)
     -> [SOON] EVM Node
     -> [SOON] Your services (APIs, ...)
 ```
@@ -80,6 +80,7 @@ See the [Getting Started guide](https://evm-cloud.xyz/docs/getting-started) for 
 | [`prod_aws_k3s_multi_byo_clickhouse`](examples/prod_aws_k3s_multi_byo_clickhouse/) | k3s multi-node + Secrets Manager + ESO | ClickHouse (BYO) | ~$40/mo |
 | [`aws_eks_BYO_clickhouse`](examples/aws_eks_BYO_clickhouse/) | EKS (managed Kubernetes) | ClickHouse (BYO) | ~$110/mo |
 | [`baremetal_k3s_byo_db`](examples/baremetal_k3s_byo_db/) | Bare metal k3s (any VPS) | PostgreSQL (BYO) | Your VPS |
+| [`aws_k3s_cloudflare_ingress`](examples/aws_k3s_cloudflare_ingress/) | k3s + Cloudflare TLS | ClickHouse (BYO) | ~$17/mo |
 | [`minimal_aws_external_ec2_byo`](examples/minimal_aws_external_ec2_byo/) | EC2 (infra only, BYO deployer) | ClickHouse (BYO) | ~$35/mo |
 
 See [Choosing a Pattern](https://evm-cloud.xyz/docs/examples) for help picking the right one.
@@ -101,7 +102,7 @@ curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/latest/download/install
 ### Pinned version
 
 ```bash
-curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha4/install.sh | bash -s -- 0.0.1-alpha4
+curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha5/install.sh | bash -s -- 0.0.1-alpha5
 ```
 
 ### Source build
@@ -115,7 +116,7 @@ cargo install --path .
 
 ```yaml
 - name: Install evm-cloud
-  run: curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha4/install.sh | bash -s -- 0.0.1-alpha4
+  run: curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha5/install.sh | bash -s -- 0.0.1-alpha5
 ```
 
 ## Architecture
@@ -127,6 +128,7 @@ evm-cloud init    → scaffolds Terraform config from evm-cloud.toml
 evm-cloud deploy  → provisions infra + deploys workloads (unified)
 evm-cloud apply   → terraform apply only (infra layer)
 evm-cloud destroy → teardown everything
+evm-cloud kubectl → run kubectl against the deployed cluster
 evm-cloud local   → local dev stack (kind + Anvil)
 ```
 
@@ -149,7 +151,7 @@ Full docs at **[evm-cloud.xyz](https://evm-cloud.xyz)**:
 
 ## Prerequisites
 
-- Terraform >= 1.5.0
+- Terraform/OpenTofu >= 1.14.6 ([install](https://opentofu.org/docs/intro/install/))
 - AWS CLI v2 (for AWS deployments)
 - SSH key pair
 - `jq` (for k3s/EKS deployers)

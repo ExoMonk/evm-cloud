@@ -36,7 +36,7 @@ Terraform provisions the EC2 instance and networking, but does not deploy worklo
 
 ## Prerequisites
 
-- Terraform >= 1.14.6
+- Terraform/OpenTofu >= 1.14.6
 - AWS CLI v2 with configured credentials (EC2, VPC, IAM, Secrets Manager)
 - SSH key pair
 - A deployment pipeline (GitHub Actions, GitLab CI, Ansible, or scripts)
@@ -79,7 +79,7 @@ terraform output -json workload_handoff
 |----------|------|---------|-------------|
 | `workload_mode` | string | `external` | Must be `external` for this example |
 | `compute_engine` | string | `ec2` | EC2 compute backend |
-| `ec2_instance_type` | string | `t2.micro` | EC2 instance size |
+| `ec2_instance_type` | string | `t3.small` | EC2 instance size |
 | `ssh_public_key` | string | - | SSH public key for EC2 key pair |
 | `indexer_clickhouse_url` | string | - | ClickHouse HTTP endpoint (sensitive) |
 | `indexer_clickhouse_password` | string | - | ClickHouse password (sensitive) |

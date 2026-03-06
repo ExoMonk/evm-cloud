@@ -182,6 +182,10 @@ The deployer uses `scp` to copy files and `ssh` to restart services. No Helm or 
 
 For `compute_engine = "eks"` with `workload_mode = "external"`.
 
+:::warning
+The `evm-cloud deploy` CLI command does not currently support EKS workload deployment. Use `evm-cloud apply` for infrastructure provisioning, then run the deployer script below manually.
+:::
+
 **What it does:**
 1. Configures kubectl via `aws eks update-kubeconfig` using the cluster name from the handoff
 2. Renders Helm values from handoff data (database connection, service configuration)
