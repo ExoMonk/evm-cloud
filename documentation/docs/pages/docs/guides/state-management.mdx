@@ -1,0 +1,207 @@
+# State Management
+
+Configure remote Terraform state backends for production deployments. Remote state enables team collaboration, state locking, and encrypted storage.
+
+---
+
+## Why Remote State
+
+Local Terraform state (`terraform.tfstate`) is:
+
+- **Insecure** — contains all variable values including secrets in plaintext
+- **Not collaborative** — only one person can apply at a time without conflicts
+- **Not durable** — lost if the local machine fails
+
+Remote state solves all three with server-side encryption, state locking (prevents concurrent modifications), and centralized storage.
+
+---
+
+## Configuration
+
+Add a `[state]` section to your `evm-cloud.toml`. The state backend is **independent of your infrastructure provider** — you can deploy on bare metal but store state in S3, or deploy on AWS but store state in GCS.
+
+### S3 Backend (AWS)
+
+```toml
+[state]
+backend = "s3"
+bucket = "myorg-terraform-state"
+dynamodb_table = "myorg-terraform-locks"
+region = "us-east-1"
+# key = "my-project/terraform.tfstate"  # optional, defaults to "<project.name>/terraform.tfstate"
+# encrypt = true                         # optional, defaults to true (SSE-S3)
+```
+
+### GCS Backend (Google Cloud)
+
+```toml
+[state]
+backend = "gcs"
+bucket = "myorg-terraform-state"
+region = "us-central1"
+# prefix = "my-project"  # optional, defaults to "<project.name>"
+```
+
+---
+
+## Bootstrap Workflow
+
+The `evm-cloud bootstrap` command creates the cloud resources your state backend needs.
+
+```bash
+# 1. Preview what will be created
+evm-cloud bootstrap --dry-run
+
+# 2. Create the resources
+evm-cloud bootstrap
+
+# 3. Initialize Terraform with the remote backend
+evm-cloud init
+
+# 4. Deploy
+evm-cloud deploy
+```
+
+### What Bootstrap Creates
+
+| Backend | Resources |
+|---------|-----------|
+| **S3** | S3 bucket (versioned, SSE-S3 encrypted, public access blocked) + DynamoDB table (PAY_PER_REQUEST, LockID partition key) |
+| **GCS** | GCS bucket (versioned, uniform bucket-level access, public access prevented) |
+
+Bootstrap is **idempotent** — safe to run multiple times. It checks for existing resources before creating, and re-applies security settings (versioning, encryption, access controls) on every run.
+
+### Prerequisites
+
+| Backend | Required CLI | Install |
+|---------|-------------|---------|
+| S3 | `aws` | [AWS CLI install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
+| GCS | `gcloud` | [gcloud CLI install guide](https://cloud.google.com/sdk/docs/install) |
+
+Credentials must be configured before running bootstrap (`aws configure` or `gcloud auth login`).
+
+---
+
+## Required IAM Permissions
+
+### AWS (S3 + DynamoDB)
+
+```
+s3:CreateBucket
+s3:HeadBucket
+s3:GetBucketLocation
+s3:PutBucketVersioning
+s3:PutBucketPublicAccessBlock
+s3:PutEncryptionConfiguration
+dynamodb:CreateTable
+dynamodb:DescribeTable
+```
+
+### GCP (GCS)
+
+```
+storage.buckets.create
+storage.buckets.get
+storage.buckets.update
+```
+
+Minimum role: `roles/storage.admin` on the project.
+
+---
+
+## Multi-Environment Patterns
+
+Use distinct keys or prefixes per environment to isolate state:
+
+### S3
+
+```toml
+# staging/evm-cloud.toml
+[state]
+backend = "s3"
+bucket = "myorg-terraform-state"
+dynamodb_table = "myorg-terraform-locks"
+region = "us-east-1"
+key = "staging/terraform.tfstate"
+
+# production/evm-cloud.toml
+[state]
+backend = "s3"
+bucket = "myorg-terraform-state"
+dynamodb_table = "myorg-terraform-locks"
+region = "us-east-1"
+key = "production/terraform.tfstate"
+```
+
+### GCS
+
+```toml
+# staging/evm-cloud.toml
+[state]
+backend = "gcs"
+bucket = "myorg-terraform-state"
+region = "us-central1"
+prefix = "staging"
+
+# production/evm-cloud.toml
+[state]
+backend = "gcs"
+bucket = "myorg-terraform-state"
+region = "us-central1"
+prefix = "production"
+```
+
+---
+
+## Backend Migration
+
+When you change `[state]` configuration (different bucket, region, or backend type), the CLI detects the change and stops with a warning:
+
+```
+  Backend configuration changed.
+  Your state data is NOT automatically migrated.
+
+  To reconfigure (start fresh, existing state in old backend remains):
+    terraform -chdir=.evm-cloud init -reconfigure
+
+  To migrate existing state to the new backend:
+    terraform -chdir=.evm-cloud init -migrate-state
+```
+
+**`-reconfigure`**: Start fresh with the new backend. Existing state stays in the old location.
+
+**`-migrate-state`**: Move state data from the old backend to the new one.
+
+The `init` command auto-applies `-reconfigure` to prevent CI from hanging on interactive prompts. For state migration, run the command manually.
+
+---
+
+## Troubleshooting
+
+### Bucket name already taken
+
+S3 bucket names are globally unique. If `bootstrap` fails with "bucket name is taken by another account", choose a different bucket name in your `[state]` config. A common pattern: `<org>-<project>-terraform-state`.
+
+### AWS credentials not configured
+
+```
+Unable to locate credentials
+```
+
+Run `aws configure` or set `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` environment variables.
+
+### DynamoDB table stuck in CREATING
+
+Bootstrap waits for the table to become ACTIVE. If it times out, check the AWS Console or run:
+
+```bash
+aws dynamodb describe-table --table-name <table> --region <region>
+```
+
+### State encryption warning
+
+If you see "State encryption is disabled", add `encrypt = true` to your `[state]` section (or remove `encrypt = false` — `true` is the default).
+
+### Public access block denied (enterprise)
+
+Some AWS organizations enforce public access blocks via Service Control Policies. If `put-public-access-block` fails with `AccessDenied`, the CLI will show a warning but continue — your organization's policy is already enforcing the restriction.

@@ -112,9 +112,11 @@ fn validate_state(state: &StateConfig) -> Result<()> {
                 validate_hcl_safe("state.key", k)?;
             }
         }
-        StateConfig::Gcs { bucket, prefix } => {
+        StateConfig::Gcs { bucket, region, prefix } => {
             validate_non_empty("state.bucket", bucket)?;
+            validate_non_empty("state.region", region)?;
             validate_hcl_safe("state.bucket", bucket)?;
+            validate_hcl_safe("state.region", region)?;
             if let Some(ref p) = prefix {
                 validate_hcl_safe("state.prefix", p)?;
             }

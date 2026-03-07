@@ -136,7 +136,7 @@ fn render_backend_hcl(state: &StateConfig) -> String {
                  \x20 }}\n"
             )
         }
-        StateConfig::Gcs { bucket, prefix } => {
+        StateConfig::Gcs { bucket, prefix, .. } => {
             let prefix_str = prefix.as_deref().unwrap_or("");
             if prefix_str.is_empty() {
                 format!(
@@ -217,6 +217,7 @@ mod tests {
     fn renders_gcs_backend_hcl() {
         let state = StateConfig::Gcs {
             bucket: "my-bucket".to_string(),
+            region: "us-central1".to_string(),
             prefix: Some("demo".to_string()),
         };
         let hcl = render_backend_hcl(&state);
@@ -229,6 +230,7 @@ mod tests {
     fn renders_gcs_without_prefix() {
         let state = StateConfig::Gcs {
             bucket: "my-bucket".to_string(),
+            region: "us-central1".to_string(),
             prefix: None,
         };
         let hcl = render_backend_hcl(&state);
@@ -385,6 +387,7 @@ key = "test/terraform.tfstate"
 [state]
 backend = "gcs"
 bucket = "my-state"
+region = "us-central1"
 prefix = "test"
 "#
         );

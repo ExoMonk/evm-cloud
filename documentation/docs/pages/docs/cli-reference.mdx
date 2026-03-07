@@ -90,6 +90,39 @@ evm-cloud apply [OPTIONS] [-- <terraform args>]
 For most workflows, use `evm-cloud deploy` instead — it runs terraform **and** deploys workloads in one step. Use `apply` only when you need terraform-only control.
 :::
 
+### `bootstrap`
+
+Create prerequisite cloud resources for the remote state backend configured in `[state]`.
+
+```bash
+evm-cloud bootstrap [OPTIONS]
+
+  -d, --dir <path>              Project directory (default: .)
+  --dry-run                     Print commands without executing (read-only checks still run)
+```
+
+Reads `[state]` from `evm-cloud.toml` and creates:
+
+| Backend | Resources Created |
+|---------|------------------|
+| **S3** | S3 bucket (versioned, encrypted, public access blocked) + DynamoDB lock table (PAY_PER_REQUEST) |
+| **GCS** | GCS bucket (versioned, uniform access, public access prevented) |
+
+**Idempotent** — safe to run multiple times. Existing resources are detected and skipped; security settings (versioning, encryption, access controls) are re-applied on every run.
+
+**Prerequisites**: Requires `aws` CLI (for S3 backend) or `gcloud` CLI (for GCS backend) on PATH with valid credentials.
+
+```bash
+# Typical workflow
+evm-cloud bootstrap          # Create S3 bucket + DynamoDB table
+evm-cloud init                # Initialize Terraform with remote backend
+evm-cloud deploy              # Deploy infrastructure
+```
+
+:::tip
+Use `--dry-run` to preview the exact AWS/GCP CLI commands that will run before creating any resources.
+:::
+
 ### `destroy`
 
 Destroy infrastructure resources.

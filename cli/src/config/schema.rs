@@ -401,6 +401,7 @@ pub(crate) enum StateConfig {
     #[serde(rename = "gcs")]
     Gcs {
         bucket: String,
+        region: String,
         #[serde(default)]
         prefix: Option<String>,
     },
@@ -463,12 +464,14 @@ encrypt = true
         let toml_str = r#"
 backend = "gcs"
 bucket = "my-state-bucket"
+region = "us-central1"
 prefix = "my-project"
 "#;
         let config: StateConfig = toml::from_str(toml_str).expect("must parse GCS state config");
         match config {
-            StateConfig::Gcs { bucket, prefix } => {
+            StateConfig::Gcs { bucket, region, prefix } => {
                 assert_eq!(bucket, "my-state-bucket");
+                assert_eq!(region, "us-central1");
                 assert_eq!(prefix.as_deref(), Some("my-project"));
             }
             _ => panic!("expected Gcs variant"),
@@ -498,6 +501,7 @@ region = "us-east-1"
         let toml_str = r#"
 backend = "gcs"
 bucket = "my-bucket"
+region = "us-central1"
 "#;
         let config: StateConfig = toml::from_str(toml_str).expect("must parse");
         match config {
@@ -526,6 +530,7 @@ region = "r"
         let mut config: StateConfig = toml::from_str(r#"
 backend = "gcs"
 bucket = "b"
+region = "us-central1"
 "#).unwrap();
         config.resolve_defaults("demo");
         match config {

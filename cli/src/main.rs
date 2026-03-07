@@ -29,6 +29,7 @@ pub(crate) fn module_source() -> String {
 }
 
 use crate::commands::apply::ApplyArgs;
+use crate::commands::bootstrap::BootstrapArgs;
 use crate::commands::deploy::DeployArgs;
 use crate::commands::destroy::DestroyArgs;
 use crate::commands::init::InitArgs;
@@ -57,6 +58,8 @@ struct Cli {
 enum Commands {
     Init(InitArgs),
     Apply(ApplyArgs),
+    /// Create prerequisite cloud resources for the remote state backend
+    Bootstrap(BootstrapArgs),
     Deploy(DeployArgs),
     Kubectl(KubectlArgs),
     Status(StatusArgs),
@@ -78,6 +81,7 @@ fn main() {
     let result = match cli.command {
         Commands::Init(args) => commands::init::run(args, cli.color),
         Commands::Apply(args) => commands::apply::run(args, cli.color),
+        Commands::Bootstrap(args) => commands::bootstrap::run(args, cli.color),
         Commands::Deploy(args) => commands::deploy::run(args, cli.color),
         Commands::Kubectl(args) => commands::kubectl::run(args),
         Commands::Status(args) => commands::status::run(args, cli.color),

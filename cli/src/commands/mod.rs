@@ -1,4 +1,5 @@
 pub(crate) mod apply;
+pub(crate) mod bootstrap;
 pub(crate) mod deploy;
 pub(crate) mod destroy;
 pub(crate) mod infra;

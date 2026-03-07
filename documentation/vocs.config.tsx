@@ -74,6 +74,10 @@ export default defineConfig({
           link: "/docs/guides/secrets-management",
         },
         {
+          text: "State Management",
+          link: "/docs/guides/state-management",
+        },
+        {
           text: "Two-Phase Workflow",
           link: "/docs/guides/two-phase-workflow",
         },

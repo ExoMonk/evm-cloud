@@ -8,7 +8,36 @@ Everything you need to harden, scale, and operate your evm-cloud deployment in p
 
 Terraform state contains all variable values, including secrets, in plaintext. Never use local state for production.
 
-### S3 + KMS + DynamoDB
+For a complete guide covering IAM permissions, multi-environment patterns, and troubleshooting, see the [State Management guide](/docs/guides/state-management).
+
+### Easy Mode (recommended)
+
+Add a `[state]` section to your `evm-cloud.toml`:
+
+```toml
+[state]
+backend = "s3"
+bucket = "myorg-terraform-state"
+dynamodb_table = "myorg-terraform-locks"
+region = "us-east-1"
+# key defaults to "<project.name>/terraform.tfstate"
+# encrypt defaults to true (SSE-S3)
+```
+
+Then bootstrap and initialize:
+
+```bash
+evm-cloud bootstrap           # Creates S3 bucket + DynamoDB table
+evm-cloud init                # Initializes Terraform with remote backend
+```
+
+Use `--dry-run` to preview the AWS commands before creating any resources:
+
+```bash
+evm-cloud bootstrap --dry-run
+```
+
+### Power Mode (manual backend.tf)
 
 ```hcl
 # backend.tf (add to your example directory)
@@ -24,7 +53,7 @@ terraform {
 }
 ```
 
-Create the prerequisite resources:
+Create the prerequisite resources manually:
 
 ```bash
 # S3 bucket with versioning
@@ -425,7 +454,7 @@ Check the [CHANGELOG](https://github.com/ExoMonk/evm-cloud/blob/main/CHANGELOG.m
 
 Use this as a pre-launch checklist:
 
-- [ ] Remote state backend configured (S3 + KMS + DynamoDB)
+- [ ] Remote state backend configured (`evm-cloud bootstrap` or manual S3/GCS setup)
 - [ ] Environment isolation in place (separate directories or workspaces)
 - [ ] CI runs `make qa` on every PR
 - [ ] Plan-then-apply workflow enforced (no direct `terraform apply` in CI)
