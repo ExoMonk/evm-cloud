@@ -7,6 +7,8 @@ pub(crate) mod manifest;
 pub(crate) mod scaffold;
 pub(crate) mod tfvars;
 
+pub(crate) use scaffold::ScaffoldResult;
+
 pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<()> {
     let parent = path.parent().ok_or_else(|| CliError::Io {
         source: std::io::Error::new(std::io::ErrorKind::NotFound, "no parent directory"),

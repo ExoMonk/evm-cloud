@@ -105,6 +105,9 @@ pub(crate) enum CliError {
     #[error("bundled script checksum mismatch for {script}")]
     BundledScriptChecksumMismatch { script: String },
 
+    #[error("state backend configuration changed. Run `terraform -chdir=.evm-cloud init -reconfigure` or `-migrate-state` to proceed")]
+    BackendChanged,
+
     #[error("managed init file already exists: {path}")]
     InitFileExists { path: PathBuf },
 

@@ -46,7 +46,11 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
         ProjectKind::EasyToml => {
             // Silently regenerate bridge files — destroy needs matching variable
             // declarations but the user doesn't need to see "Generated" output.
-            easy_mode::prepare_workspace_quiet(&preflight.resolved_root)?
+            let (dir, scaffold) = easy_mode::prepare_workspace_quiet(&preflight.resolved_root)?;
+            if scaffold == crate::codegen::ScaffoldResult::BackendChanged {
+                return Err(easy_mode::handle_backend_changed(&preflight.resolved_root));
+            }
+            dir
         }
         ProjectKind::RawTerraform => preflight.resolved_root.clone(),
     };

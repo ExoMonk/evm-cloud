@@ -25,6 +25,9 @@ pub(crate) fn scaffold_project(
     let managed_files = managed_files(answers);
 
     for rel in &managed_files {
+        if *rel == ".gitignore" {
+            continue; // .gitignore is merged, not overwritten
+        }
         let path = project_root.join(rel);
         if path.exists() && !force {
             return Err(CliError::InitFileExists { path });
@@ -176,14 +179,17 @@ fn update_gitignore(project_root: &Path, mode: InitMode) -> Result<()> {
 
     match mode {
         InitMode::Easy => {
-            ensure_line(&mut lines, ".evm-cloud/");
             ensure_line(&mut lines, "terraform.auto.tfvars.json");
+            ensure_line(&mut lines, ".evm-cloud/logs/");
+            ensure_line(&mut lines, ".evm-cloud-deploy.lock");
+            ensure_line(&mut lines, "kubeconfig.yaml");
         }
         InitMode::Power => {
             ensure_line(&mut lines, "secrets.auto.tfvars");
             ensure_line(&mut lines, ".terraform/");
             ensure_line(&mut lines, "*.tfstate*");
-            ensure_line(&mut lines, ".evm-cloud/");
+            ensure_line(&mut lines, ".evm-cloud-deploy.lock");
+            ensure_line(&mut lines, "kubeconfig.yaml");
         }
     }
 

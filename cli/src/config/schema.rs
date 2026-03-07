@@ -26,6 +26,8 @@ pub(crate) struct EvmCloudConfig {
     pub(crate) bare_metal: Option<BareMetalConfig>,
     #[serde(default)]
     pub(crate) streaming: Option<StreamingConfig>,
+    #[serde(default)]
+    pub(crate) state: Option<StateConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -375,4 +377,196 @@ pub(crate) struct StreamingConfig {
 
 fn default_streaming_mode() -> String {
     "disabled".to_string()
+}
+
+// State backend is DECOUPLED from infrastructure provider.
+// Users can deploy on AWS but store state in GCS, or deploy on
+// bare_metal but store state in S3. The backend choice is orthogonal.
+//
+// NOTE: This enum covers `backend {}` block codegen only.
+// Terraform Cloud (`cloud {}` block) would need a separate codegen path.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, tag = "backend")]
+pub(crate) enum StateConfig {
+    #[serde(rename = "s3")]
+    S3 {
+        bucket: String,
+        dynamodb_table: String,
+        region: String,
+        #[serde(default)]
+        key: Option<String>,
+        #[serde(default = "default_encrypt")]
+        encrypt: bool,
+    },
+    #[serde(rename = "gcs")]
+    Gcs {
+        bucket: String,
+        #[serde(default)]
+        prefix: Option<String>,
+    },
+}
+
+fn default_encrypt() -> bool {
+    true
+}
+
+impl StateConfig {
+    pub(crate) fn resolve_defaults(&mut self, project_name: &str) {
+        match self {
+            StateConfig::S3 { key, .. } => {
+                if key.is_none() {
+                    *key = Some(format!("{project_name}/terraform.tfstate"));
+                }
+            }
+            StateConfig::Gcs { prefix, .. } => {
+                if prefix.is_none() {
+                    *prefix = Some(project_name.to_string());
+                }
+            }
+        }
+    }
+
+    pub(crate) fn is_encrypt_disabled(&self) -> bool {
+        matches!(self, StateConfig::S3 { encrypt: false, .. })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_s3_state_config_from_toml() {
+        let toml_str = r#"
+backend = "s3"
+bucket = "my-state-bucket"
+dynamodb_table = "my-lock-table"
+region = "us-east-1"
+key = "my-project/terraform.tfstate"
+encrypt = true
+"#;
+        let config: StateConfig = toml::from_str(toml_str).expect("must parse S3 state config");
+        match config {
+            StateConfig::S3 { bucket, dynamodb_table, region, key, encrypt } => {
+                assert_eq!(bucket, "my-state-bucket");
+                assert_eq!(dynamodb_table, "my-lock-table");
+                assert_eq!(region, "us-east-1");
+                assert_eq!(key.as_deref(), Some("my-project/terraform.tfstate"));
+                assert!(encrypt);
+            }
+            _ => panic!("expected S3 variant"),
+        }
+    }
+
+    #[test]
+    fn parses_gcs_state_config_from_toml() {
+        let toml_str = r#"
+backend = "gcs"
+bucket = "my-state-bucket"
+prefix = "my-project"
+"#;
+        let config: StateConfig = toml::from_str(toml_str).expect("must parse GCS state config");
+        match config {
+            StateConfig::Gcs { bucket, prefix } => {
+                assert_eq!(bucket, "my-state-bucket");
+                assert_eq!(prefix.as_deref(), Some("my-project"));
+            }
+            _ => panic!("expected Gcs variant"),
+        }
+    }
+
+    #[test]
+    fn s3_defaults_key_and_encrypt() {
+        let toml_str = r#"
+backend = "s3"
+bucket = "my-bucket"
+dynamodb_table = "my-lock"
+region = "us-east-1"
+"#;
+        let config: StateConfig = toml::from_str(toml_str).expect("must parse");
+        match config {
+            StateConfig::S3 { key, encrypt, .. } => {
+                assert!(key.is_none());
+                assert!(encrypt);
+            }
+            _ => panic!("expected S3"),
+        }
+    }
+
+    #[test]
+    fn gcs_defaults_prefix() {
+        let toml_str = r#"
+backend = "gcs"
+bucket = "my-bucket"
+"#;
+        let config: StateConfig = toml::from_str(toml_str).expect("must parse");
+        match config {
+            StateConfig::Gcs { prefix, .. } => assert!(prefix.is_none()),
+            _ => panic!("expected Gcs"),
+        }
+    }
+
+    #[test]
+    fn resolve_defaults_fills_s3_key() {
+        let mut config: StateConfig = toml::from_str(r#"
+backend = "s3"
+bucket = "b"
+dynamodb_table = "t"
+region = "r"
+"#).unwrap();
+        config.resolve_defaults("demo");
+        match config {
+            StateConfig::S3 { key, .. } => assert_eq!(key.as_deref(), Some("demo/terraform.tfstate")),
+            _ => panic!("expected S3"),
+        }
+    }
+
+    #[test]
+    fn resolve_defaults_fills_gcs_prefix() {
+        let mut config: StateConfig = toml::from_str(r#"
+backend = "gcs"
+bucket = "b"
+"#).unwrap();
+        config.resolve_defaults("demo");
+        match config {
+            StateConfig::Gcs { prefix, .. } => assert_eq!(prefix.as_deref(), Some("demo")),
+            _ => panic!("expected Gcs"),
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_backend() {
+        let toml_str = r#"
+backend = "azurerm"
+bucket = "my-bucket"
+"#;
+        let err = toml::from_str::<StateConfig>(toml_str).expect_err("must reject unknown backend");
+        let msg = err.to_string();
+        assert!(msg.contains("s3") || msg.contains("gcs"), "error should mention valid variants: {msg}");
+    }
+
+    #[test]
+    fn no_state_section_parses_as_none() {
+        // Simulate EvmCloudConfig without [state]
+        #[derive(Deserialize)]
+        struct Partial {
+            #[serde(default)]
+            state: Option<StateConfig>,
+        }
+        let config: Partial = toml::from_str("").expect("must parse empty");
+        assert!(config.state.is_none());
+    }
+
+    #[test]
+    fn s3_encrypt_false_detected() {
+        let toml_str = r#"
+backend = "s3"
+bucket = "b"
+dynamodb_table = "t"
+region = "r"
+encrypt = false
+"#;
+        let config: StateConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.is_encrypt_disabled());
+    }
 }

@@ -117,6 +117,8 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
     let preflight = preflight::run_checks(&args.dir, allow_raw_terraform);
 
+    let mut needs_reconfigure = false;
+
     let terraform_dir = match preflight {
         Ok(preflight) => {
             if args.config.is_some() && !args.force {
@@ -136,7 +138,12 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
             match preflight.project_kind {
                 ProjectKind::EasyToml => {
-                    easy_mode::prepare_workspace(&preflight.resolved_root, color)?
+                    let (dir, scaffold) = easy_mode::prepare_workspace(&preflight.resolved_root, color)?;
+                    if scaffold == crate::codegen::ScaffoldResult::BackendChanged {
+                        easy_mode::warn_backend_changed(&preflight.resolved_root)?;
+                        needs_reconfigure = true;
+                    }
+                    dir
                 }
                 ProjectKind::RawTerraform => {
                     output::checkline("Terraform project ready", color);
@@ -153,7 +160,14 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
             init_scaffold::scaffold_project(&args.dir, &answers, args.force, color)?;
 
             match answers.mode {
-                InitMode::Easy => easy_mode::prepare_workspace(&args.dir, color)?,
+                InitMode::Easy => {
+                    let (dir, scaffold) = easy_mode::prepare_workspace(&args.dir, color)?;
+                    if scaffold == crate::codegen::ScaffoldResult::BackendChanged {
+                        easy_mode::warn_backend_changed(&args.dir)?;
+                        needs_reconfigure = true;
+                    }
+                    dir
+                }
                 InitMode::Power => {
                     output::checkline("Generated Terraform files (versions.tf, main.tf, variables.tf, outputs.tf)", color);
                     output::checkline("Generated secrets.auto.tfvars.example", color);
@@ -177,7 +191,14 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
     let runner = TerraformRunner::check_installed(&terraform_dir)?;
 
-    output::with_terraforming(color, || runner.init(&terraform_dir, &args.terraform_args))?;
+    let mut init_args = args.terraform_args.clone();
+    if needs_reconfigure
+        && !init_args.iter().any(|a| a == "-reconfigure" || a == "-migrate-state")
+    {
+        init_args.push("-reconfigure".to_string());
+    }
+
+    output::with_terraforming(color, || runner.init(&terraform_dir, &init_args))?;
 
     if terraform_dir.join("versions.tf").is_file() {
         output::with_terraforming(color, || runner.fmt(&terraform_dir))?;

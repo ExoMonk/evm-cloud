@@ -68,6 +68,9 @@ pub(crate) fn bootstrap_example_to_dir(
         if is_excluded_path(relative) {
             continue;
         }
+        if relative.file_name().and_then(|n| n.to_str()) == Some(".gitignore") {
+            continue; // .gitignore is merged, not overwritten
+        }
         let target_path = destination_dir.join(relative);
         if target_path.exists() && !force {
             return Err(CliError::InitFileExists { path: target_path });

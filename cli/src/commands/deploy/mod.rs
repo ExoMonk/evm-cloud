@@ -128,7 +128,13 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
     let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
     let project_root = preflight.resolved_root.clone();
     let terraform_dir = match preflight.project_kind {
-        ProjectKind::EasyToml => easy_mode::prepare_workspace_quiet(&project_root)?,
+        ProjectKind::EasyToml => {
+            let (dir, scaffold) = easy_mode::prepare_workspace_quiet(&project_root)?;
+            if scaffold == crate::codegen::ScaffoldResult::BackendChanged {
+                return Err(easy_mode::handle_backend_changed(&project_root));
+            }
+            dir
+        }
         ProjectKind::RawTerraform => project_root.clone(),
     };
 
