@@ -132,7 +132,7 @@ resource "null_resource" "k3s_install" {
 # state after a single `terraform apply` (no refresh needed).
 
 locals {
-  secrets_dir     = "${path.module}/.secrets"
+  secrets_dir     = "${path.root}/.evm-cloud/secrets"
   token_file      = "${local.secrets_dir}/${var.project_name}.node-token"
   kubeconfig_file = "${local.secrets_dir}/${var.project_name}.kubeconfig.b64"
 }

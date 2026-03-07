@@ -71,5 +71,12 @@ if [[ "$EXTRA_ENV_JSON" != "{}" && "$EXTRA_ENV_JSON" != "null" ]]; then
   echo "$EXTRA_ENV_JSON" | jq -r 'to_entries[] | "  \(.key): \(.value | @json)"' >> "$OUT_DIR/indexer-values.yaml"
 fi
 
+# Inject user-defined secret env vars from handoff (stored in K8s Secret, referenced via secretKeyRef)
+EXTRA_SECRET_ENV_JSON=$(jq -c '.services.indexer.extra_secret_env // {}' "$HANDOFF_FILE")
+if [[ "$EXTRA_SECRET_ENV_JSON" != "{}" && "$EXTRA_SECRET_ENV_JSON" != "null" ]]; then
+  echo "extraSecretEnv:" >> "$OUT_DIR/indexer-values.yaml"
+  echo "$EXTRA_SECRET_ENV_JSON" | jq -r 'to_entries[] | "  \(.key): \(.value | @json)"' >> "$OUT_DIR/indexer-values.yaml"
+fi
+
 echo "Wrote $OUT_DIR/rpc-proxy-values.yaml"
 echo "Wrote $OUT_DIR/indexer-values.yaml"

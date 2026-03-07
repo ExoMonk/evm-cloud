@@ -167,6 +167,13 @@ EOF
     echo "$EXTRA_ENV_JSON" | jq -r 'to_entries[] | "  \(.key): \(.value | @json)"' >> "$OUT_FILE"
   fi
 
+  # Inject user-defined secret env vars from handoff (stored in K8s Secret, referenced via secretKeyRef)
+  EXTRA_SECRET_ENV_JSON=$(jq -c '.services.indexer.extra_secret_env // {}' "$HANDOFF")
+  if [[ "$EXTRA_SECRET_ENV_JSON" != "{}" && "$EXTRA_SECRET_ENV_JSON" != "null" ]]; then
+    echo "extraSecretEnv:" >> "$OUT_FILE"
+    echo "$EXTRA_SECRET_ENV_JSON" | jq -r 'to_entries[] | "  \(.key): \(.value | @json)"' >> "$OUT_FILE"
+  fi
+
   echo "Wrote $OUT_FILE"
 }
 

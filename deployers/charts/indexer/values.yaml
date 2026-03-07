@@ -61,6 +61,10 @@ clickhouse:
 # will appear in the pod spec. Use indexer_extra_secret_env via TF variables instead.
 extraEnv: {}
 
+# Additional secret environment variables. Values are stored in the K8s Secret
+# and referenced via secretKeyRef in the pod spec.
+extraSecretEnv: {}
+
 config:
   rindexerYaml: |
     name: indexer
