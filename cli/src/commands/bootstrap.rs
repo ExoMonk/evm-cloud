@@ -29,30 +29,37 @@ pub(crate) fn run(args: BootstrapArgs, color: ColorMode) -> Result<()> {
 
     state.resolve_defaults(&config.project.name);
 
-    output::headline("🏰 Bootstrapping state backend", color);
-
-    if args.dry_run {
-        output::info("     [dry-run] Read-only checks will run; mutations will be printed only", color);
-    }
+    let dry_run = args.dry_run;
 
     match state.clone() {
         StateConfig::S3 { bucket, dynamodb_table, region, .. } => {
             check_tool("aws")?;
-            output::info(&format!("     Creating state backend in region: {region}"), color);
-            bootstrap_s3(&bucket, &dynamodb_table, &region, args.dry_run, color)?;
+            output::headline(
+                &format!("🏰 ⚒️  Bootstrapping S3 state backend ({region})"),
+                color,
+            );
+            if dry_run {
+                output::subline("🏖️  Dry run — mutations will be printed only", color);
+            }
+            bootstrap_s3(&bucket, &dynamodb_table, &region, dry_run, color)?;
         }
         StateConfig::Gcs { bucket, region, .. } => {
             check_tool("gcloud")?;
-            output::info(&format!("     Creating state backend in region: {region}"), color);
-            bootstrap_gcs(&bucket, &region, args.dry_run, color)?;
+            output::headline(
+                &format!("🏰 ⚒️  Bootstrapping GCS state backend ({region})"),
+                color,
+            );
+            if dry_run {
+                output::subline("🏖️  Dry run — mutations will be printed only", color);
+            }
+            bootstrap_gcs(&bucket, &region, dry_run, color)?;
         }
     }
 
-    if args.dry_run {
-        output::info("     [dry-run] No resources were created", color);
-    } else {
-        output::success("State backend ready. Run `evm-cloud init` next.", color);
+    if dry_run {
+        output::subline("🏖️  No resources were created", color);
     }
+    output::success("State backend ready. Run `evm-cloud init` next.", color);
 
     Ok(())
 }
@@ -77,13 +84,14 @@ fn bootstrap_s3(
     dry_run: bool,
     color: ColorMode,
 ) -> Result<()> {
-    // 1. Check bucket (no --region: S3 names are globally unique, --region causes 301 redirects)
-    match resource_exists("aws", &["s3api", "head-bucket", "--bucket", bucket])? {
+    // -- S3 bucket --
+    // Check exists (no --region: S3 names are globally unique, --region causes 301 redirects)
+    let bucket_created = match resource_exists("aws", &["s3api", "head-bucket", "--bucket", bucket])? {
         ResourceStatus::Exists(_) => {
-            output::checkline(&format!("S3 bucket '{bucket}' already exists"), color);
+            output::checkline(&format!("S3 bucket '{bucket}' exists"), color);
+            false
         }
         ResourceStatus::NotFound => {
-            output::info(&format!("     Creating S3 bucket '{bucket}'"), color);
             let mut create_args = vec![
                 "s3api", "create-bucket", "--bucket", bucket, "--region", region,
             ];
@@ -93,11 +101,11 @@ fn bootstrap_s3(
                 create_args.push(&constraint);
             }
             run_cmd("aws", &create_args, dry_run, color)?;
+            true
         }
-    }
+    };
 
-    // 2. Public access block (always, idempotent — lenient for enterprise SCPs)
-    output::info(&format!("     Blocking public access on '{bucket}'"), color);
+    // Harden bucket (always, idempotent)
     run_cmd_lenient(
         "aws",
         &[
@@ -110,9 +118,6 @@ fn bootstrap_s3(
         dry_run,
         color,
     )?;
-
-    // 3. Versioning (always, idempotent)
-    output::info(&format!("     Enabling versioning on '{bucket}'"), color);
     run_cmd(
         "aws",
         &[
@@ -124,9 +129,6 @@ fn bootstrap_s3(
         dry_run,
         color,
     )?;
-
-    // 4. Encryption (always, idempotent — AES256)
-    output::info(&format!("     Enabling SSE-S3 encryption on '{bucket}'"), color);
     run_cmd(
         "aws",
         &[
@@ -140,18 +142,23 @@ fn bootstrap_s3(
         color,
     )?;
 
-    // 5. DynamoDB table
+    if bucket_created {
+        output::checkline(
+            &format!("S3 bucket '{bucket}' created (versioning, encryption, public-access-block)"),
+            color,
+        );
+    }
+
+    // -- DynamoDB lock table --
     let table_needs_wait = match resource_exists(
         "aws",
         &["dynamodb", "describe-table", "--table-name", dynamodb_table, "--region", region],
     )? {
         ResourceStatus::Exists(stdout) => {
-            output::checkline(&format!("DynamoDB table '{dynamodb_table}' already exists"), color);
-            // Check if table is ACTIVE — if not, we need to wait
+            output::checkline(&format!("DynamoDB table '{dynamodb_table}' exists"), color);
             !stdout.contains("\"ACTIVE\"")
         }
         ResourceStatus::NotFound => {
-            output::info(&format!("     Creating DynamoDB table '{dynamodb_table}'"), color);
             run_cmd(
                 "aws",
                 &[
@@ -165,19 +172,20 @@ fn bootstrap_s3(
                 dry_run,
                 color,
             )?;
-            !dry_run // need to wait after creation (but not in dry-run)
+            !dry_run
         }
     };
 
-    // 6. Wait for table ACTIVE
     if table_needs_wait {
-        output::info(&format!("     Waiting for DynamoDB table '{dynamodb_table}' to become ACTIVE"), color);
-        run_cmd(
-            "aws",
-            &["dynamodb", "wait", "table-exists", "--table-name", dynamodb_table, "--region", region],
-            dry_run,
-            color,
-        )?;
+        output::with_spinner("Waiting for DynamoDB table", color, || {
+            run_cmd(
+                "aws",
+                &["dynamodb", "wait", "table-exists", "--table-name", dynamodb_table, "--region", region],
+                false, // never dry-run the wait — we only get here when !dry_run
+                color,
+            )
+        })?;
+        output::checkline(&format!("DynamoDB table '{dynamodb_table}' created"), color);
     }
 
     Ok(())
@@ -195,13 +203,12 @@ fn bootstrap_gcs(
 ) -> Result<()> {
     let uri = format!("gs://{bucket}");
 
-    // 1. Check bucket
-    match resource_exists("gcloud", &["storage", "buckets", "describe", &uri, "--format=json"])? {
+    let bucket_created = match resource_exists("gcloud", &["storage", "buckets", "describe", &uri, "--format=json"])? {
         ResourceStatus::Exists(_) => {
-            output::checkline(&format!("GCS bucket '{bucket}' already exists"), color);
+            output::checkline(&format!("GCS bucket '{bucket}' exists"), color);
+            false
         }
         ResourceStatus::NotFound => {
-            output::info(&format!("     Creating GCS bucket '{bucket}'"), color);
             run_cmd(
                 "gcloud",
                 &[
@@ -213,17 +220,21 @@ fn bootstrap_gcs(
                 dry_run,
                 color,
             )?;
+            true
         }
-    }
+    };
 
-    // 2. Versioning (always, idempotent)
-    output::info(&format!("     Enabling versioning on '{bucket}'"), color);
-    run_cmd(
+    // Versioning (always, idempotent — lenient for org policies that enforce it externally)
+    run_cmd_lenient(
         "gcloud",
         &["storage", "buckets", "update", &uri, "--versioning"],
         dry_run,
         color,
     )?;
+
+    if bucket_created {
+        output::checkline(&format!("GCS bucket '{bucket}' created (versioning, public-access-prevention)"), color);
+    }
 
     Ok(())
 }
@@ -327,8 +338,8 @@ fn run_cmd(tool: &str, args: &[&str], dry_run: bool, color: ColorMode) -> Result
     Ok(())
 }
 
-/// Like run_cmd, but treats AccessDenied as a non-fatal warning.
-/// Used for put-public-access-block in enterprise environments with SCPs.
+/// Like run_cmd, but treats permission errors as a non-fatal warning.
+/// Used for idempotent settings that may be enforced by org policies (SCPs, GCP constraints).
 fn run_cmd_lenient(tool: &str, args: &[&str], dry_run: bool, color: ColorMode) -> Result<()> {
     if dry_run {
         let cmd_str = format!("{} {}", tool, args.join(" "));
@@ -353,7 +364,7 @@ fn run_cmd_lenient(tool: &str, args: &[&str], dry_run: bool, color: ColorMode) -
             || stderr.contains("OperationNotPermitted")
         {
             output::warn(
-                "Public access block may already be enforced by organization policy",
+                "Setting may already be enforced by organization policy — skipping",
                 color,
             );
             return Ok(());

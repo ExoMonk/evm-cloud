@@ -136,6 +136,8 @@ fn render_backend_hcl(state: &StateConfig) -> String {
                  \x20 }}\n"
             )
         }
+        // `region` is intentionally excluded — the Terraform GCS backend does not accept it.
+        // It's stored in the schema only to drive `gcloud storage buckets create --location`.
         StateConfig::Gcs { bucket, prefix, .. } => {
             let prefix_str = prefix.as_deref().unwrap_or("");
             if prefix_str.is_empty() {
