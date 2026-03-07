@@ -125,7 +125,7 @@ aws eks update-kubeconfig --name evm-cloud-eks-ch-dev --region us-east-1
 
 # 7) Check workloads
 kubectl get pods
-kubectl logs -l app=evm-cloud-eks-ch-indexer
+kubectl logs -l app.kubernetes.io/name=indexer
 
 # 8) (Optional) Destroy when done
 terraform destroy -var-file=eks_clickhouse.tfvars

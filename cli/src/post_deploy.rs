@@ -137,12 +137,12 @@ pub(crate) fn logs_command(handoff: &WorkloadHandoff) -> String {
                 .and_then(|k3s| non_empty(k3s.kubeconfig_base64.as_deref()))
                 .is_some()
             {
-                format!("kubectl --kubeconfig=kubeconfig.yaml logs -n {ns} -l app=rindexer -f")
+                format!("kubectl --kubeconfig=kubeconfig.yaml logs -n {ns} -l app.kubernetes.io/name=indexer -f")
             } else {
-                format!("kubectl logs -n {ns} -l app=rindexer -f")
+                format!("kubectl logs -n {ns} -l app.kubernetes.io/name=indexer -f")
             }
         }
-        ComputeEngine::Eks => format!("kubectl logs -n {ns} -l app=rindexer -f"),
+        ComputeEngine::Eks => format!("kubectl logs -n {ns} -l app.kubernetes.io/name=indexer -f"),
         _ => handoff
             .runtime
             .ec2
@@ -278,7 +278,7 @@ pub(crate) fn print_summary(handoff: &WorkloadHandoff, _mode: ColorMode) {
 
         if row.label == "Kubeconfig commands" {
             eprintln!("         🛟 Pods      evm-cloud kubectl get pods -n {ns}");
-            eprintln!("         🛟 Logs      evm-cloud kubectl logs -n {ns} -l app=rindexer -f");
+            eprintln!("         🛟 Logs      evm-cloud kubectl logs -n {ns} -l app.kubernetes.io/name=indexer -f");
         }
     }
 }
@@ -380,7 +380,7 @@ mod tests {
 
         assert_eq!(
             logs_command(&handoff),
-            "kubectl --kubeconfig=kubeconfig.yaml logs -n demo -l app=rindexer -f"
+            "kubectl --kubeconfig=kubeconfig.yaml logs -n demo -l app.kubernetes.io/name=indexer -f"
         );
     }
 

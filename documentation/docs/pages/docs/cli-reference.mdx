@@ -172,7 +172,7 @@ Key behavior:
      kubectl   evm-cloud kubectl -- get pods -n my-project
      SSH       ssh ubuntu@54.1.2.3
      Grafana   https://grafana.example.com (admin/prom-operator)
-     Logs      kubectl --kubeconfig=kubeconfig.yaml logs -n my-project -l app=rindexer -f
+     Logs      kubectl --kubeconfig=kubeconfig.yaml logs -n my-project -l app.kubernetes.io/name=indexer -f
 
   ✓ All 5 services healthy
 ```
@@ -210,7 +210,7 @@ evm-cloud kubectl [OPTIONS] <kubectl args>
 ```bash
 # Examples
 evm-cloud kubectl get pods -n evm-cloud
-evm-cloud kubectl logs -n evm-cloud -l app=rindexer -f
+evm-cloud kubectl logs -n evm-cloud -l app.kubernetes.io/name=indexer -f
 evm-cloud kubectl --dir ./my-project get nodes -o wide
 ```
 

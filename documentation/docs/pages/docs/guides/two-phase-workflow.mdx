@@ -175,8 +175,8 @@ terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/s
 evm-cloud kubectl get pods -n evm-cloud
 
 # Check logs
-evm-cloud kubectl logs -n evm-cloud -l app=rindexer --tail=50
-evm-cloud kubectl logs -n evm-cloud -l app=erpc --tail=50
+evm-cloud kubectl logs -n evm-cloud -l app.kubernetes.io/name=indexer --tail=50
+evm-cloud kubectl logs -n evm-cloud -l app.kubernetes.io/name=rpc-proxy --tail=50
 ```
 
 You should see both `erpc` and `rindexer` pods in `Running` state.
