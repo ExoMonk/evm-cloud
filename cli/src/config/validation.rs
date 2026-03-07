@@ -149,6 +149,14 @@ const RESERVED_ENV_KEYS: &[&str] = &[
 
 fn validate_extra_env(extra_env: &std::collections::BTreeMap<String, String>) -> Result<()> {
     for (key, value) in extra_env {
+        if key.is_empty() || !key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            || key.as_bytes()[0].is_ascii_digit()
+        {
+            return Err(CliError::ConfigValidation {
+                field: format!("indexer.extra_env.{key}"),
+                message: "key must be a valid POSIX environment variable name (letters, digits, underscores; cannot start with a digit)".to_string(),
+            });
+        }
         if RESERVED_ENV_KEYS.contains(&key.as_str()) {
             return Err(CliError::ConfigValidation {
                 field: format!("indexer.extra_env.{key}"),

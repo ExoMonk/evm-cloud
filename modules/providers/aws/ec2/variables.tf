@@ -173,9 +173,10 @@ variable "clickhouse_db" {
 }
 
 variable "extra_env" {
-  description = "Additional environment variables to inject into the indexer container."
+  description = "Additional environment variables to inject into the indexer container (may contain sensitive values)."
   type        = map(string)
   default     = {}
+  sensitive   = true
 }
 
 variable "rpc_proxy_mem_limit" {

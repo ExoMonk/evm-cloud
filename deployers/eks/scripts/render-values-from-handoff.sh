@@ -68,7 +68,7 @@ EOF
 EXTRA_ENV_JSON=$(jq -c '.services.indexer.extra_env // {}' "$HANDOFF_FILE")
 if [[ "$EXTRA_ENV_JSON" != "{}" && "$EXTRA_ENV_JSON" != "null" ]]; then
   echo "extraEnv:" >> "$OUT_DIR/indexer-values.yaml"
-  echo "$EXTRA_ENV_JSON" | jq -r 'to_entries[] | "  \(.key): \"\(.value)\""' >> "$OUT_DIR/indexer-values.yaml"
+  echo "$EXTRA_ENV_JSON" | jq -r 'to_entries[] | "  \(.key): \(.value | @json)"' >> "$OUT_DIR/indexer-values.yaml"
 fi
 
 echo "Wrote $OUT_DIR/rpc-proxy-values.yaml"

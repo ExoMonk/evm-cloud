@@ -236,10 +236,14 @@ indexer_extra_secret_env = {
 }
 ```
 
-Both maps are merged before injection into the container. Reserved keys (`RPC_URL`, `DATABASE_URL`, `CLICKHOUSE_URL`, `CLICKHOUSE_USER`, `CLICKHOUSE_DB`, `CLICKHOUSE_PASSWORD`) are rejected at validation time — these are managed by evm-cloud.
+Both maps are merged before injection into the container. If the same key appears in both maps, the `indexer_extra_secret_env` value takes precedence. Reserved keys (`RPC_URL`, `DATABASE_URL`, `CLICKHOUSE_URL`, `CLICKHOUSE_USER`, `CLICKHOUSE_DB`, `CLICKHOUSE_PASSWORD`) are rejected at validation time — these are managed by evm-cloud.
 
 :::tip
 On EC2 deployments, both `extra_env` and `extra_secret_env` are stored in AWS Secrets Manager alongside database credentials. Changes trigger a secret version rotation.
+:::
+
+:::warning
+On K3s/EKS with `workload_mode = "external"` (the default), `indexer_extra_secret_env` values are **not injected** into the container — external deployer render scripts only read non-sensitive vars from the handoff JSON. To use secret env vars on K3s/EKS, either set `workload_mode = "terraform"` or manually add the values to your Helm values file.
 :::
 
 ---
