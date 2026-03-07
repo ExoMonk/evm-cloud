@@ -49,6 +49,10 @@ spec:
                   name: {{ include "indexer.fullname" . }}-secrets
                   key: CLICKHOUSE_PASSWORD
 {{- end }}
+{{- range $name, $value := .Values.extraEnv }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+{{- end }}
           ports:
             - name: metrics
               containerPort: 8080

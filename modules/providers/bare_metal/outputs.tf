@@ -112,6 +112,7 @@ output "workload_handoff" {
         service_name           = "rindexer"
         single_writer_required = true
         storage_backend        = var.indexer_storage_backend
+        extra_env              = var.indexer_extra_env
         }, length(var.indexer_instances) > 0 ? {
         instances = var.indexer_instances
       } : {}) : null

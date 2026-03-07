@@ -21,12 +21,12 @@ module "evm_cloud" {
   workload_mode  = "external"
 
   # SSH keys — public key for EC2, private key path for k3s provisioner
-  ssh_public_key           = var.ssh_public_key
-  ssh_private_key_path = var.ssh_private_key_path
-  k3s_instance_type        = var.k3s_instance_type
-  k3s_version              = var.k3s_version
-  k3s_api_allowed_cidrs    = var.k3s_api_allowed_cidrs # Must include your IP for SSH + k3s provisioning
-  k3s_worker_nodes         = var.k3s_worker_nodes
+  ssh_public_key        = var.ssh_public_key
+  ssh_private_key_path  = var.ssh_private_key_path
+  k3s_instance_type     = var.k3s_instance_type
+  k3s_version           = var.k3s_version
+  k3s_api_allowed_cidrs = var.k3s_api_allowed_cidrs # Must include your IP for SSH + k3s provisioning
+  k3s_worker_nodes      = var.k3s_worker_nodes
 
   # AWS
   aws_region                      = var.aws_region

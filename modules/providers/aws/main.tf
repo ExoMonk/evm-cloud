@@ -235,6 +235,9 @@ module "ec2" {
   clickhouse_user     = var.indexer_clickhouse_user
   clickhouse_password = var.indexer_clickhouse_password
   clickhouse_db       = var.indexer_clickhouse_db
+
+  # Extra env vars
+  extra_env = merge(var.indexer_extra_env, var.indexer_extra_secret_env)
 }
 
 # --- EKS Cluster ---
@@ -473,4 +476,7 @@ module "eks_indexer" {
   clickhouse_user     = var.indexer_clickhouse_user
   clickhouse_password = var.indexer_clickhouse_password
   clickhouse_db       = var.indexer_clickhouse_db
+
+  # Extra env vars
+  extra_env = merge(var.indexer_extra_env, var.indexer_extra_secret_env)
 }

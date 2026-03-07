@@ -220,11 +220,13 @@ module "provider_aws" {
   rpc_proxy_image   = var.rpc_proxy_image
 
   # Indexer
-  indexer_enabled         = var.indexer_enabled
-  indexer_image           = var.indexer_image
-  indexer_rpc_url         = var.indexer_rpc_url
-  indexer_storage_backend = var.indexer_storage_backend
-  indexer_instances       = var.indexer_instances
+  indexer_enabled          = var.indexer_enabled
+  indexer_image            = var.indexer_image
+  indexer_rpc_url          = var.indexer_rpc_url
+  indexer_storage_backend  = var.indexer_storage_backend
+  indexer_instances        = var.indexer_instances
+  indexer_extra_env        = var.indexer_extra_env
+  indexer_extra_secret_env = var.indexer_extra_secret_env
 
   # ClickHouse BYODB
   indexer_clickhouse_url      = var.indexer_clickhouse_url
@@ -238,10 +240,10 @@ module "provider_aws" {
   rindexer_abis        = var.rindexer_abis
 
   # k3s
-  k3s_version              = var.k3s_version
-  k3s_instance_type        = var.k3s_instance_type
-  k3s_api_allowed_cidrs    = var.k3s_api_allowed_cidrs
-  k3s_worker_nodes         = var.k3s_worker_nodes
+  k3s_version           = var.k3s_version
+  k3s_instance_type     = var.k3s_instance_type
+  k3s_api_allowed_cidrs = var.k3s_api_allowed_cidrs
+  k3s_worker_nodes      = var.k3s_worker_nodes
 
   # Ingress / TLS
   erpc_hostname                      = var.erpc_hostname
@@ -305,14 +307,16 @@ module "provider_bare_metal" {
   erpc_config_yaml    = var.erpc_config_yaml
 
   # Indexer
-  indexer_enabled         = var.indexer_enabled
-  indexer_image           = var.indexer_image
-  indexer_rpc_url         = var.indexer_rpc_url
-  indexer_storage_backend = var.indexer_storage_backend
-  indexer_instances       = var.indexer_instances
-  indexer_mem_limit       = var.bare_metal_indexer_mem_limit
-  rindexer_config_yaml    = var.rindexer_config_yaml
-  rindexer_abis           = var.rindexer_abis
+  indexer_enabled          = var.indexer_enabled
+  indexer_image            = var.indexer_image
+  indexer_rpc_url          = var.indexer_rpc_url
+  indexer_storage_backend  = var.indexer_storage_backend
+  indexer_instances        = var.indexer_instances
+  indexer_extra_env        = var.indexer_extra_env
+  indexer_extra_secret_env = var.indexer_extra_secret_env
+  indexer_mem_limit        = var.bare_metal_indexer_mem_limit
+  rindexer_config_yaml     = var.rindexer_config_yaml
+  rindexer_abis            = var.rindexer_abis
 
   # ClickHouse BYODB
   indexer_clickhouse_url      = var.indexer_clickhouse_url

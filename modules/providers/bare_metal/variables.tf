@@ -124,6 +124,19 @@ variable "indexer_instances" {
   default = []
 }
 
+variable "indexer_extra_env" {
+  description = "Additional plaintext environment variables for the indexer container."
+  type        = map(string)
+  default     = {}
+}
+
+variable "indexer_extra_secret_env" {
+  description = "Additional sensitive environment variables for the indexer container."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+}
+
 # --- PostgreSQL BYODB ---
 
 variable "indexer_postgres_url" {

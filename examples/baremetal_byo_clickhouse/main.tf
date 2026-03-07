@@ -15,12 +15,12 @@ module "evm_cloud" {
   workload_mode           = var.workload_mode
 
   # Bare metal SSH connection
-  bare_metal_host                 = var.bare_metal_host
-  bare_metal_ssh_user             = var.bare_metal_ssh_user
-  ssh_private_key_path = var.ssh_private_key_path
-  bare_metal_ssh_port             = var.bare_metal_ssh_port
-  bare_metal_rpc_proxy_mem_limit  = var.bare_metal_rpc_proxy_mem_limit
-  bare_metal_indexer_mem_limit    = var.bare_metal_indexer_mem_limit
+  bare_metal_host                = var.bare_metal_host
+  bare_metal_ssh_user            = var.bare_metal_ssh_user
+  ssh_private_key_path           = var.ssh_private_key_path
+  bare_metal_ssh_port            = var.bare_metal_ssh_port
+  bare_metal_rpc_proxy_mem_limit = var.bare_metal_rpc_proxy_mem_limit
+  bare_metal_indexer_mem_limit   = var.bare_metal_indexer_mem_limit
 
   # AWS provider (required by Terraform even when unused — credentials skipped)
   aws_skip_credentials_validation = true

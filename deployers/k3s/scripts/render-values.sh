@@ -160,6 +160,13 @@ nodeSelector:
 EOF
   fi
 
+  # Inject user-defined extra env vars from handoff
+  EXTRA_ENV_JSON=$(jq -c '.services.indexer.extra_env // {}' "$HANDOFF")
+  if [[ "$EXTRA_ENV_JSON" != "{}" && "$EXTRA_ENV_JSON" != "null" ]]; then
+    echo "extraEnv:" >> "$OUT_FILE"
+    echo "$EXTRA_ENV_JSON" | jq -r 'to_entries[] | "  \(.key): \"\(.value)\""' >> "$OUT_FILE"
+  fi
+
   echo "Wrote $OUT_FILE"
 }
 

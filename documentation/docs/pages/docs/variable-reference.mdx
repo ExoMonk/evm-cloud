@@ -180,6 +180,8 @@ eRPC aggregates multiple upstream RPC endpoints with automatic failover, caching
 | `indexer_postgres_url` | `string` | `""` | PostgreSQL connection string (e.g. `postgres://user:pass@host:5432/db`). Used for `bare_metal` + `postgres` deployments. |
 | `rindexer_abis` | `map(string)` | `{}` | ABI files: `{ "ERC20.json" = file("abis/ERC20.json") }`. |
 | `indexer_instances` | `list(object)` | `[]` | Multiple indexer instances with independent configs. Each becomes a separate Helm release. See below. |
+| `indexer_extra_env` | `map(string)` | `{}` | Additional plaintext environment variables for the rindexer container (non-sensitive, from TOML config). |
+| `indexer_extra_secret_env` | `map(string)` | `{}` | Additional **sensitive** environment variables for the rindexer container. Set in `secrets.auto.tfvars` — never committed to source control. |
 
 > **Tip:** When both `rpc_proxy_enabled` and `indexer_enabled` are true, the indexer's RPC URL automatically points to the eRPC internal service — no manual wiring needed.
 
@@ -213,6 +215,32 @@ indexer_instances = [
 ```
 
 The `"job"` workload type renders a Kubernetes Job instead of a Deployment — the pod runs to completion and does not restart.
+
+### Custom Environment Variables
+
+Inject runtime configuration into the rindexer container — for example, to configure [webhook streams](https://rindexer.xyz/docs/streams/webhooks) or Slack alerts.
+
+**Non-sensitive vars** go in your TOML config (committed):
+
+```toml
+[indexer.extra_env]
+WEBHOOK_URL = "http://my-api:3001/api/webhooks/rindexer"
+SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/..."
+```
+
+**Sensitive vars** go in `secrets.auto.tfvars` (gitignored):
+
+```hcl
+indexer_extra_secret_env = {
+  RINDEXER_WEBHOOK_SECRET = "my-secret-key"
+}
+```
+
+Both maps are merged before injection into the container. Reserved keys (`RPC_URL`, `DATABASE_URL`, `CLICKHOUSE_URL`, `CLICKHOUSE_USER`, `CLICKHOUSE_DB`, `CLICKHOUSE_PASSWORD`) are rejected at validation time — these are managed by evm-cloud.
+
+:::tip
+On EC2 deployments, both `extra_env` and `extra_secret_env` are stored in AWS Secrets Manager alongside database credentials. Changes trigger a secret version rotation.
+:::
 
 ---
 

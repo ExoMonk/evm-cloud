@@ -16,6 +16,7 @@ locals {
       CLICKHOUSE_PASSWORD = var.clickhouse_password
       CLICKHOUSE_DB       = var.clickhouse_db
     } : {},
+    var.extra_env,
   )
 
   # Caddy is enabled for cloudflare and caddy ingress modes on EC2

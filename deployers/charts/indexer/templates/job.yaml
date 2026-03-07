@@ -45,6 +45,10 @@ spec:
                   name: {{ include "indexer.fullname" . }}-secrets
                   key: CLICKHOUSE_PASSWORD
 {{- end }}
+{{- range $name, $value := .Values.extraEnv }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+{{- end }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
           volumeMounts:

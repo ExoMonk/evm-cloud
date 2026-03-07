@@ -115,3 +115,9 @@ variable "wait_for_rollout" {
   type        = bool
   default     = true
 }
+
+variable "extra_env" {
+  description = "Additional environment variables to inject into the indexer container."
+  type        = map(string)
+  default     = {}
+}

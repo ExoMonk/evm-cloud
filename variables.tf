@@ -434,6 +434,19 @@ variable "indexer_instances" {
   default = []
 }
 
+variable "indexer_extra_env" {
+  description = "Additional plaintext environment variables to inject into the indexer container (non-sensitive, from TOML config)."
+  type        = map(string)
+  default     = {}
+}
+
+variable "indexer_extra_secret_env" {
+  description = "Additional sensitive environment variables to inject into the indexer container (from secrets.auto.tfvars)."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+}
+
 # --- Bare Metal ---
 
 variable "bare_metal_host" {

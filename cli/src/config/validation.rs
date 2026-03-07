@@ -48,6 +48,8 @@ pub(crate) fn validate(config: &EvmCloudConfig) -> Result<()> {
         });
     }
 
+    validate_extra_env(&config.indexer.extra_env)?;
+
     if let Some(ref state) = config.state {
         validate_state(state)?;
     }
@@ -132,6 +134,35 @@ fn validate_hcl_safe(field: &str, value: &str) -> Result<()> {
             field: field.to_string(),
             message: "contains invalid characters (quotes, backslashes, or newlines are not allowed in HCL values)".to_string(),
         });
+    }
+    Ok(())
+}
+
+const RESERVED_ENV_KEYS: &[&str] = &[
+    "RPC_URL",
+    "DATABASE_URL",
+    "CLICKHOUSE_URL",
+    "CLICKHOUSE_USER",
+    "CLICKHOUSE_DB",
+    "CLICKHOUSE_PASSWORD",
+];
+
+fn validate_extra_env(extra_env: &std::collections::BTreeMap<String, String>) -> Result<()> {
+    for (key, value) in extra_env {
+        if RESERVED_ENV_KEYS.contains(&key.as_str()) {
+            return Err(CliError::ConfigValidation {
+                field: format!("indexer.extra_env.{key}"),
+                message: format!(
+                    "`{key}` is reserved and managed by evm-cloud. Remove it from extra_env."
+                ),
+            });
+        }
+        if value.contains('\n') || value.contains('\r') {
+            return Err(CliError::ConfigValidation {
+                field: format!("indexer.extra_env.{key}"),
+                message: "values must not contain newline characters".to_string(),
+            });
+        }
     }
     Ok(())
 }

@@ -172,6 +172,12 @@ variable "clickhouse_db" {
   default     = "default"
 }
 
+variable "extra_env" {
+  description = "Additional environment variables to inject into the indexer container."
+  type        = map(string)
+  default     = {}
+}
+
 variable "rpc_proxy_mem_limit" {
   description = "Docker memory limit for eRPC container (e.g. 512m, 1g, 2g)."
   type        = string

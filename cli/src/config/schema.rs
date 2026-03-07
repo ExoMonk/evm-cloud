@@ -241,6 +241,8 @@ pub(crate) struct IndexerConfig {
     #[serde(default)]
     pub(crate) erpc_config_path: Option<PathBuf>,
     pub(crate) chains: Vec<String>,
+    #[serde(default)]
+    pub(crate) extra_env: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

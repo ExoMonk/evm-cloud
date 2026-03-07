@@ -21,6 +21,8 @@ locals {
       CLICKHOUSE_PASSWORD = var.indexer_clickhouse_password
       CLICKHOUSE_DB       = var.indexer_clickhouse_db
     } : {},
+    var.indexer_extra_env,
+    var.indexer_extra_secret_env,
   )
 }
 

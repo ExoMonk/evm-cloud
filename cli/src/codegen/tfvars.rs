@@ -60,6 +60,9 @@ struct TerraformVars {
     // ABI files: map of filename → JSON content
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     rindexer_abis: BTreeMap<String, String>,
+    // User-defined non-sensitive env vars for the indexer container
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    indexer_extra_env: BTreeMap<String, String>,
     // Deployment
     deployment_target: String,
     runtime_arch: String,
@@ -273,6 +276,7 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
         rindexer_config_yaml: rindexer_yaml,
         erpc_config_yaml: erpc_yaml,
         rindexer_abis: load_abi_files(&config.indexer.config_path)?,
+        indexer_extra_env: config.indexer.extra_env.clone(),
         // Deployment
         deployment_target: config
             .project
@@ -995,6 +999,10 @@ mode = "provider"
             rindexer_abis: std::collections::BTreeMap::from([(
                 "dummy".to_string(),
                 "{}".to_string(),
+            )]),
+            indexer_extra_env: std::collections::BTreeMap::from([(
+                "DUMMY".to_string(),
+                "val".to_string(),
             )]),
             // New fields — all Some to ensure they appear in JSON keys
             deployment_target: String::new(),

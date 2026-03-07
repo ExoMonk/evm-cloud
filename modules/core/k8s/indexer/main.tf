@@ -14,7 +14,8 @@ locals {
       CLICKHOUSE_URL  = var.clickhouse_url
       CLICKHOUSE_USER = var.clickhouse_user
       CLICKHOUSE_DB   = var.clickhouse_db
-    }
+    },
+    var.extra_env,
   )
 }
 
