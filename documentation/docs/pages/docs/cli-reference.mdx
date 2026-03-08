@@ -220,7 +220,7 @@ Key behavior:
      kubectl   evm-cloud kubectl -- get pods -n my-project
      SSH       ssh ubuntu@54.1.2.3
      Grafana   https://grafana.example.com (admin/prom-operator)
-     Logs      kubectl --kubeconfig=kubeconfig.yaml logs -n my-project -l app.kubernetes.io/name=indexer -f
+     Logs      evm-cloud logs rindexer -f
 
   ✓ All 5 services healthy
 ```
@@ -233,13 +233,56 @@ SSH key and user are auto-resolved from your `secrets.auto.tfvars` and `terrafor
 
 ### `logs`
 
-Logs command placeholder.
+Stream real-time logs from any deployed service across all compute engines.
 
 ```bash
-evm-cloud logs
+evm-cloud logs [SERVICE] [OPTIONS]
+
+Positional:
+  SERVICE                        rindexer|erpc|clickhouse|postgres|caddy|grafana|prometheus (default: rindexer)
+
+Options:
+  -f, --follow                   Follow log output (stream continuously)
+  --tail <N>                     Number of historical lines (default: 100)
+  --pod <NAME>                   Target a specific pod by name (K8s only, bypasses label selector)
+  -d, --dir <path>               Project directory (default: .)
+  --module-name <NAME>           Terraform module name (default: evm_cloud)
+  --env <ENV>                    Environment name for multi-env projects
+  --ssh-key <PATH>               SSH private key override
+  --ssh-user <USER>              SSH user override
+  --ssh-port <PORT>              SSH port override (default: 22)
 ```
 
-Current behavior: prints `logs command not yet implemented`.
+The command auto-detects your compute engine and uses the appropriate log transport:
+
+| Engine | Strategy |
+|--------|----------|
+| EC2/DockerCompose | `docker compose logs` via SSH |
+| EC2 + CloudWatch | `aws logs tail` (falls back to SSH if `aws` CLI not installed) |
+| K3s/EKS | `kubectl logs` with label selector `app.kubernetes.io/name=<service>` |
+
+```bash
+# Stream rindexer logs (follow mode)
+evm-cloud logs rindexer -f
+
+# Dump last 50 lines of eRPC logs
+evm-cloud logs erpc --tail 50
+
+# View Grafana logs (auto-routes to monitoring namespace)
+evm-cloud logs grafana
+
+# Target a specific pod (K8s only)
+evm-cloud logs rindexer --pod my-project-indexer-8584fb5745-t74gg
+
+# Multi-env
+evm-cloud logs rindexer --env staging -f
+```
+
+When multiple pods match a label selector (e.g., multiple indexer replicas), logs are interleaved with `[pod/container]` prefixes. Use `--pod` to target a specific one.
+
+:::tip
+`grafana` and `prometheus` services auto-route to the `monitoring` namespace. All other services use the project namespace.
+:::
 
 ### `kubectl`
 
@@ -258,7 +301,7 @@ evm-cloud kubectl [OPTIONS] <kubectl args>
 ```bash
 # Examples
 evm-cloud kubectl get pods -n evm-cloud
-evm-cloud kubectl logs -n evm-cloud -l app.kubernetes.io/name=indexer -f
+evm-cloud kubectl describe pod -n evm-cloud -l app.kubernetes.io/name=indexer
 evm-cloud kubectl --dir ./my-project get nodes -o wide
 ```
 

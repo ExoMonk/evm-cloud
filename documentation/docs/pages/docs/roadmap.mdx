@@ -158,33 +158,24 @@ compute_engine          = "gce"
 - VPC networking, firewall rules, IAM
 - Feature parity with AWS provider
 
-### EVM Cloud CLI
+### EVM Cloud CLI ✅
 
-> **Mostly implemented:** `init`, `apply`, `deploy`, `destroy`, `kubectl`, and `local` are shipped. Only `status` and `logs` are placeholders for future implementation.
+> **Fully implemented:** `init`, `apply`, `deploy`, `destroy`, `kubectl`, `local`, `status`, and `logs` are all shipped.
 
 ```bash
 # Scaffold a new project
-evm-cloud init --chain ethereum --db clickhouse
+evm-cloud init
 
-# Deploy with smart defaults
-evm-cloud deploy --preset dev
+# Deploy infrastructure + workloads
+evm-cloud deploy
 
-# Live status
+# Live health dashboard
 evm-cloud status
-# ┌─────────────────────────────────────────────┐
-# │ Chain:     Ethereum mainnet                  │
-# │ Blocks:    19,847,231 / 19,847,235 (-4)     │
-# │ Events:    1,247/sec                         │
-# │ eRPC:      3/3 upstreams healthy             │
-# │ DB:        ClickHouse — 42GB indexed         │
-# │ Cost:      ~$38/mo (EC2 t3.medium)           │
-# └─────────────────────────────────────────────┘
 
-# Stream logs from all services
-evm-cloud logs --follow
-
-# Scale without editing HCL
-evm-cloud scale --instance t3.xlarge
+# Stream service logs
+evm-cloud logs rindexer -f
+evm-cloud logs erpc --tail 50
+evm-cloud logs grafana  # auto-routes to monitoring namespace
 ```
 
 ### Deployment Presets

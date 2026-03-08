@@ -322,11 +322,14 @@ See the [Observability Guide](./observability.mdx) for full setup, dashboard des
 Terraform creates a CloudWatch log group (available in the handoff as `artifacts.cloudwatch_log_group`). View logs:
 
 ```bash
-ssh ec2-user@<ip> "sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs rindexer --tail 100"
-ssh ec2-user@<ip> "sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs erpc --tail 100"
+# Stream rindexer logs (auto-detects SSH or CloudWatch transport)
+evm-cloud logs rindexer --tail 100
 
-# Via CloudWatch (if configured)
-aws logs tail /evm-cloud/my-indexer --follow
+# Stream eRPC logs
+evm-cloud logs erpc --tail 100
+
+# Follow mode for real-time streaming
+evm-cloud logs rindexer -f
 ```
 
 ### Health checks

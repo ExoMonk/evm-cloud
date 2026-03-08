@@ -169,7 +169,7 @@ You should see `erpc` and `rindexer` containers in `running` state.
 
 ```bash
 # Verify data is flowing — check rindexer logs
-sudo docker compose -f /opt/evm-cloud/docker-compose.yml logs rindexer --tail=20
+evm-cloud logs rindexer --tail 20
 # Look for "Indexed block ..." or "Stored N events" messages
 ```
 
