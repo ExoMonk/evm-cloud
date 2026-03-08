@@ -1,7 +1,7 @@
 use std::fs;
 
 use crate::config::schema::{
-    ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode, StateConfig,
+    ComputeEngine, EvmCloudConfig, IndexerType, InfrastructureProvider, IngressMode, StateConfig,
 };
 use crate::error::{CliError, Result};
 
@@ -35,6 +35,7 @@ pub(crate) fn validate(config: &EvmCloudConfig) -> Result<()> {
         });
     }
 
+    validate_indexer_type(&config.indexer, &config.containers)?;
     validate_existing_file("indexer.config_path", &config.indexer.config_path)?;
 
     if let Some(path) = &config.indexer.erpc_config_path {
@@ -182,6 +183,35 @@ fn validate_extra_env(extra_env: &std::collections::BTreeMap<String, String>) ->
             return Err(CliError::ConfigValidation {
                 field: format!("indexer.extra_env.{key}"),
                 message: "values must not contain newline characters".to_string(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_indexer_type(
+    indexer: &crate::config::schema::IndexerConfig,
+    containers: &Option<crate::config::schema::ContainerConfig>,
+) -> Result<()> {
+    if indexer.indexer_type == IndexerType::Rindexer
+        && (indexer.custom_command.is_some()
+            || indexer.custom_health_path.is_some()
+            || indexer.custom_health_port.is_some())
+    {
+        return Err(CliError::ConfigValidation {
+            field: "indexer.custom_*".to_string(),
+            message: "custom_command, custom_health_path, and custom_health_port are only valid when indexer_type = \"custom\"".to_string(),
+        });
+    }
+    if indexer.indexer_type == IndexerType::Custom {
+        let has_image = containers
+            .as_ref()
+            .and_then(|c| c.indexer_image.as_ref())
+            .is_some();
+        if !has_image {
+            return Err(CliError::ConfigValidation {
+                field: "containers.indexer_image".to_string(),
+                message: "required when indexer_type = \"custom\". Set [containers] indexer_image to your custom indexer Docker image.".to_string(),
             });
         }
     }

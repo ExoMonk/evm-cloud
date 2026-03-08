@@ -234,15 +234,58 @@ fn default_storage_backend() -> String {
     "clickhouse".to_string()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum IndexerType {
+    Rindexer,
+    Custom,
+}
+
+impl Default for IndexerType {
+    fn default() -> Self {
+        Self::Rindexer
+    }
+}
+
+impl IndexerType {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::Rindexer => "rindexer",
+            Self::Custom => "custom",
+        }
+    }
+
+    pub(crate) fn is_custom(self) -> bool {
+        self == Self::Custom
+    }
+}
+
+impl std::fmt::Display for IndexerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct IndexerConfig {
+    #[serde(default)]
+    pub(crate) indexer_type: IndexerType,
     pub(crate) config_path: PathBuf,
     #[serde(default)]
     pub(crate) erpc_config_path: Option<PathBuf>,
     pub(crate) chains: Vec<String>,
     #[serde(default)]
     pub(crate) extra_env: BTreeMap<String, String>,
+    /// Custom indexer: override the container command (e.g. `["node", "dist/index.js"]`).
+    #[serde(default)]
+    pub(crate) custom_command: Option<Vec<String>>,
+    /// Custom indexer: override the health endpoint path (e.g. `/healthz`).
+    #[serde(default)]
+    pub(crate) custom_health_path: Option<String>,
+    /// Custom indexer: override the health endpoint port.
+    #[serde(default)]
+    pub(crate) custom_health_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

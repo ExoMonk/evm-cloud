@@ -302,7 +302,14 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
             .containers
             .as_ref()
             .and_then(|c| c.indexer_image.clone())
-            .unwrap_or_else(|| "ghcr.io/joshstevens19/rindexer:latest".to_string()),
+            .unwrap_or_else(|| {
+                if config.indexer.indexer_type.is_custom() {
+                    // Custom indexer must provide an image via [containers].indexer_image.
+                    String::new()
+                } else {
+                    "ghcr.io/joshstevens19/rindexer:latest".to_string()
+                }
+            }),
         // Ingress details
         ingress_cloudflare_ssl_mode: if ingress_mode == IngressMode::Cloudflare {
             Some(
