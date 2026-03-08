@@ -78,6 +78,10 @@ export default defineConfig({
           link: "/docs/guides/state-management",
         },
         {
+          text: "Remote State & .tfbackend",
+          link: "/docs/guides/remote-state",
+        },
+        {
           text: "Two-Phase Workflow",
           link: "/docs/guides/two-phase-workflow",
         },

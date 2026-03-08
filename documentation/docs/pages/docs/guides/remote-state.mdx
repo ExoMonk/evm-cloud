@@ -1,0 +1,244 @@
+# Remote State & `.tfbackend` Files
+
+How evm-cloud manages Terraform state backends using the `.tfbackend` partial configuration pattern — keeping credentials out of HCL and enabling multi-environment workflows.
+
+---
+
+## How It Works
+
+Terraform's [partial backend configuration](https://developer.hashicorp.com/terraform/language/backend#partial-configuration) allows you to declare a backend type in HCL without any values, then supply the values at `terraform init` time via a `-backend-config` file. evm-cloud uses this pattern natively:
+
+1. The generated `main.tf` contains an **empty** backend block:
+
+```hcl
+terraform {
+  required_version = ">= 1.5"
+
+  backend "s3" {}
+}
+```
+
+2. A `.tfbackend` file holds the actual values:
+
+```hcl
+# my-indexer.s3.tfbackend
+bucket         = "myorg-terraform-state"
+key            = "my-indexer/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "myorg-terraform-locks"
+encrypt        = true
+```
+
+3. During `terraform init`, the CLI auto-detects the `.tfbackend` file and injects `-backend-config=<file>` — no manual wiring needed.
+
+This separation keeps backend credentials out of version-controlled HCL and makes it trivial to swap environments.
+
+---
+
+## Setting Up Remote State
+
+There are three paths to configure remote state, depending on your workflow.
+
+### Option 1: During `evm-cloud init` (Recommended)
+
+The init wizard asks about remote state. If you choose to configure it, the wizard:
+
+1. Collects backend type (`s3` or `gcs`), bucket name, region, and lock table
+2. Writes a `[state]` section to `evm-cloud.toml`
+3. Optionally runs `evm-cloud bootstrap` to create the cloud resources
+4. Generates the `.tfbackend` file in the terraform working directory
+5. Runs `terraform init -backend-config=<file>` automatically
+
+```bash
+evm-cloud init
+# Wizard prompts: "Configure remote state backend? (y/N)"
+# If yes: collects S3/GCS details, optionally bootstraps resources
+```
+
+For non-interactive init (CI), pass `--bootstrap` to auto-create state resources:
+
+```bash
+evm-cloud init --non-interactive --config answers.toml --bootstrap
+```
+
+### Option 2: `evm-cloud bootstrap` (Standalone)
+
+If you already ran `evm-cloud init` and have an `evm-cloud.toml` with a `[state]` section but haven't created the cloud resources yet:
+
+```bash
+# 1. Preview what will be created
+evm-cloud bootstrap --dry-run
+
+# 2. Create the cloud resources (S3 bucket + DynamoDB table, or GCS bucket)
+evm-cloud bootstrap
+
+# 3. Initialize Terraform — the CLI auto-injects -backend-config
+evm-cloud init
+```
+
+:::note
+`bootstrap` requires an existing `evm-cloud.toml` with a `[state]` section, or explicit CLI flags. If you're starting from scratch, use Option 1 (`evm-cloud init`) — the wizard handles everything including bootstrap.
+:::
+
+### Option 3: Bootstrap with CLI Flags (No TOML)
+
+For CI pipelines or one-off setups where you don't want to write a `[state]` section first:
+
+```bash
+evm-cloud bootstrap \
+  --backend s3 \
+  --bucket myorg-terraform-state \
+  --region us-east-1 \
+  --dynamodb-table myorg-terraform-locks \
+  --name my-indexer
+```
+
+All flags:
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--backend` | Yes | `s3` or `gcs` |
+| `--bucket` | Yes | S3/GCS bucket name |
+| `--region` | Yes | AWS region or GCS location |
+| `--dynamodb-table` | S3 only | DynamoDB lock table name |
+| `--name` | If no TOML | Project name (used in state key and `.tfbackend` filename) |
+| `--dry-run` | No | Print commands without executing |
+| `--dir` | No | Project directory (default: `.`) |
+
+CLI flags override TOML values when both are present. The CLI warns when flag values diverge from TOML.
+
+---
+
+## The Wizard Fallback
+
+If you run `evm-cloud bootstrap` without a `[state]` section in your TOML **and** without CLI flags, the CLI enters an interactive wizard:
+
+```bash
+evm-cloud bootstrap
+# No [state] configured. Starting state setup wizard...
+# ? State backend: s3 / gcs
+# ? S3 bucket name: myorg-terraform-state
+# ? AWS region: us-east-1
+# ? DynamoDB lock table: myorg-terraform-locks
+```
+
+The wizard writes the collected values back to `evm-cloud.toml` as a `[state]` section, then proceeds with resource creation.
+
+In non-interactive shells (no TTY), the CLI exits with an error and tells you which flags to provide.
+
+---
+
+## `--dry-run`
+
+Preview the exact AWS/GCP CLI commands that would run, without creating anything:
+
+```bash
+evm-cloud bootstrap --dry-run
+```
+
+```
+🏰 ⚒️  Bootstrapping S3 state backend (us-east-1)
+🏖️  Dry run — mutations will be printed only
+     [dry-run] would run: aws s3api create-bucket --bucket myorg-terraform-state --region us-east-1
+     [dry-run] would run: aws s3api put-public-access-block --bucket myorg-terraform-state ...
+     [dry-run] would run: aws s3api put-bucket-versioning --bucket myorg-terraform-state ...
+     [dry-run] would run: aws s3api put-bucket-encryption --bucket myorg-terraform-state ...
+     [dry-run] would run: aws dynamodb create-table --table-name myorg-terraform-locks ...
+🏖️  No resources were created
+```
+
+Read-only checks (does the bucket exist?) still run in dry-run mode — only mutations are skipped.
+
+---
+
+## Auto-Injection of `-backend-config`
+
+You never need to manually pass `-backend-config` to Terraform. The CLI handles it automatically in three places:
+
+| Command | When It Injects |
+|---------|----------------|
+| `evm-cloud init` | Always, if a single `.tfbackend` file exists in the terraform directory |
+| `evm-cloud deploy` | On first init (no `.terraform/` directory) or when `-reconfigure` / `-migrate-state` is passed |
+| `evm-cloud apply` | Same as deploy |
+
+The detection logic:
+- Scans the terraform working directory for `*.tfbackend` files
+- If **exactly one** is found, injects `-backend-config=<filename>`
+- If **zero** are found, skips injection (local backend or manual setup)
+- If **two or more** are found, skips injection and prints a warning — you must select one explicitly
+
+:::warning
+When multiple `.tfbackend` files exist (e.g. `dev.s3.tfbackend` and `prod.s3.tfbackend`), auto-injection is disabled. Pass the file explicitly:
+
+```bash
+evm-cloud deploy -- -backend-config=prod.s3.tfbackend
+```
+:::
+
+---
+
+## Generated File Locations
+
+The `.tfbackend` file is written to the **terraform working directory**, which differs by mode:
+
+| Mode | Terraform Directory | `.tfbackend` Location |
+|------|--------------------|-----------------------|
+| **Easy** | `.evm-cloud/` | `.evm-cloud/my-indexer.s3.tfbackend` |
+| **Power** | Project root | `./my-indexer.s3.tfbackend` |
+
+The filename follows the pattern `<project-name>.<backend-type>.tfbackend`.
+
+---
+
+## Multi-Environment Setup
+
+For separate staging/production environments, keep a single `evm-cloud.toml` and create per-env `.tfbackend` files with different state keys:
+
+```
+my-project/
+├── evm-cloud.toml                     # shared config
+├── envs/
+│   ├── dev.s3.tfbackend               # key = "dev/terraform.tfstate"
+│   ├── dev.tfvars                     # smaller instances, fewer replicas
+│   ├── prod.s3.tfbackend              # key = "prod/terraform.tfstate"
+│   └── prod.tfvars                    # production sizing
+└── .evm-cloud/                        # Easy mode (or versions.tf for Power)
+```
+
+```hcl
+# envs/dev.s3.tfbackend
+bucket         = "myorg-terraform-state"
+key            = "dev/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "myorg-terraform-locks"
+encrypt        = true
+```
+
+Both environments share the same S3 bucket and DynamoDB table — the `key` prefix isolates their state. Run `evm-cloud bootstrap` once (it's idempotent) to create the shared resources.
+
+Deploy to a specific environment using `--tf-args`:
+
+```bash
+# Deploy to dev
+evm-cloud deploy --tf-args='-backend-config=envs/dev.s3.tfbackend -var-file=envs/dev.tfvars'
+
+# Deploy to prod (first time or switching from another env)
+evm-cloud deploy --tf-args='-reconfigure -backend-config=envs/prod.s3.tfbackend -var-file=envs/prod.tfvars'
+```
+
+:::warning
+Switching between environments requires `-reconfigure` because Terraform caches the active backend in `.terraform/`. Without it, Terraform silently uses the last-configured backend.
+:::
+
+:::tip
+A dedicated `--env` flag is planned to eliminate the `-reconfigure` boilerplate. Track progress in the project roadmap.
+:::
+
+---
+
+## Related Pages
+
+- **[State Management](./state-management.mdx)** — TOML `[state]` configuration, IAM permissions, backend migration, and troubleshooting
+- **[CLI Reference](/docs/cli-reference#bootstrap)** — Full `bootstrap` command flags
+- **[Getting Started](/docs/getting-started)** — First deployment walkthrough
+- **[Production Checklist](./production-checklist.mdx)** — Includes remote state as a production requirement

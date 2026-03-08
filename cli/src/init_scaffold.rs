@@ -114,7 +114,7 @@ pub(crate) fn scaffold_project(
     if matches!(answers.mode, InitMode::Power) {
         write_atomic(
             &project_root.join("versions.tf"),
-            &init_templates::render_versions_tf(),
+            &init_templates::render_versions_tf(answers.state_config.as_ref()),
         )?;
         write_atomic(
             &project_root.join("main.tf"),
@@ -128,6 +128,14 @@ pub(crate) fn scaffold_project(
             &project_root.join("outputs.tf"),
             &init_templates::render_outputs_tf(),
         )?;
+
+        // Generate .tfbackend at project root for Power mode.
+        if let Some(ref state) = answers.state_config {
+            let mut resolved = state.clone();
+            resolved.resolve_defaults(&answers.project_name);
+            let filename = resolved.tfbackend_filename(&answers.project_name);
+            write_atomic(&project_root.join(&filename), &resolved.render_tfbackend())?;
+        }
     }
 
     write_atomic(

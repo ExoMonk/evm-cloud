@@ -6,7 +6,7 @@ use clap::ValueEnum;
 use serde::Deserialize;
 
 use crate::config::schema::{
-    ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode, WorkloadMode,
+    ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode, StateConfig, WorkloadMode,
 };
 use crate::error::{CliError, Result};
 
@@ -67,6 +67,8 @@ pub(crate) struct InitAnswers {
     pub(crate) ingress_mode: IngressMode,
     pub(crate) erpc_hostname: Option<String>,
     pub(crate) ingress_tls_email: Option<String>,
+    pub(crate) state_config: Option<StateConfig>,
+    pub(crate) auto_bootstrap: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,6 +89,8 @@ struct AnswersFile {
     ingress_mode: Option<IngressMode>,
     erpc_hostname: Option<String>,
     ingress_tls_email: Option<String>,
+    #[serde(default)]
+    state: Option<StateConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -150,6 +154,8 @@ fn from_runtime_config(config: EvmCloudConfig) -> InitAnswers {
         ingress_mode: config.ingress.mode,
         erpc_hostname: config.ingress.domain,
         ingress_tls_email: config.ingress.tls_email,
+        state_config: config.state,
+        auto_bootstrap: false,
     }
 }
 
@@ -245,6 +251,8 @@ fn from_answers_file(file: AnswersFile, mode_override: Option<InitMode>) -> Resu
         ingress_mode,
         erpc_hostname: file.erpc_hostname.map(|h| sanitize_hostname(&h)),
         ingress_tls_email: file.ingress_tls_email,
+        state_config: file.state,
+        auto_bootstrap: false,
     })
 }
 

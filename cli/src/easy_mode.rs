@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::codegen::scaffold;
+use crate::codegen::scaffold::{self, TfbackendResult};
 use crate::codegen::tfvars;
 use crate::codegen::ScaffoldResult;
 use crate::config::loader;
@@ -37,9 +37,23 @@ fn prepare_workspace_inner(
     }
 
     tfvars::generate_tfvars(&config, project_root)?;
-    let scaffold_result = scaffold::generate_main_tf(&config, project_root)?;
+    let main_tf_result = scaffold::generate_main_tf(&config, project_root)?;
+    let tfbackend_result = scaffold::generate_tfbackend(&config, project_root)?;
     scaffold::generate_variables_tf(&config, project_root)?;
     scaffold::generate_outputs_tf(project_root)?;
+
+    // Composite change detection:
+    // - main.tf backend type change → BackendChanged (hard stop)
+    // - tfbackend values changed → BackendChanged (needs -reconfigure)
+    // - Both first-write → Written
+    // - Both unchanged → Unchanged
+    let scaffold_result = match (&main_tf_result, &tfbackend_result) {
+        (ScaffoldResult::BackendChanged, _) => ScaffoldResult::BackendChanged,
+        (_, TfbackendResult::Changed(_)) => ScaffoldResult::BackendChanged,
+        (ScaffoldResult::Written, _) => ScaffoldResult::Written,
+        (ScaffoldResult::Unchanged, TfbackendResult::Written(_)) => ScaffoldResult::Written,
+        _ => ScaffoldResult::Unchanged,
+    };
 
     if let Some(c) = color {
         output::success("Generated .evm-cloud terraform bridge files", c);
@@ -103,13 +117,14 @@ pub(crate) fn warn_backend_changed(project_root: &Path) -> Result<()> {
     eprintln!("       To migrate existing state instead, run manually:");
     eprintln!("         terraform -chdir=.evm-cloud init -migrate-state");
 
-    // Commit the new main.tf so terraform init picks up the new backend config.
+    // Commit the new main.tf and tfbackend so terraform init picks up the new backend config.
     let config_path = project_root.join("evm-cloud.toml");
     let mut config = loader::load(&config_path)?;
     if let Some(ref mut state) = config.state {
         state.resolve_defaults(&config.project.name);
     }
-    scaffold::commit_main_tf(&config, project_root)
+    scaffold::commit_main_tf(&config, project_root)?;
+    scaffold::commit_tfbackend(&config, project_root)
 }
 
 fn emit_state_warnings(state: &StateConfig, scaffold_result: ScaffoldResult) {

@@ -3,7 +3,9 @@ use std::path::Path;
 
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
-use crate::config::schema::{ComputeEngine, InfrastructureProvider, IngressMode, WorkloadMode};
+use crate::config::schema::{
+    ComputeEngine, InfrastructureProvider, IngressMode, StateConfig, WorkloadMode,
+};
 use crate::error::{CliError, Result};
 use crate::init_answers::{
     load_from_config, DatabaseProfile, IndexerConfigStrategy, InitAnswers, InitMode,
@@ -227,6 +229,10 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         (Some(hostname), email)
     };
 
+    // -- Remote state --
+    let (state_config, auto_bootstrap) =
+        collect_state_answers(&theme, &project_name, &region)?;
+
     Ok(InitAnswers {
         mode,
         project_name,
@@ -243,6 +249,8 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
         ingress_mode,
         erpc_hostname,
         ingress_tls_email,
+        state_config,
+        auto_bootstrap,
     })
 }
 
@@ -309,4 +317,244 @@ fn sanitize_hostname(raw: &str) -> String {
         .or_else(|| s.strip_prefix("http://"))
         .unwrap_or(s);
     s.trim_end_matches('/').to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Remote state wizard
+// ---------------------------------------------------------------------------
+
+pub(crate) fn collect_state_answers(
+    theme: &ColorfulTheme,
+    project_name: &str,
+    region: &Option<String>,
+) -> Result<(Option<StateConfig>, bool)> {
+    let want_state = Confirm::with_theme(theme)
+        .with_prompt("Configure remote Terraform state? (recommended for production)")
+        .default(false)
+        .interact()
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+
+    if !want_state {
+        return Ok((None, false));
+    }
+
+    let backend_options = ["S3 (AWS)", "GCS (Google Cloud)"];
+    let backend_idx = Select::with_theme(theme)
+        .with_prompt("State backend")
+        .items(&backend_options)
+        .default(0)
+        .interact()
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+
+    let state_config = if backend_idx == 0 {
+        collect_s3_state(theme, project_name, region)?
+    } else {
+        collect_gcs_state(theme, project_name)?
+    };
+
+    let resource_desc = match &state_config {
+        StateConfig::S3 { .. } => "S3 bucket + DynamoDB table",
+        StateConfig::Gcs { .. } => "GCS bucket",
+    };
+
+    let auto_bootstrap = Confirm::with_theme(theme)
+        .with_prompt(format!(
+            "Create the state backend resources now? ({resource_desc})"
+        ))
+        .default(true)
+        .interact()
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+
+    Ok((Some(state_config), auto_bootstrap))
+}
+
+fn collect_s3_state(
+    theme: &ColorfulTheme,
+    project_name: &str,
+    region: &Option<String>,
+) -> Result<StateConfig> {
+    let default_bucket = sanitize_bucket_name(&format!("{project_name}-terraform-state"));
+    let bucket: String = Input::with_theme(theme)
+        .with_prompt("S3 bucket name")
+        .default(default_bucket)
+        .validate_with(validate_bucket_name)
+        .interact_text()
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+
+    let default_table = sanitize_bucket_name(&format!("{project_name}-terraform-locks"));
+    let dynamodb_table: String = Input::with_theme(theme)
+        .with_prompt("DynamoDB lock table name")
+        .default(default_table)
+        .validate_with(validate_bucket_name)
+        .interact_text()
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+
+    let state_region: String = if let Some(r) = region {
+        Input::with_theme(theme)
+            .with_prompt("AWS region for state backend")
+            .default(r.clone())
+            .interact_text()
+            .map_err(|err| CliError::PromptFailed(err.to_string()))?
+    } else {
+        // BareMetal + S3: no default region — always prompt (constraint #7)
+        Input::with_theme(theme)
+            .with_prompt("AWS region for state backend")
+            .interact_text()
+            .map_err(|err| CliError::PromptFailed(err.to_string()))?
+    };
+
+    Ok(StateConfig::S3 {
+        bucket,
+        dynamodb_table,
+        region: state_region,
+        key: None,
+        encrypt: true,
+    })
+}
+
+fn collect_gcs_state(theme: &ColorfulTheme, project_name: &str) -> Result<StateConfig> {
+    let default_bucket = sanitize_bucket_name(&format!("{project_name}-terraform-state"));
+    let bucket: String = Input::with_theme(theme)
+        .with_prompt("GCS bucket name")
+        .default(default_bucket)
+        .validate_with(validate_bucket_name)
+        .interact_text()
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+
+    let gcs_region: String = Input::with_theme(theme)
+        .with_prompt("GCS region (e.g. us-central1, EU, US)")
+        .default("US".to_string())
+        .validate_with(validate_gcs_region)
+        .interact_text()
+        .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+
+    Ok(StateConfig::Gcs {
+        bucket,
+        region: gcs_region,
+        prefix: None,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Validation helpers
+// ---------------------------------------------------------------------------
+
+pub(crate) fn sanitize_bucket_name(raw: &str) -> String {
+    let sanitized: String = raw
+        .to_lowercase()
+        .replace(['_', '.'], "-")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+        .take(63)
+        .collect();
+    sanitized.trim_matches('-').to_string()
+}
+
+#[allow(clippy::ptr_arg)] // dialoguer's InputValidator requires &String
+fn validate_bucket_name(input: &String) -> std::result::Result<(), String> {
+    let len = input.len();
+    if !(3..=63).contains(&len) {
+        return Err("Must be 3-63 characters".to_string());
+    }
+    let valid = input
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if !valid {
+        return Err("Only lowercase letters, digits, and hyphens allowed".to_string());
+    }
+    if input.starts_with('-') || input.ends_with('-') {
+        return Err("Must not start or end with a hyphen".to_string());
+    }
+    Ok(())
+}
+
+#[allow(clippy::ptr_arg)] // dialoguer's InputValidator requires &String
+fn validate_gcs_region(input: &String) -> std::result::Result<(), String> {
+    let r = input.trim();
+    // Multi-region values
+    let multi_regions = ["US", "EU", "ASIA"];
+    if multi_regions.contains(&r) {
+        return Ok(());
+    }
+    // Dual-region patterns (e.g. NAM4, EUR4)
+    if matches!(r, "NAM4" | "EUR4" | "EUR7" | "EUR12") {
+        return Ok(());
+    }
+    // Standard regions: continent-direction-number (e.g. us-central1, europe-west1, asia-east1)
+    let parts: Vec<&str> = r.split('-').collect();
+    if parts.len() >= 2 {
+        let valid_prefixes = [
+            "us", "europe", "asia", "northamerica", "southamerica", "australia", "me", "africa",
+        ];
+        if valid_prefixes.iter().any(|p| parts[0] == *p) {
+            return Ok(());
+        }
+    }
+    Err(format!(
+        "Unknown GCS region '{r}'. Expected: US, EU, ASIA, or a region like us-central1, europe-west1"
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_bucket_name_lowercases_and_replaces() {
+        assert_eq!(sanitize_bucket_name("My_Project.Name"), "my-project-name");
+    }
+
+    #[test]
+    fn sanitize_bucket_name_trims_hyphens() {
+        assert_eq!(sanitize_bucket_name("-foo-"), "foo");
+    }
+
+    #[test]
+    fn sanitize_bucket_name_truncates_to_63() {
+        let long = "a".repeat(100);
+        assert_eq!(sanitize_bucket_name(&long).len(), 63);
+    }
+
+    #[test]
+    fn sanitize_bucket_name_strips_invalid_chars() {
+        assert_eq!(sanitize_bucket_name("hello@world!"), "helloworld");
+    }
+
+    #[test]
+    fn validate_bucket_name_accepts_valid() {
+        assert!(validate_bucket_name(&"my-bucket-123".to_string()).is_ok());
+    }
+
+    #[test]
+    fn validate_bucket_name_rejects_too_short() {
+        assert!(validate_bucket_name(&"ab".to_string()).is_err());
+    }
+
+    #[test]
+    fn validate_bucket_name_rejects_uppercase() {
+        assert!(validate_bucket_name(&"My-Bucket".to_string()).is_err());
+    }
+
+    #[test]
+    fn validate_bucket_name_rejects_leading_hyphen() {
+        assert!(validate_bucket_name(&"-my-bucket".to_string()).is_err());
+    }
+
+    #[test]
+    fn validate_gcs_region_accepts_multi_region() {
+        assert!(validate_gcs_region(&"US".to_string()).is_ok());
+        assert!(validate_gcs_region(&"EU".to_string()).is_ok());
+        assert!(validate_gcs_region(&"ASIA".to_string()).is_ok());
+    }
+
+    #[test]
+    fn validate_gcs_region_accepts_standard() {
+        assert!(validate_gcs_region(&"us-central1".to_string()).is_ok());
+        assert!(validate_gcs_region(&"europe-west1".to_string()).is_ok());
+    }
+
+    #[test]
+    fn validate_gcs_region_rejects_unknown() {
+        assert!(validate_gcs_region(&"mars-north1".to_string()).is_err());
+    }
 }

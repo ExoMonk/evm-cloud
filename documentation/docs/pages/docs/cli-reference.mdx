@@ -92,13 +92,18 @@ For most workflows, use `evm-cloud deploy` instead — it runs terraform **and**
 
 ### `bootstrap`
 
-Create prerequisite cloud resources for the remote state backend configured in `[state]`.
+Create prerequisite cloud resources for the remote state backend. Reads from `[state]` in `evm-cloud.toml`, CLI flags, or an interactive wizard.
 
 ```bash
 evm-cloud bootstrap [OPTIONS]
 
   -d, --dir <path>              Project directory (default: .)
   --dry-run                     Print commands without executing (read-only checks still run)
+  --name <name>                 Project name (overrides TOML value)
+  --backend <s3|gcs>            State backend type
+  --bucket <name>               S3/GCS bucket name
+  --region <region>             AWS region or GCS location
+  --dynamodb-table <name>       DynamoDB lock table (S3 backend only)
 ```
 
 Reads `[state]` from `evm-cloud.toml` and creates:
@@ -112,16 +117,26 @@ Reads `[state]` from `evm-cloud.toml` and creates:
 
 **Prerequisites**: Requires `aws` CLI (for S3 backend) or `gcloud` CLI (for GCS backend) on PATH with valid credentials.
 
+In addition to creating cloud resources, bootstrap generates a `.tfbackend` file in the terraform working directory. The CLI auto-injects this file during `terraform init` — no manual `-backend-config` flag needed.
+
 ```bash
 # Typical workflow
-evm-cloud bootstrap          # Create S3 bucket + DynamoDB table
-evm-cloud init                # Initialize Terraform with remote backend
+evm-cloud bootstrap          # Create S3 bucket + DynamoDB table, generate .tfbackend
+evm-cloud init                # Initialize Terraform (auto-detects .tfbackend)
 evm-cloud deploy              # Deploy infrastructure
 ```
 
+```bash
+# CI / non-interactive (no evm-cloud.toml [state] needed)
+evm-cloud bootstrap --backend s3 --bucket myorg-tf-state \
+  --region us-east-1 --dynamodb-table myorg-tf-locks --name my-indexer
+```
+
 :::tip
-Use `--dry-run` to preview the exact AWS/GCP CLI commands that will run before creating any resources.
+Use `--dry-run` to preview the exact AWS/GCP CLI commands that will run before creating any resources. Read-only checks (bucket existence) still execute.
 :::
+
+For the full `.tfbackend` flow (auto-injection, multi-environment, wizard fallback), see [Remote State & `.tfbackend` Files](./guides/remote-state.mdx).
 
 ### `destroy`
 

@@ -17,6 +17,39 @@ pub(crate) struct TerraformRunner {
     binary_path: PathBuf,
 }
 
+/// Find a single `.tfbackend` file in `dir` (non-recursive).
+/// Returns the **filename only** (not full path) since Terraform runs with
+/// `current_dir(dir)` and resolves `-backend-config` relative to its cwd.
+/// Returns `None` if zero or 2+ files found (ambiguous).
+pub(crate) fn find_tfbackend(dir: &Path) -> Option<PathBuf> {
+    let (found, count) = find_tfbackend_inner(dir);
+    if count > 1 {
+        return None;
+    }
+    found
+}
+
+/// Returns (filename_only, total_count) of `.tfbackend` files in `dir`.
+fn find_tfbackend_inner(dir: &Path) -> (Option<PathBuf>, usize) {
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return (None, 0),
+    };
+    let mut first: Option<PathBuf> = None;
+    let mut count = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("tfbackend") && path.is_file() {
+            count += 1;
+            if first.is_none() {
+                // Store filename only — terraform runs with current_dir(dir).
+                first = path.file_name().map(PathBuf::from);
+            }
+        }
+    }
+    (first, count)
+}
+
 #[derive(Deserialize)]
 struct TerraformVersionJson {
     terraform_version: String,
@@ -58,13 +91,47 @@ impl TerraformRunner {
         self.run_captured(dir, &args)
     }
 
-    /// Skip init if `.terraform/` already exists (modules already downloaded).
-    /// Forces re-init when passthrough args are provided (e.g. `-reconfigure`).
+    /// Skip init if `.terraform/` already exists and no passthrough args.
+    /// Auto-injects `-backend-config=<file>` on first init or reconfigure.
     pub(crate) fn init_if_needed(&self, dir: &Path, passthrough_args: &[String]) -> Result<bool> {
-        if passthrough_args.is_empty() && dir.join(".terraform").is_dir() {
+        let terraform_exists = dir.join(".terraform").is_dir();
+
+        // Fast path: already initialized and caller has no special flags.
+        if terraform_exists && passthrough_args.is_empty() {
             return Ok(false);
         }
-        self.init(dir, passthrough_args)?;
+
+        let mut args = Vec::new();
+
+        // Auto-add -backend-config on first init or reconfigure/migrate.
+        let has_reconfigure = passthrough_args.iter().any(|a| {
+            a == "-reconfigure"
+                || a == "--reconfigure"
+                || a == "-migrate-state"
+                || a == "--migrate-state"
+        });
+
+        if !terraform_exists || has_reconfigure {
+            let (found, count) = find_tfbackend_inner(dir);
+            match count.cmp(&1) {
+                std::cmp::Ordering::Equal => {
+                    if let Some(tfbackend) = found {
+                        args.push(format!("-backend-config={}", tfbackend.display()));
+                    }
+                }
+                std::cmp::Ordering::Greater => {
+                    eprintln!(
+                        "     ⚠ Found {} .tfbackend files — skipping auto-injection. \
+                         Pass --tf-args='-backend-config=<file>' to select one.",
+                        count
+                    );
+                }
+                std::cmp::Ordering::Less => {}
+            }
+        }
+
+        args.extend_from_slice(passthrough_args);
+        self.init(dir, &args)?;
         Ok(true)
     }
 
@@ -456,4 +523,50 @@ fn parse_version(version_str: &str) -> Option<(u32, u32, u32)> {
 
     let patch = patch_digits.parse::<u32>().ok()?;
     Some((major, minor, patch))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tfbackend_test_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir()
+            .join("evm-cloud-tf-test")
+            .join(name)
+            .join(format!("{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn find_tfbackend_none_when_empty_dir() {
+        let dir = tfbackend_test_dir("empty");
+        assert!(find_tfbackend(&dir).is_none());
+    }
+
+    #[test]
+    fn find_tfbackend_returns_single_file() {
+        let dir = tfbackend_test_dir("single");
+        std::fs::write(dir.join("project.s3.tfbackend"), "bucket = \"b\"\n").unwrap();
+        let result = find_tfbackend(&dir);
+        assert!(result.is_some());
+        assert!(result.unwrap().ends_with("project.s3.tfbackend"));
+    }
+
+    #[test]
+    fn find_tfbackend_none_when_multiple_files() {
+        let dir = tfbackend_test_dir("multiple");
+        std::fs::write(dir.join("dev.s3.tfbackend"), "bucket = \"dev\"\n").unwrap();
+        std::fs::write(dir.join("prod.s3.tfbackend"), "bucket = \"prod\"\n").unwrap();
+        assert!(find_tfbackend(&dir).is_none());
+    }
+
+    #[test]
+    fn find_tfbackend_ignores_non_tfbackend_files() {
+        let dir = tfbackend_test_dir("non-tfbackend");
+        std::fs::write(dir.join("main.tf"), "terraform {}\n").unwrap();
+        std::fs::write(dir.join("project.s3.tfbackend"), "bucket = \"b\"\n").unwrap();
+        let result = find_tfbackend(&dir);
+        assert!(result.is_some());
+    }
 }

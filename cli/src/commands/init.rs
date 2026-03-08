@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use clap::Args;
 
+use crate::commands::bootstrap;
+use crate::config::loader;
 use crate::easy_mode;
 use crate::error::{CliError, Result};
 use crate::examples;
@@ -30,6 +32,9 @@ pub(crate) struct InitArgs {
     force: bool,
     #[arg(long, value_enum)]
     mode: Option<InitMode>,
+    /// Create state backend resources after scaffolding (for non-interactive mode)
+    #[arg(long)]
+    bootstrap: bool,
     #[arg(long)]
     skip_terraform_init: bool,
     #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
@@ -118,6 +123,8 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
     let preflight = preflight::run_checks(&args.dir, allow_raw_terraform);
 
     let mut needs_reconfigure = false;
+    let mut should_bootstrap = false;
+    let mut project_root = args.dir.clone();
 
     let terraform_dir = match preflight {
         Ok(preflight) => {
@@ -127,12 +134,53 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
                 });
             }
 
+            project_root = preflight.resolved_root.clone();
+
             if args.force {
-                let answers = init_wizard::collect_answers(
+                // Extract existing [state] before overwrite (works with both full and minimal TOMLs)
+                let toml_path = preflight.resolved_root.join("evm-cloud.toml");
+                let existing_state = if toml_path.exists() {
+                    loader::load_for_bootstrap(&toml_path)
+                        .ok()
+                        .and_then(|(_, s)| s)
+                } else {
+                    None
+                };
+
+                // Guard: warn if existing TOML has [state]
+                if existing_state.is_some() {
+                    if args.non_interactive {
+                        output::warn(
+                            "Overwriting existing [state] config (remote resources are NOT deleted)",
+                            color,
+                        );
+                    } else {
+                        let overwrite = dialoguer::Confirm::new()
+                            .with_prompt("Existing [state] config will be overwritten (remote resources are NOT deleted). Continue?")
+                            .default(false)
+                            .interact()
+                            .unwrap_or(false);
+                        if !overwrite {
+                            return Ok(());
+                        }
+                    }
+                }
+
+                let mut answers = init_wizard::collect_answers(
                     args.config.as_deref(),
                     args.non_interactive,
                     args.mode,
                 )?;
+                should_bootstrap = answers.auto_bootstrap || args.bootstrap;
+
+                // Preserve existing [state] if wizard didn't collect one
+                if answers.state_config.is_none() {
+                    if let Some(state) = existing_state {
+                        output::checkline("Preserving existing [state] from evm-cloud.toml", color);
+                        answers.state_config = Some(state);
+                    }
+                }
+
                 init_scaffold::scaffold_project(&preflight.resolved_root, &answers, true, color)?;
             }
 
@@ -152,11 +200,28 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
             }
         }
         Err(CliError::NoProjectDetected { .. }) => {
-            let answers = init_wizard::collect_answers(
+            let mut answers = init_wizard::collect_answers(
                 args.config.as_deref(),
                 args.non_interactive,
                 args.mode,
             )?;
+            should_bootstrap = answers.auto_bootstrap || args.bootstrap;
+
+            // Preserve existing [state] if wizard didn't collect one
+            // (e.g. user ran `evm-cloud bootstrap` first with a minimal TOML)
+            if answers.state_config.is_none() {
+                let toml_path = args.dir.join("evm-cloud.toml");
+                if toml_path.exists() {
+                    if let Ok((_, Some(state))) = loader::load_for_bootstrap(&toml_path) {
+                        output::checkline(
+                            "Preserving existing [state] from evm-cloud.toml",
+                            color,
+                        );
+                        answers.state_config = Some(state);
+                    }
+                }
+            }
+
             init_scaffold::scaffold_project(&args.dir, &answers, args.force, color)?;
 
             match answers.mode {
@@ -178,6 +243,20 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
         Err(other) => return Err(other),
     };
 
+    // Auto-bootstrap state backend if requested.
+    // Use project_root (not terraform_dir) because in Easy mode terraform_dir is .evm-cloud/
+    // but evm-cloud.toml lives at the project root.
+    if should_bootstrap {
+        if let Err(err) = bootstrap::run_inline(&project_root, color) {
+            output::warn(
+                &format!(
+                    "Bootstrap failed: {err}. Run 'evm-cloud bootstrap' to retry after resolving the issue."
+                ),
+                color,
+            );
+        }
+    }
+
     if args.skip_terraform_init {
         output::headline(
             &format!(
@@ -196,6 +275,12 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
         && !init_args.iter().any(|a| a == "-reconfigure" || a == "-migrate-state")
     {
         init_args.push("-reconfigure".to_string());
+    }
+
+    // Auto-add -backend-config if a .tfbackend file exists in the terraform dir.
+    // NOTE: This calls runner.init() directly (not init_if_needed), so no double injection.
+    if let Some(tfbackend) = crate::terraform::find_tfbackend(&terraform_dir) {
+        init_args.insert(0, format!("-backend-config={}", tfbackend.display()));
     }
 
     output::with_terraforming(color, || runner.init(&terraform_dir, &init_args))?;

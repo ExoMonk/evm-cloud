@@ -116,46 +116,86 @@ pub(crate) fn backup_state_file(project_root: &Path) -> Result<Option<std::path:
     Ok(Some(backup_path))
 }
 
+/// Render an empty backend block for the HCL `terraform {}` stanza.
+/// Actual values live in a `.tfbackend` file, loaded via `terraform init -backend-config=<file>`.
 fn render_backend_hcl(state: &StateConfig) -> String {
-    match state {
-        StateConfig::S3 {
-            bucket,
-            dynamodb_table,
-            region,
-            key,
-            encrypt,
-        } => {
-            let key_str = key.as_deref().unwrap_or("terraform.tfstate");
-            format!(
-                "  backend \"s3\" {{\n\
-                 \x20   bucket         = \"{bucket}\"\n\
-                 \x20   key            = \"{key_str}\"\n\
-                 \x20   region         = \"{region}\"\n\
-                 \x20   dynamodb_table = \"{dynamodb_table}\"\n\
-                 \x20   encrypt        = {encrypt}\n\
-                 \x20 }}\n"
-            )
-        }
-        // `region` is intentionally excluded — the Terraform GCS backend does not accept it.
-        // It's stored in the schema only to drive `gcloud storage buckets create --location`.
-        StateConfig::Gcs { bucket, prefix, .. } => {
-            let prefix_str = prefix.as_deref().unwrap_or("");
-            if prefix_str.is_empty() {
-                format!(
-                    "  backend \"gcs\" {{\n\
-                     \x20   bucket = \"{bucket}\"\n\
-                     \x20 }}\n"
-                )
-            } else {
-                format!(
-                    "  backend \"gcs\" {{\n\
-                     \x20   bucket = \"{bucket}\"\n\
-                     \x20   prefix = \"{prefix_str}\"\n\
-                     \x20 }}\n"
-                )
-            }
+    format!("  backend \"{}\" {{}}\n", state.backend_type())
+}
+
+/// Result of `.tfbackend` file generation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TfbackendResult {
+    /// No state config — nothing to generate.
+    None,
+    /// File written for the first time.
+    Written(std::path::PathBuf),
+    /// File existed but content changed (backend values updated).
+    Changed(std::path::PathBuf),
+    /// File existed and content is identical.
+    Unchanged(std::path::PathBuf),
+}
+
+/// Generate a `.tfbackend` file with backend configuration values.
+/// Cleans up stale `.tfbackend` files from a different backend type.
+pub(crate) fn generate_tfbackend(
+    config: &EvmCloudConfig,
+    project_root: &Path,
+) -> Result<TfbackendResult> {
+    let state = match config.state.as_ref() {
+        Some(s) => s,
+        None => return Ok(TfbackendResult::None),
+    };
+
+    let mut resolved = state.clone();
+    resolved.resolve_defaults(&config.project.name);
+
+    let filename = resolved.tfbackend_filename(&config.project.name);
+    let dir = project_root.join(GENERATED_DIR);
+    let path = dir.join(&filename);
+    let contents = resolved.render_tfbackend();
+
+    // Clean up stale tfbackend from a different backend type.
+    let stale_backend = match state.backend_type() {
+        "s3" => Some("gcs"),
+        "gcs" => Some("s3"),
+        _ => None, // Unknown backend — skip stale cleanup rather than panicking.
+    };
+    if let Some(stale_backend) = stale_backend {
+        let stale = dir.join(format!("{}.{stale_backend}.tfbackend", config.project.name));
+        if stale.exists() {
+            let _ = fs::remove_file(&stale);
         }
     }
+
+    let old_contents = fs::read_to_string(&path).ok();
+    if old_contents.as_deref() == Some(&contents) {
+        return Ok(TfbackendResult::Unchanged(path));
+    }
+
+    let result = if old_contents.is_some() {
+        TfbackendResult::Changed(path.clone())
+    } else {
+        TfbackendResult::Written(path.clone())
+    };
+
+    write_atomic(&path, &contents)?;
+    Ok(result)
+}
+
+/// Write `.tfbackend` file unconditionally, skipping change detection.
+/// Used after `warn_backend_changed()` to commit the new values.
+pub(crate) fn commit_tfbackend(config: &EvmCloudConfig, project_root: &Path) -> Result<()> {
+    let state = match config.state.as_ref() {
+        Some(s) => s,
+        None => return Ok(()),
+    };
+
+    let mut resolved = state.clone();
+    resolved.resolve_defaults(&config.project.name);
+
+    let filename = resolved.tfbackend_filename(&config.project.name);
+    let path = project_root.join(GENERATED_DIR).join(&filename);
+    write_atomic(&path, &resolved.render_tfbackend())
 }
 
 /// Detect whether the backend configuration changed between old and new main.tf content.
@@ -198,7 +238,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn renders_s3_backend_hcl() {
+    fn renders_s3_backend_hcl_empty_block() {
         let state = StateConfig::S3 {
             bucket: "my-bucket".to_string(),
             dynamodb_table: "my-lock".to_string(),
@@ -207,38 +247,18 @@ mod tests {
             encrypt: true,
         };
         let hcl = render_backend_hcl(&state);
-        assert!(hcl.contains("backend \"s3\""));
-        assert!(hcl.contains("bucket         = \"my-bucket\""));
-        assert!(hcl.contains("key            = \"demo/terraform.tfstate\""));
-        assert!(hcl.contains("region         = \"us-east-1\""));
-        assert!(hcl.contains("dynamodb_table = \"my-lock\""));
-        assert!(hcl.contains("encrypt        = true"));
+        assert_eq!(hcl.trim(), "backend \"s3\" {}");
     }
 
     #[test]
-    fn renders_gcs_backend_hcl() {
+    fn renders_gcs_backend_hcl_empty_block() {
         let state = StateConfig::Gcs {
             bucket: "my-bucket".to_string(),
             region: "us-central1".to_string(),
             prefix: Some("demo".to_string()),
         };
         let hcl = render_backend_hcl(&state);
-        assert!(hcl.contains("backend \"gcs\""));
-        assert!(hcl.contains("bucket = \"my-bucket\""));
-        assert!(hcl.contains("prefix = \"demo\""));
-    }
-
-    #[test]
-    fn renders_gcs_without_prefix() {
-        let state = StateConfig::Gcs {
-            bucket: "my-bucket".to_string(),
-            region: "us-central1".to_string(),
-            prefix: None,
-        };
-        let hcl = render_backend_hcl(&state);
-        assert!(hcl.contains("backend \"gcs\""));
-        assert!(hcl.contains("bucket = \"my-bucket\""));
-        assert!(!hcl.contains("prefix"));
+        assert_eq!(hcl.trim(), "backend \"gcs\" {}");
     }
 
     #[test]
@@ -373,11 +393,9 @@ key = "test/terraform.tfstate"
         assert_eq!(result, ScaffoldResult::Written);
 
         let content = std::fs::read_to_string(dir.join(GENERATED_DIR).join("main.tf")).unwrap();
-        assert!(content.contains("backend \"s3\""));
-        assert!(content.contains("bucket         = \"my-state\""));
-        assert!(content.contains("dynamodb_table = \"my-lock\""));
-        assert!(content.contains("key            = \"test/terraform.tfstate\""));
-        assert!(content.contains("encrypt        = true"));
+        assert!(content.contains("backend \"s3\" {}"), "expected empty backend block");
+        // Values now live in .tfbackend file, not inline
+        assert!(!content.contains("bucket"), "inline values should not appear in main.tf");
     }
 
     #[test]
@@ -399,9 +417,8 @@ prefix = "test"
         assert_eq!(result, ScaffoldResult::Written);
 
         let content = std::fs::read_to_string(dir.join(GENERATED_DIR).join("main.tf")).unwrap();
-        assert!(content.contains("backend \"gcs\""));
-        assert!(content.contains("bucket = \"my-state\""));
-        assert!(content.contains("prefix = \"test\""));
+        assert!(content.contains("backend \"gcs\" {}"), "expected empty backend block");
+        assert!(!content.contains("prefix"), "inline values should not appear in main.tf");
     }
 
     #[test]
@@ -474,7 +491,9 @@ region = "r"
     }
 
     #[test]
-    fn changing_bucket_returns_backend_changed() {
+    fn changing_bucket_same_backend_type_is_unchanged_in_main_tf() {
+        // With empty backend blocks, bucket changes don't affect main.tf.
+        // Detection moved to generate_tfbackend() + composite check in easy_mode.
         let toml1 = format!(
             "{}\n{}",
             base_toml(),
@@ -501,7 +520,42 @@ region = "r"
         generate_main_tf(&parse_config(&toml1), &dir).expect("first run");
 
         let r2 = generate_main_tf(&parse_config(&toml2), &dir).expect("second run");
-        assert_eq!(r2, ScaffoldResult::BackendChanged);
+        assert_eq!(r2, ScaffoldResult::Unchanged);
+    }
+
+    #[test]
+    fn changing_bucket_detected_by_tfbackend() {
+        let toml1 = format!(
+            "{}\n{}",
+            base_toml(),
+            r#"
+[state]
+backend = "s3"
+bucket = "bucket-a"
+dynamodb_table = "t"
+region = "r"
+"#
+        );
+        let toml2 = format!(
+            "{}\n{}",
+            base_toml(),
+            r#"
+[state]
+backend = "s3"
+bucket = "bucket-b"
+dynamodb_table = "t"
+region = "r"
+"#
+        );
+        let dir = temp_dir("change-bucket-tfbackend");
+        let config1 = parse_config(&toml1);
+        let config2 = parse_config(&toml2);
+
+        let r1 = generate_tfbackend(&config1, &dir).expect("first run");
+        assert!(matches!(r1, TfbackendResult::Written(_)));
+
+        let r2 = generate_tfbackend(&config2, &dir).expect("second run");
+        assert!(matches!(r2, TfbackendResult::Changed(_)));
     }
 
     #[test]
@@ -523,5 +577,96 @@ region = "r"
         let config_without = parse_config(base_toml());
         let r2 = generate_main_tf(&config_without, &dir).expect("second run without state");
         assert_eq!(r2, ScaffoldResult::BackendChanged);
+    }
+
+    // ── generate_tfbackend tests ───────────────────────────────────────
+
+    #[test]
+    fn generate_tfbackend_none_when_no_state() {
+        let config = parse_config(base_toml());
+        let dir = temp_dir("tfbackend-none");
+        let result = generate_tfbackend(&config, &dir).expect("must succeed");
+        assert_eq!(result, TfbackendResult::None);
+    }
+
+    #[test]
+    fn generate_tfbackend_writes_s3_file() {
+        let toml_str = format!(
+            "{}\n{}",
+            base_toml(),
+            r#"
+[state]
+backend = "s3"
+bucket = "my-bucket"
+dynamodb_table = "my-lock"
+region = "us-east-1"
+"#
+        );
+        let config = parse_config(&toml_str);
+        let dir = temp_dir("tfbackend-s3");
+        let result = generate_tfbackend(&config, &dir).expect("must succeed");
+        assert!(matches!(result, TfbackendResult::Written(_)));
+
+        let path = dir.join(GENERATED_DIR).join("test.s3.tfbackend");
+        assert!(path.exists());
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("bucket         = \"my-bucket\""));
+        assert!(content.contains("dynamodb_table = \"my-lock\""));
+        assert!(content.contains("region         = \"us-east-1\""));
+        assert!(content.contains("key            = \"test/terraform.tfstate\""));
+    }
+
+    #[test]
+    fn generate_tfbackend_unchanged_on_second_run() {
+        let toml_str = format!(
+            "{}\n{}",
+            base_toml(),
+            r#"
+[state]
+backend = "s3"
+bucket = "b"
+dynamodb_table = "t"
+region = "r"
+"#
+        );
+        let config = parse_config(&toml_str);
+        let dir = temp_dir("tfbackend-unchanged");
+        generate_tfbackend(&config, &dir).expect("first run");
+        let r2 = generate_tfbackend(&config, &dir).expect("second run");
+        assert!(matches!(r2, TfbackendResult::Unchanged(_)));
+    }
+
+    #[test]
+    fn generate_tfbackend_cleans_stale_backend_type() {
+        let s3_toml = format!(
+            "{}\n{}",
+            base_toml(),
+            r#"
+[state]
+backend = "s3"
+bucket = "b"
+dynamodb_table = "t"
+region = "r"
+"#
+        );
+        let gcs_toml = format!(
+            "{}\n{}",
+            base_toml(),
+            r#"
+[state]
+backend = "gcs"
+bucket = "b"
+region = "r"
+"#
+        );
+        let dir = temp_dir("tfbackend-stale");
+        generate_tfbackend(&parse_config(&s3_toml), &dir).expect("s3 first");
+        let s3_path = dir.join(GENERATED_DIR).join("test.s3.tfbackend");
+        assert!(s3_path.exists());
+
+        generate_tfbackend(&parse_config(&gcs_toml), &dir).expect("gcs second");
+        let gcs_path = dir.join(GENERATED_DIR).join("test.gcs.tfbackend");
+        assert!(gcs_path.exists());
+        assert!(!s3_path.exists(), "stale S3 tfbackend should be cleaned up");
     }
 }

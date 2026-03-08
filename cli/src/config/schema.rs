@@ -381,6 +381,29 @@ fn default_streaming_mode() -> String {
     "disabled".to_string()
 }
 
+/// Minimal config for bootstrap — only needs project name + state.
+///
+/// Uses `deny_unknown_fields`: a full TOML (with `[compute]`, `[database]`, etc.)
+/// will fail to parse into this struct. This is intentional —
+/// `load_for_bootstrap()` tries the full `EvmCloudConfig` parse first, then
+/// falls back to this. If you add fields here, verify the invariant holds:
+/// a full TOML must still fail `BootstrapConfig` parse so the fallback
+/// ordering remains correct.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct BootstrapConfig {
+    pub(crate) schema_version: Option<u32>,
+    pub(crate) project: BootstrapProjectConfig,
+    #[serde(default)]
+    pub(crate) state: Option<StateConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct BootstrapProjectConfig {
+    pub(crate) name: String,
+}
+
 // State backend is DECOUPLED from infrastructure provider.
 // Users can deploy on AWS but store state in GCS, or deploy on
 // bare_metal but store state in S3. The backend choice is orthogonal.
@@ -431,6 +454,50 @@ impl StateConfig {
 
     pub(crate) fn is_encrypt_disabled(&self) -> bool {
         matches!(self, StateConfig::S3 { encrypt: false, .. })
+    }
+
+    pub(crate) fn backend_type(&self) -> &'static str {
+        match self {
+            StateConfig::S3 { .. } => "s3",
+            StateConfig::Gcs { .. } => "gcs",
+        }
+    }
+
+    pub(crate) fn tfbackend_filename(&self, project_name: &str) -> String {
+        format!("{}.{}.tfbackend", project_name, self.backend_type())
+    }
+
+    /// Render key-value pairs for a `.tfbackend` file.
+    /// Call `resolve_defaults()` first to fill in key/prefix.
+    pub(crate) fn render_tfbackend(&self) -> String {
+        match self {
+            StateConfig::S3 {
+                bucket,
+                dynamodb_table,
+                region,
+                key,
+                encrypt,
+            } => {
+                let key_str = key.as_deref().unwrap_or("terraform.tfstate");
+                format!(
+                    "bucket         = \"{bucket}\"\n\
+                     key            = \"{key_str}\"\n\
+                     region         = \"{region}\"\n\
+                     dynamodb_table = \"{dynamodb_table}\"\n\
+                     encrypt        = {encrypt}\n"
+                )
+            }
+            // `region` excluded — Terraform's GCS backend does not accept it.
+            StateConfig::Gcs { bucket, prefix, .. } => {
+                let mut out = format!("bucket = \"{bucket}\"\n");
+                if let Some(p) = prefix.as_deref() {
+                    if !p.is_empty() {
+                        out.push_str(&format!("prefix = \"{p}\"\n"));
+                    }
+                }
+                out
+            }
+        }
     }
 }
 
@@ -562,6 +629,70 @@ bucket = "my-bucket"
         }
         let config: Partial = toml::from_str("").expect("must parse empty");
         assert!(config.state.is_none());
+    }
+
+    #[test]
+    fn backend_type_s3() {
+        let config: StateConfig = toml::from_str(r#"
+backend = "s3"
+bucket = "b"
+dynamodb_table = "t"
+region = "r"
+"#).unwrap();
+        assert_eq!(config.backend_type(), "s3");
+    }
+
+    #[test]
+    fn backend_type_gcs() {
+        let config: StateConfig = toml::from_str(r#"
+backend = "gcs"
+bucket = "b"
+region = "r"
+"#).unwrap();
+        assert_eq!(config.backend_type(), "gcs");
+    }
+
+    #[test]
+    fn tfbackend_filename_format() {
+        let config: StateConfig = toml::from_str(r#"
+backend = "s3"
+bucket = "b"
+dynamodb_table = "t"
+region = "r"
+"#).unwrap();
+        assert_eq!(config.tfbackend_filename("myproject"), "myproject.s3.tfbackend");
+    }
+
+    #[test]
+    fn render_tfbackend_s3() {
+        let mut config: StateConfig = toml::from_str(r#"
+backend = "s3"
+bucket = "my-bucket"
+dynamodb_table = "my-lock"
+region = "us-east-1"
+"#).unwrap();
+        config.resolve_defaults("demo");
+        let rendered = config.render_tfbackend();
+        assert!(rendered.contains("bucket         = \"my-bucket\""));
+        assert!(rendered.contains("key            = \"demo/terraform.tfstate\""));
+        assert!(rendered.contains("region         = \"us-east-1\""));
+        assert!(rendered.contains("dynamodb_table = \"my-lock\""));
+        assert!(rendered.contains("encrypt        = true"));
+        assert!(!rendered.contains("backend"));
+    }
+
+    #[test]
+    fn render_tfbackend_gcs() {
+        let mut config: StateConfig = toml::from_str(r#"
+backend = "gcs"
+bucket = "my-bucket"
+region = "us-central1"
+"#).unwrap();
+        config.resolve_defaults("demo");
+        let rendered = config.render_tfbackend();
+        assert!(rendered.contains("bucket = \"my-bucket\""));
+        assert!(rendered.contains("prefix = \"demo\""));
+        assert!(!rendered.contains("region"));
     }
 
     #[test]

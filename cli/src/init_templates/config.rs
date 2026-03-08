@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::config::schema::ComputeEngine;
+use crate::config::schema::{ComputeEngine, StateConfig};
 use crate::init_answers::{DatabaseProfile, IndexerConfigStrategy, InitAnswers};
 
 pub(crate) fn render_evm_cloud_toml(answers: &InitAnswers) -> String {
@@ -48,8 +48,10 @@ pub(crate) fn render_evm_cloud_toml(answers: &InitAnswers) -> String {
         ingress_extras.push_str(&format!("tls_email = \"{email}\"\n"));
     }
 
+    let state_section = render_state_section(&answers.state_config);
+
     format!(
-        "schema_version = 1\n\n[project]\nname = \"{}\"\n{}\n[compute]\nengine = \"{}\"\n{}\n[database]\nmode = \"{}\"\nprovider = \"{}\"\nstorage_backend = \"{}\"\n\n[indexer]\nconfig_path = \"{}\"\n{}chains = [{}]\n\n[rpc]\nendpoints = {{ {} }}\n\n[ingress]\nmode = \"{}\"\n{}\n[secrets]\nmode = \"{}\"\n",
+        "schema_version = 1\n\n[project]\nname = \"{}\"\n{}\n[compute]\nengine = \"{}\"\n{}\n[database]\nmode = \"{}\"\nprovider = \"{}\"\nstorage_backend = \"{}\"\n\n[indexer]\nconfig_path = \"{}\"\n{}chains = [{}]\n\n[rpc]\nendpoints = {{ {} }}\n\n[ingress]\nmode = \"{}\"\n{}\n[secrets]\nmode = \"{}\"\n{}",
         answers.project_name,
         region_line,
         answers.compute_engine,
@@ -63,7 +65,8 @@ pub(crate) fn render_evm_cloud_toml(answers: &InitAnswers) -> String {
         endpoints,
         answers.ingress_mode,
         ingress_extras,
-        secrets_mode
+        secrets_mode,
+        state_section,
     )
 }
 
@@ -90,6 +93,27 @@ fn infer_secrets_mode(answers: &InitAnswers) -> String {
         "inline".to_string()
     } else {
         "provider".to_string()
+    }
+}
+
+pub(crate) fn render_state_section(state: &Option<StateConfig>) -> String {
+    match state {
+        None => String::new(),
+        Some(StateConfig::S3 {
+            bucket,
+            dynamodb_table,
+            region,
+            ..
+        }) => {
+            format!(
+                "\n[state]\nbackend = \"s3\"\nbucket = \"{bucket}\"\ndynamodb_table = \"{dynamodb_table}\"\nregion = \"{region}\"\n"
+            )
+        }
+        Some(StateConfig::Gcs { bucket, region, .. }) => {
+            format!(
+                "\n[state]\nbackend = \"gcs\"\nbucket = \"{bucket}\"\nregion = \"{region}\"\n"
+            )
+        }
     }
 }
 

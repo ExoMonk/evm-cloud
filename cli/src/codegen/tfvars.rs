@@ -782,6 +782,7 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
     write_atomic(&generated_path, &format!("{rendered}\n"))?;
 
     ensure_gitignore_entry(project_root, &format!("{GENERATED_DIR}/{GENERATED_TFVARS}"))?;
+    ensure_gitignore_entry(project_root, &format!("{GENERATED_DIR}/secrets/"))?;
     Ok(json_value)
 }
 

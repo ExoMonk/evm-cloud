@@ -46,21 +46,25 @@ region = "us-central1"
 
 ## Bootstrap Workflow
 
-The `evm-cloud bootstrap` command creates the cloud resources your state backend needs.
+The `evm-cloud bootstrap` command creates the cloud resources your state backend needs. It also generates a `.tfbackend` file that the CLI auto-injects during `terraform init`.
 
 ```bash
 # 1. Preview what will be created
 evm-cloud bootstrap --dry-run
 
-# 2. Create the resources
+# 2. Create the resources + generate .tfbackend file
 evm-cloud bootstrap
 
-# 3. Initialize Terraform with the remote backend
+# 3. Initialize Terraform (auto-detects .tfbackend, no manual -backend-config needed)
 evm-cloud init
 
 # 4. Deploy
 evm-cloud deploy
 ```
+
+:::tip
+Bootstrap also supports CLI flags for CI pipelines (no TOML required) and an interactive wizard fallback. See [Remote State & `.tfbackend` Files](./remote-state.mdx) for the full walkthrough — including `--dry-run`, multi-environment patterns, and how auto-injection works.
+:::
 
 ### What Bootstrap Creates
 

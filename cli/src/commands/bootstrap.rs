@@ -1,11 +1,16 @@
-use std::path::PathBuf;
+use std::fs;
+use std::io::IsTerminal;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use clap::Args;
 
+use crate::codegen;
 use crate::config::loader;
 use crate::config::schema::StateConfig;
 use crate::error::{CliError, Result};
+use crate::init_templates;
+use crate::init_wizard;
 use crate::output::{self, ColorMode};
 
 #[derive(Args)]
@@ -16,20 +21,322 @@ pub(crate) struct BootstrapArgs {
     /// Print commands without executing (read-only checks still run)
     #[arg(long)]
     dry_run: bool,
+    /// Project name (overrides TOML value)
+    #[arg(long)]
+    name: Option<String>,
+    /// State backend: "s3" or "gcs"
+    #[arg(long)]
+    backend: Option<String>,
+    /// S3/GCS bucket name
+    #[arg(long)]
+    bucket: Option<String>,
+    /// AWS region / GCS region
+    #[arg(long)]
+    region: Option<String>,
+    /// DynamoDB lock table (S3 backend only)
+    #[arg(long)]
+    dynamodb_table: Option<String>,
 }
 
 pub(crate) fn run(args: BootstrapArgs, color: ColorMode) -> Result<()> {
     let config_path = args.dir.join("evm-cloud.toml");
-    let mut config = loader::load(&config_path)?;
+    let has_cli_flags = args.backend.is_some()
+        || args.bucket.is_some()
+        || args.region.is_some()
+        || args.dynamodb_table.is_some();
 
-    let state = config.state.as_mut().ok_or_else(|| CliError::ConfigValidation {
+    let (toml_name, toml_state) = if config_path.exists() {
+        loader::load_for_bootstrap(&config_path)?
+    } else if !has_cli_flags && args.name.is_none() {
+        return Err(CliError::ConfigValidation {
+            field: "state".into(),
+            message: "No evm-cloud.toml found. Run `evm-cloud init` first to create your project, \
+                      or pass CLI flags: --name <project> --backend s3 --bucket <bucket> --region <region> --dynamodb-table <table>".into(),
+        });
+    } else {
+        (String::new(), None)
+    };
+
+    let toml_name_opt = if toml_name.is_empty() {
+        None
+    } else {
+        Some(toml_name)
+    };
+    let project_name = args
+        .name
+        .clone()
+        .or(toml_name_opt)
+        .ok_or_else(|| CliError::ConfigValidation {
+            field: "name".into(),
+            message: "No project name: pass --name or provide [project].name in evm-cloud.toml"
+                .into(),
+        })?;
+
+    let mut state = build_state_from_flags(&args, toml_state, &project_name, &config_path, color)?;
+
+    // Generate .tfbackend in the terraform working directory.
+    // Easy mode: .evm-cloud/ is the terraform dir. Power mode: project root is.
+    let mut resolved = state.clone();
+    resolved.resolve_defaults(&project_name);
+    let filename = resolved.tfbackend_filename(&project_name);
+    let content = resolved.render_tfbackend();
+
+    let evm_cloud_dir = args.dir.join(".evm-cloud");
+    if evm_cloud_dir.is_dir() {
+        // Easy mode — write only into .evm-cloud/ (the terraform working dir).
+        codegen::write_atomic(&evm_cloud_dir.join(&filename), &content)?;
+    } else {
+        // Power mode — write at project root (which IS the terraform dir).
+        codegen::write_atomic(&args.dir.join(&filename), &content)?;
+    }
+    output::checkline(&format!("Generated {filename}"), color);
+
+    run_core(&mut state, &project_name, args.dry_run, color)
+}
+
+/// Called from `evm-cloud init` when auto-bootstrap is requested.
+/// Always runs live (not dry-runnable) — the user explicitly confirmed resource creation.
+pub(crate) fn run_inline(dir: &Path, color: ColorMode) -> Result<()> {
+    let config_path = dir.join("evm-cloud.toml");
+    let config = loader::load(&config_path)?;
+
+    let mut state = config.state.ok_or_else(|| CliError::ConfigValidation {
         field: "state".into(),
-        message: "No [state] section found in evm-cloud.toml. Add a [state] section with backend = \"s3\" or backend = \"gcs\".".into(),
+        message: "No [state] section found in evm-cloud.toml.".into(),
     })?;
 
-    state.resolve_defaults(&config.project.name);
+    run_core(&mut state, &config.project.name, false, color)
+}
 
-    let dry_run = args.dry_run;
+fn build_state_from_flags(
+    args: &BootstrapArgs,
+    mut toml_state: Option<StateConfig>,
+    project_name: &str,
+    config_path: &Path,
+    color: ColorMode,
+) -> Result<StateConfig> {
+    let has_flags = args.backend.is_some()
+        || args.bucket.is_some()
+        || args.region.is_some()
+        || args.dynamodb_table.is_some();
+
+    if !has_flags {
+        if let Some(state) = toml_state {
+            return Ok(state);
+        }
+
+        // No TOML state and no CLI flags — offer the interactive wizard.
+        if std::io::stdin().is_terminal() {
+            output::info("No [state] configured. Starting state setup wizard...", color);
+            let theme = dialoguer::theme::ColorfulTheme::default();
+            // Best-effort region hint: try to extract project.region from TOML.
+            let region = extract_project_region(config_path);
+            let (wizard_state, _auto_bootstrap) =
+                init_wizard::collect_state_answers(&theme, project_name, &region)?;
+
+            match wizard_state {
+                Some(state) => {
+                    // Append [state] to existing TOML.
+                    if config_path.exists() {
+                        append_state_to_toml(config_path, &state)?;
+                        output::checkline("Wrote [state] to evm-cloud.toml", color);
+                    }
+                    toml_state = Some(state);
+                }
+                None => {
+                    return Err(CliError::ConfigValidation {
+                        field: "state".into(),
+                        message: "State configuration is required for bootstrap.".into(),
+                    });
+                }
+            }
+        } else {
+            return Err(CliError::ConfigValidation {
+                field: "state".into(),
+                message: "No [state] in evm-cloud.toml and no CLI flags. Use --backend --bucket --region or run interactively.".into(),
+            });
+        }
+
+        return toml_state.ok_or_else(|| CliError::ConfigValidation {
+            field: "state".into(),
+            message: "State configuration is required for bootstrap.".into(),
+        });
+    }
+
+    // CLI flags are set — build state from flags, falling back to TOML for missing values
+    let toml_backend = toml_state.as_ref().map(|s| match s {
+        StateConfig::S3 { .. } => "s3",
+        StateConfig::Gcs { .. } => "gcs",
+    });
+
+    let backend = args
+        .backend
+        .as_deref()
+        .or(toml_backend)
+        .ok_or_else(|| CliError::ConfigValidation {
+            field: "backend".into(),
+            message: "--backend is required (\"s3\" or \"gcs\")".into(),
+        })?;
+
+    // Warn when CLI flags diverge from TOML values
+    if let Some(ref ts) = toml_state {
+        // Warn if backend type itself changed
+        if let Some(ref flag_backend) = args.backend {
+            let toml_backend = match ts {
+                StateConfig::S3 { .. } => "s3",
+                StateConfig::Gcs { .. } => "gcs",
+            };
+            if flag_backend != toml_backend {
+                output::warn(
+                    &format!(
+                        "Backend type changed from '{toml_backend}' (TOML) to '{flag_backend}' (CLI flag)"
+                    ),
+                    color,
+                );
+            }
+        }
+        warn_divergence(args, ts, color);
+    }
+
+    match backend {
+        "s3" => {
+            let (toml_bucket, toml_table, toml_region, toml_key) = match &toml_state {
+                Some(StateConfig::S3 {
+                    bucket,
+                    dynamodb_table,
+                    region,
+                    key,
+                    ..
+                }) => (Some(bucket.clone()), Some(dynamodb_table.clone()), Some(region.clone()), key.clone()),
+                _ => (None, None, None, None),
+            };
+
+            let bucket = args.bucket.clone().or(toml_bucket).ok_or_else(|| {
+                CliError::ConfigValidation {
+                    field: "bucket".into(),
+                    message: "--bucket is required for S3 backend".into(),
+                }
+            })?;
+            let region = args.region.clone().or(toml_region).ok_or_else(|| {
+                CliError::ConfigValidation {
+                    field: "region".into(),
+                    message: "--region is required for S3 backend".into(),
+                }
+            })?;
+            let dynamodb_table =
+                args.dynamodb_table
+                    .clone()
+                    .or(toml_table)
+                    .ok_or_else(|| CliError::ConfigValidation {
+                        field: "dynamodb_table".into(),
+                        message: "--dynamodb-table is required for S3 backend".into(),
+                    })?;
+
+            Ok(StateConfig::S3 {
+                bucket,
+                dynamodb_table,
+                region,
+                key: toml_key,
+                encrypt: true,
+            })
+        }
+        "gcs" => {
+            let (toml_bucket, toml_region, toml_prefix) = match &toml_state {
+                Some(StateConfig::Gcs { bucket, region, prefix, .. }) => {
+                    (Some(bucket.clone()), Some(region.clone()), prefix.clone())
+                }
+                _ => (None, None, None),
+            };
+
+            let bucket = args.bucket.clone().or(toml_bucket).ok_or_else(|| {
+                CliError::ConfigValidation {
+                    field: "bucket".into(),
+                    message: "--bucket is required for GCS backend".into(),
+                }
+            })?;
+            let region = args.region.clone().or(toml_region).ok_or_else(|| {
+                CliError::ConfigValidation {
+                    field: "region".into(),
+                    message: "--region is required for GCS backend".into(),
+                }
+            })?;
+
+            Ok(StateConfig::Gcs {
+                bucket,
+                region,
+                prefix: toml_prefix,
+            })
+        }
+        other => Err(CliError::ConfigValidation {
+            field: "backend".into(),
+            message: format!("unsupported backend \"{other}\". Use \"s3\" or \"gcs\"."),
+        }),
+    }
+}
+
+fn warn_divergence(args: &BootstrapArgs, toml_state: &StateConfig, color: ColorMode) {
+    let check = |flag_name: &str, flag_val: &Option<String>, toml_val: &str| {
+        if let Some(ref fv) = flag_val {
+            if fv != toml_val {
+                output::warn(
+                    &format!(
+                        "Using --{flag_name} from CLI flag; your evm-cloud.toml [state] block differs and was not updated."
+                    ),
+                    color,
+                );
+            }
+        }
+    };
+
+    match toml_state {
+        StateConfig::S3 {
+            bucket,
+            dynamodb_table,
+            region,
+            ..
+        } => {
+            check("bucket", &args.bucket, bucket);
+            check("region", &args.region, region);
+            check("dynamodb-table", &args.dynamodb_table, dynamodb_table);
+        }
+        StateConfig::Gcs { bucket, region, .. } => {
+            check("bucket", &args.bucket, bucket);
+            check("region", &args.region, region);
+        }
+    }
+}
+
+/// Best-effort extraction of `project.region` from TOML for wizard defaults.
+fn extract_project_region(path: &Path) -> Option<String> {
+    let raw = fs::read_to_string(path).ok()?;
+    let table: toml::Table = toml::from_str(&raw).ok()?;
+    table
+        .get("project")?
+        .as_table()?
+        .get("region")?
+        .as_str()
+        .map(String::from)
+}
+
+/// Append a `[state]` section to an existing evm-cloud.toml.
+/// PRECONDITION: caller verified `toml_state.is_none()` — the TOML has no `[state]` yet.
+fn append_state_to_toml(path: &Path, state: &StateConfig) -> Result<()> {
+    let existing = fs::read_to_string(path).map_err(|source| CliError::Io {
+        source,
+        path: path.to_path_buf(),
+    })?;
+    let section = init_templates::render_state_section(&Some(state.clone()));
+    let updated = format!("{existing}{section}");
+    codegen::write_atomic(path, &updated)
+}
+
+fn run_core(
+    state: &mut StateConfig,
+    project_name: &str,
+    dry_run: bool,
+    color: ColorMode,
+) -> Result<()> {
+    state.resolve_defaults(project_name);
 
     match state.clone() {
         StateConfig::S3 { bucket, dynamodb_table, region, .. } => {
@@ -59,7 +366,7 @@ pub(crate) fn run(args: BootstrapArgs, color: ColorMode) -> Result<()> {
     if dry_run {
         output::subline("🏖️  No resources were created", color);
     }
-    output::success("State backend ready. Run `evm-cloud init` next.", color);
+    output::success("State backend ready.", color);
 
     Ok(())
 }

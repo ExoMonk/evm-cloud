@@ -933,6 +933,8 @@ mode = "inline"
             ingress_mode: IngressMode::None,
             erpc_hostname: None,
             ingress_tls_email: None,
+            state_config: None,
+            auto_bootstrap: false,
         }
     }
 
@@ -956,6 +958,8 @@ mode = "inline"
             ingress_mode: IngressMode::None,
             erpc_hostname: None,
             ingress_tls_email: None,
+            state_config: None,
+            auto_bootstrap: false,
         }
     }
 
@@ -979,6 +983,8 @@ mode = "inline"
             ingress_mode: IngressMode::None,
             erpc_hostname: None,
             ingress_tls_email: None,
+            state_config: None,
+            auto_bootstrap: false,
         }
     }
 
