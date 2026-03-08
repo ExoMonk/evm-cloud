@@ -130,10 +130,10 @@ mod tests {
     #[test]
     fn lock_guard_blocks_concurrent_acquisition() {
         let dir = temp_dir("deploy-lock");
-        let first =
-            DeployLockGuard::acquire(&dir, None, ColorMode::Never).expect("first lock must succeed");
-        let second =
-            DeployLockGuard::acquire(&dir, None, ColorMode::Never).expect_err("second lock must fail");
+        let first = DeployLockGuard::acquire(&dir, None, ColorMode::Never)
+            .expect("first lock must succeed");
+        let second = DeployLockGuard::acquire(&dir, None, ColorMode::Never)
+            .expect_err("second lock must fail");
 
         match second {
             CliError::DeployLockBusy { .. } => {}
@@ -186,13 +186,11 @@ mod tests {
     #[test]
     fn namespaced_lock_per_env() {
         let dir = temp_dir("deploy-lock-ns");
-        let staging =
-            DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never)
-                .expect("staging lock must succeed");
+        let staging = DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never)
+            .expect("staging lock must succeed");
         // Different env should not conflict.
-        let production =
-            DeployLockGuard::acquire(&dir, Some("production"), ColorMode::Never)
-                .expect("production lock must succeed");
+        let production = DeployLockGuard::acquire(&dir, Some("production"), ColorMode::Never)
+            .expect("production lock must succeed");
 
         // Verify lock files have distinct names.
         assert!(dir.join(".evm-cloud-deploy-staging.lock").exists());
@@ -205,12 +203,10 @@ mod tests {
     #[test]
     fn namespaced_lock_same_env_conflicts() {
         let dir = temp_dir("deploy-lock-ns-conflict");
-        let first =
-            DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never)
-                .expect("first staging lock must succeed");
-        let second =
-            DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never)
-                .expect_err("second staging lock must fail");
+        let first = DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never)
+            .expect("first staging lock must succeed");
+        let second = DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never)
+            .expect_err("second staging lock must fail");
 
         match second {
             CliError::DeployLockBusy { .. } => {}

@@ -230,8 +230,7 @@ fn interactive_wizard(mode_override: Option<InitMode>) -> Result<InitAnswers> {
     };
 
     // -- Remote state --
-    let (state_config, auto_bootstrap) =
-        collect_state_answers(&theme, &project_name, &region)?;
+    let (state_config, auto_bootstrap) = collect_state_answers(&theme, &project_name, &region)?;
 
     Ok(InitAnswers {
         mode,
@@ -484,7 +483,14 @@ fn validate_gcs_region(input: &String) -> std::result::Result<(), String> {
     let parts: Vec<&str> = r.split('-').collect();
     if parts.len() >= 2 {
         let valid_prefixes = [
-            "us", "europe", "asia", "northamerica", "southamerica", "australia", "me", "africa",
+            "us",
+            "europe",
+            "asia",
+            "northamerica",
+            "southamerica",
+            "australia",
+            "me",
+            "africa",
         ];
         if valid_prefixes.iter().any(|p| parts[0] == *p) {
             return Ok(());

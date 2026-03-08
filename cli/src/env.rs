@@ -25,6 +25,7 @@ pub(crate) struct EnvContext {
     /// Environment name (e.g. "staging", "prod").
     pub name: String,
     /// Path to `envs/<name>/`.
+    #[allow(dead_code)] // Used by future `env add/list/remove` commands
     pub dir: PathBuf,
     /// Path to the `.tfbackend` file inside `envs/<name>/`.
     pub tfbackend: PathBuf,
@@ -36,6 +37,7 @@ pub(crate) struct EnvContext {
 
 /// Summary info for listing environments.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Used by future `env list` command
 pub(crate) struct EnvInfo {
     pub name: String,
     pub dir: PathBuf,
@@ -50,9 +52,11 @@ pub(crate) fn resolve_env(flag: Option<&str>, project_root: &Path) -> Result<Opt
     let envs_dir = project_root.join("envs");
 
     // Determine env name from flag or env var.
-    let name_from_source = flag
-        .map(String::from)
-        .or_else(|| std::env::var("EVM_CLOUD_ENV").ok().filter(|v| !v.is_empty()));
+    let name_from_source = flag.map(String::from).or_else(|| {
+        std::env::var("EVM_CLOUD_ENV")
+            .ok()
+            .filter(|v| !v.is_empty())
+    });
 
     let envs_exists = envs_dir.is_dir();
 
@@ -118,10 +122,7 @@ pub(crate) fn validate_env_name(name: &str) -> Result<()> {
         });
     }
 
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-')
-    {
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err(CliError::InvalidEnvName {
             name: name.to_string(),
             reason: "only alphanumeric characters and hyphens are allowed".to_string(),
@@ -146,6 +147,7 @@ pub(crate) fn validate_env_name(name: &str) -> Result<()> {
 }
 
 /// List all environments under `envs/`.
+#[allow(dead_code)] // Used by future `env list` command
 pub(crate) fn list_envs(project_root: &Path) -> Result<Vec<EnvInfo>> {
     let envs_dir = project_root.join("envs");
     if !envs_dir.is_dir() {
@@ -187,9 +189,7 @@ pub(crate) fn resolve_env_state(
             key: Some(format!("{project_name}/{env_name}/terraform.tfstate")),
             encrypt,
         },
-        StateConfig::Gcs {
-            bucket, region, ..
-        } => StateConfig::Gcs {
+        StateConfig::Gcs { bucket, region, .. } => StateConfig::Gcs {
             bucket,
             region,
             prefix: Some(format!("{project_name}/{env_name}")),
@@ -203,9 +203,7 @@ pub(crate) fn build_env_context(name: &str, project_root: &Path) -> Result<EnvCo
     let env_dir = envs_dir.join(name);
 
     if !env_dir.is_dir() {
-        let available = list_env_subdirs(&envs_dir)
-            .unwrap_or_default()
-            .join(", ");
+        let available = list_env_subdirs(&envs_dir).unwrap_or_default().join(", ");
         return Err(CliError::EnvNotFound {
             name: name.to_string(),
             available,
@@ -403,11 +401,7 @@ mod tests {
         let root = test_dir("resolve-not-found");
         let env_dir = root.join("envs").join("staging");
         std::fs::create_dir_all(&env_dir).unwrap();
-        std::fs::write(
-            env_dir.join("staging.s3.tfbackend"),
-            "bucket = \"b\"\n",
-        )
-        .unwrap();
+        std::fs::write(env_dir.join("staging.s3.tfbackend"), "bucket = \"b\"\n").unwrap();
         let result = resolve_env(Some("prod"), &root);
         assert!(result.is_err());
     }
@@ -455,10 +449,7 @@ mod tests {
         let resolved = resolve_env_state(&base, "myproject", "staging");
         match resolved {
             StateConfig::S3 { key, .. } => {
-                assert_eq!(
-                    key.unwrap(),
-                    "myproject/staging/terraform.tfstate"
-                );
+                assert_eq!(key.unwrap(), "myproject/staging/terraform.tfstate");
             }
             _ => panic!("expected S3"),
         }

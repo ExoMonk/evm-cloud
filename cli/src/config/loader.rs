@@ -71,18 +71,18 @@ pub(crate) fn load_for_bootstrap(path: &Path) -> Result<(String, Option<StateCon
     // When both fail, surface the most informative error: use the full-parse error
     // if the TOML looks like it was intended to be a complete config (has full-config
     // sections), otherwise use the minimal-parse error.
-    let config: BootstrapConfig =
-        toml::from_str(&raw).map_err(|minimal_err| {
-            let looks_like_full = raw.contains("[compute]") || raw.contains("[database]") || raw.contains("[indexer]");
-            CliError::ConfigParse {
-                path: path.to_path_buf(),
-                details: if looks_like_full {
-                    full_err.to_string()
-                } else {
-                    minimal_err.to_string()
-                },
-            }
-        })?;
+    let config: BootstrapConfig = toml::from_str(&raw).map_err(|minimal_err| {
+        let looks_like_full =
+            raw.contains("[compute]") || raw.contains("[database]") || raw.contains("[indexer]");
+        CliError::ConfigParse {
+            path: path.to_path_buf(),
+            details: if looks_like_full {
+                full_err.to_string()
+            } else {
+                minimal_err.to_string()
+            },
+        }
+    })?;
 
     let version = config
         .schema_version
@@ -390,8 +390,7 @@ name = "no-state-project"
 "#,
         );
 
-        let (name, state) =
-            load_for_bootstrap(&dir.join("evm-cloud.toml")).expect("must load");
+        let (name, state) = load_for_bootstrap(&dir.join("evm-cloud.toml")).expect("must load");
         assert_eq!(name, "no-state-project");
         assert!(state.is_none());
     }
@@ -437,8 +436,7 @@ region = "US"
 "#,
         );
 
-        let (name, state) =
-            load_for_bootstrap(&dir.join("evm-cloud.toml")).expect("must load");
+        let (name, state) = load_for_bootstrap(&dir.join("evm-cloud.toml")).expect("must load");
         assert_eq!(name, "gcs-project");
         assert!(state.is_some());
     }

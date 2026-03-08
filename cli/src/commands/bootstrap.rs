@@ -65,15 +65,15 @@ pub(crate) fn run(args: BootstrapArgs, color: ColorMode) -> Result<()> {
     } else {
         Some(toml_name)
     };
-    let project_name = args
-        .name
-        .clone()
-        .or(toml_name_opt)
-        .ok_or_else(|| CliError::ConfigValidation {
-            field: "name".into(),
-            message: "No project name: pass --name or provide [project].name in evm-cloud.toml"
-                .into(),
-        })?;
+    let project_name =
+        args.name
+            .clone()
+            .or(toml_name_opt)
+            .ok_or_else(|| CliError::ConfigValidation {
+                field: "name".into(),
+                message: "No project name: pass --name or provide [project].name in evm-cloud.toml"
+                    .into(),
+            })?;
 
     let mut state = build_state_from_flags(&args, toml_state, &project_name, &config_path, color)?;
 
@@ -130,7 +130,10 @@ fn build_state_from_flags(
 
         // No TOML state and no CLI flags — offer the interactive wizard.
         if std::io::stdin().is_terminal() {
-            output::info("No [state] configured. Starting state setup wizard...", color);
+            output::info(
+                "No [state] configured. Starting state setup wizard...",
+                color,
+            );
             let theme = dialoguer::theme::ColorfulTheme::default();
             // Best-effort region hint: try to extract project.region from TOML.
             let region = extract_project_region(config_path);
@@ -172,14 +175,14 @@ fn build_state_from_flags(
         StateConfig::Gcs { .. } => "gcs",
     });
 
-    let backend = args
-        .backend
-        .as_deref()
-        .or(toml_backend)
-        .ok_or_else(|| CliError::ConfigValidation {
-            field: "backend".into(),
-            message: "--backend is required (\"s3\" or \"gcs\")".into(),
-        })?;
+    let backend =
+        args.backend
+            .as_deref()
+            .or(toml_backend)
+            .ok_or_else(|| CliError::ConfigValidation {
+                field: "backend".into(),
+                message: "--backend is required (\"s3\" or \"gcs\")".into(),
+            })?;
 
     // Warn when CLI flags diverge from TOML values
     if let Some(ref ts) = toml_state {
@@ -210,30 +213,37 @@ fn build_state_from_flags(
                     region,
                     key,
                     ..
-                }) => (Some(bucket.clone()), Some(dynamodb_table.clone()), Some(region.clone()), key.clone()),
+                }) => (
+                    Some(bucket.clone()),
+                    Some(dynamodb_table.clone()),
+                    Some(region.clone()),
+                    key.clone(),
+                ),
                 _ => (None, None, None, None),
             };
 
-            let bucket = args.bucket.clone().or(toml_bucket).ok_or_else(|| {
-                CliError::ConfigValidation {
-                    field: "bucket".into(),
-                    message: "--bucket is required for S3 backend".into(),
-                }
-            })?;
-            let region = args.region.clone().or(toml_region).ok_or_else(|| {
-                CliError::ConfigValidation {
-                    field: "region".into(),
-                    message: "--region is required for S3 backend".into(),
-                }
-            })?;
-            let dynamodb_table =
-                args.dynamodb_table
+            let bucket =
+                args.bucket
                     .clone()
-                    .or(toml_table)
+                    .or(toml_bucket)
                     .ok_or_else(|| CliError::ConfigValidation {
-                        field: "dynamodb_table".into(),
-                        message: "--dynamodb-table is required for S3 backend".into(),
+                        field: "bucket".into(),
+                        message: "--bucket is required for S3 backend".into(),
                     })?;
+            let region =
+                args.region
+                    .clone()
+                    .or(toml_region)
+                    .ok_or_else(|| CliError::ConfigValidation {
+                        field: "region".into(),
+                        message: "--region is required for S3 backend".into(),
+                    })?;
+            let dynamodb_table = args.dynamodb_table.clone().or(toml_table).ok_or_else(|| {
+                CliError::ConfigValidation {
+                    field: "dynamodb_table".into(),
+                    message: "--dynamodb-table is required for S3 backend".into(),
+                }
+            })?;
 
             Ok(StateConfig::S3 {
                 bucket,
@@ -245,24 +255,31 @@ fn build_state_from_flags(
         }
         "gcs" => {
             let (toml_bucket, toml_region, toml_prefix) = match &toml_state {
-                Some(StateConfig::Gcs { bucket, region, prefix, .. }) => {
-                    (Some(bucket.clone()), Some(region.clone()), prefix.clone())
-                }
+                Some(StateConfig::Gcs {
+                    bucket,
+                    region,
+                    prefix,
+                    ..
+                }) => (Some(bucket.clone()), Some(region.clone()), prefix.clone()),
                 _ => (None, None, None),
             };
 
-            let bucket = args.bucket.clone().or(toml_bucket).ok_or_else(|| {
-                CliError::ConfigValidation {
-                    field: "bucket".into(),
-                    message: "--bucket is required for GCS backend".into(),
-                }
-            })?;
-            let region = args.region.clone().or(toml_region).ok_or_else(|| {
-                CliError::ConfigValidation {
-                    field: "region".into(),
-                    message: "--region is required for GCS backend".into(),
-                }
-            })?;
+            let bucket =
+                args.bucket
+                    .clone()
+                    .or(toml_bucket)
+                    .ok_or_else(|| CliError::ConfigValidation {
+                        field: "bucket".into(),
+                        message: "--bucket is required for GCS backend".into(),
+                    })?;
+            let region =
+                args.region
+                    .clone()
+                    .or(toml_region)
+                    .ok_or_else(|| CliError::ConfigValidation {
+                        field: "region".into(),
+                        message: "--region is required for GCS backend".into(),
+                    })?;
 
             Ok(StateConfig::Gcs {
                 bucket,
@@ -342,7 +359,12 @@ fn run_core(
     state.resolve_defaults(project_name);
 
     match state.clone() {
-        StateConfig::S3 { bucket, dynamodb_table, region, .. } => {
+        StateConfig::S3 {
+            bucket,
+            dynamodb_table,
+            region,
+            ..
+        } => {
             check_tool("aws")?;
             output::headline(
                 &format!("🏰 ⚒️  Bootstrapping S3 state backend ({region})"),
@@ -396,24 +418,30 @@ fn bootstrap_s3(
 ) -> Result<()> {
     // -- S3 bucket --
     // Check exists (no --region: S3 names are globally unique, --region causes 301 redirects)
-    let bucket_created = match resource_exists("aws", &["s3api", "head-bucket", "--bucket", bucket])? {
-        ResourceStatus::Exists(_) => {
-            output::checkline(&format!("S3 bucket '{bucket}' exists"), color);
-            false
-        }
-        ResourceStatus::NotFound => {
-            let mut create_args = vec![
-                "s3api", "create-bucket", "--bucket", bucket, "--region", region,
-            ];
-            let constraint = format!("LocationConstraint={region}");
-            if region != "us-east-1" {
-                create_args.push("--create-bucket-configuration");
-                create_args.push(&constraint);
+    let bucket_created =
+        match resource_exists("aws", &["s3api", "head-bucket", "--bucket", bucket])? {
+            ResourceStatus::Exists(_) => {
+                output::checkline(&format!("S3 bucket '{bucket}' exists"), color);
+                false
             }
-            run_cmd("aws", &create_args, dry_run, color)?;
-            true
-        }
-    };
+            ResourceStatus::NotFound => {
+                let mut create_args = vec![
+                    "s3api",
+                    "create-bucket",
+                    "--bucket",
+                    bucket,
+                    "--region",
+                    region,
+                ];
+                let constraint = format!("LocationConstraint={region}");
+                if region != "us-east-1" {
+                    create_args.push("--create-bucket-configuration");
+                    create_args.push(&constraint);
+                }
+                run_cmd("aws", &create_args, dry_run, color)?;
+                true
+            }
+        };
 
     // Harden bucket (always, idempotent)
     run_cmd_lenient(
@@ -431,10 +459,14 @@ fn bootstrap_s3(
     run_cmd(
         "aws",
         &[
-            "s3api", "put-bucket-versioning",
-            "--bucket", bucket,
-            "--region", region,
-            "--versioning-configuration", "Status=Enabled",
+            "s3api",
+            "put-bucket-versioning",
+            "--bucket",
+            bucket,
+            "--region",
+            region,
+            "--versioning-configuration",
+            "Status=Enabled",
         ],
         dry_run,
         color,
@@ -442,9 +474,12 @@ fn bootstrap_s3(
     run_cmd(
         "aws",
         &[
-            "s3api", "put-bucket-encryption",
-            "--bucket", bucket,
-            "--region", region,
+            "s3api",
+            "put-bucket-encryption",
+            "--bucket",
+            bucket,
+            "--region",
+            region,
             "--server-side-encryption-configuration",
             r#"{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}"#,
         ],
@@ -462,7 +497,14 @@ fn bootstrap_s3(
     // -- DynamoDB lock table --
     let table_needs_wait = match resource_exists(
         "aws",
-        &["dynamodb", "describe-table", "--table-name", dynamodb_table, "--region", region],
+        &[
+            "dynamodb",
+            "describe-table",
+            "--table-name",
+            dynamodb_table,
+            "--region",
+            region,
+        ],
     )? {
         ResourceStatus::Exists(stdout) => {
             output::checkline(&format!("DynamoDB table '{dynamodb_table}' exists"), color);
@@ -472,12 +514,18 @@ fn bootstrap_s3(
             run_cmd(
                 "aws",
                 &[
-                    "dynamodb", "create-table",
-                    "--table-name", dynamodb_table,
-                    "--attribute-definitions", "AttributeName=LockID,AttributeType=S",
-                    "--key-schema", "AttributeName=LockID,KeyType=HASH",
-                    "--billing-mode", "PAY_PER_REQUEST",
-                    "--region", region,
+                    "dynamodb",
+                    "create-table",
+                    "--table-name",
+                    dynamodb_table,
+                    "--attribute-definitions",
+                    "AttributeName=LockID,AttributeType=S",
+                    "--key-schema",
+                    "AttributeName=LockID,KeyType=HASH",
+                    "--billing-mode",
+                    "PAY_PER_REQUEST",
+                    "--region",
+                    region,
                 ],
                 dry_run,
                 color,
@@ -490,7 +538,15 @@ fn bootstrap_s3(
         output::with_spinner("Waiting for DynamoDB table", color, || {
             run_cmd(
                 "aws",
-                &["dynamodb", "wait", "table-exists", "--table-name", dynamodb_table, "--region", region],
+                &[
+                    "dynamodb",
+                    "wait",
+                    "table-exists",
+                    "--table-name",
+                    dynamodb_table,
+                    "--region",
+                    region,
+                ],
                 false, // never dry-run the wait — we only get here when !dry_run
                 color,
             )
@@ -505,15 +561,13 @@ fn bootstrap_s3(
 // GCS bootstrap
 // ---------------------------------------------------------------------------
 
-fn bootstrap_gcs(
-    bucket: &str,
-    region: &str,
-    dry_run: bool,
-    color: ColorMode,
-) -> Result<()> {
+fn bootstrap_gcs(bucket: &str, region: &str, dry_run: bool, color: ColorMode) -> Result<()> {
     let uri = format!("gs://{bucket}");
 
-    let bucket_created = match resource_exists("gcloud", &["storage", "buckets", "describe", &uri, "--format=json"])? {
+    let bucket_created = match resource_exists(
+        "gcloud",
+        &["storage", "buckets", "describe", &uri, "--format=json"],
+    )? {
         ResourceStatus::Exists(_) => {
             output::checkline(&format!("GCS bucket '{bucket}' exists"), color);
             false
@@ -522,7 +576,10 @@ fn bootstrap_gcs(
             run_cmd(
                 "gcloud",
                 &[
-                    "storage", "buckets", "create", &uri,
+                    "storage",
+                    "buckets",
+                    "create",
+                    &uri,
                     &format!("--location={region}"),
                     "--uniform-bucket-level-access",
                     "--public-access-prevention=enforced",
@@ -543,7 +600,10 @@ fn bootstrap_gcs(
     )?;
 
     if bucket_created {
-        output::checkline(&format!("GCS bucket '{bucket}' created (versioning, public-access-prevention)"), color);
+        output::checkline(
+            &format!("GCS bucket '{bucket}' created (versioning, public-access-prevention)"),
+            color,
+        );
     }
 
     Ok(())
@@ -693,7 +753,14 @@ mod tests {
     #[test]
     fn build_s3_create_bucket_args_us_east_1_no_constraint() {
         let region = "us-east-1";
-        let mut args = vec!["s3api", "create-bucket", "--bucket", "test-bucket", "--region", region];
+        let mut args = vec![
+            "s3api",
+            "create-bucket",
+            "--bucket",
+            "test-bucket",
+            "--region",
+            region,
+        ];
         let constraint = format!("LocationConstraint={region}");
         if region != "us-east-1" {
             args.push("--create-bucket-configuration");
@@ -705,7 +772,14 @@ mod tests {
     #[test]
     fn build_s3_create_bucket_args_non_us_east_1_has_constraint() {
         let region = "eu-west-1";
-        let mut args = vec!["s3api", "create-bucket", "--bucket", "test-bucket", "--region", region];
+        let mut args = vec![
+            "s3api",
+            "create-bucket",
+            "--bucket",
+            "test-bucket",
+            "--region",
+            region,
+        ];
         let constraint = format!("LocationConstraint={region}");
         if region != "us-east-1" {
             args.push("--create-bucket-configuration");

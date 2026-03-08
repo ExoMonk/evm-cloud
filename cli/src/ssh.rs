@@ -1,5 +1,6 @@
+use std::io::IsTerminal;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::config::schema::ComputeEngine;
 use crate::error::{CliError, Result};
@@ -66,6 +67,45 @@ pub(crate) fn resolve(
         key_path,
         port,
     })
+}
+
+/// Build an SSH Command with `Stdio::inherit()` for streaming output.
+///
+/// Unlike `exec()`, this does not capture output — used for `logs -f`.
+/// Adds keepalive and optional PTY allocation for clean signal propagation.
+pub(crate) fn stream_command(ctx: &SshContext, remote_command: &str, follow: bool) -> Command {
+    let mut cmd = Command::new("ssh");
+    cmd.args([
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "LogLevel=ERROR",
+        "-o",
+        "ServerAliveInterval=60",
+        "-o",
+        "ServerAliveCountMax=3",
+    ]);
+
+    if follow && std::io::stdout().is_terminal() {
+        cmd.arg("-tt");
+    }
+
+    if let Some(ref key) = ctx.key_path {
+        cmd.arg("-i").arg(key);
+    }
+
+    if ctx.port != 22 {
+        cmd.arg("-p").arg(ctx.port.to_string());
+    }
+
+    cmd.arg(format!("{}@{}", ctx.user, ctx.host));
+    cmd.arg(remote_command);
+    cmd.stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    cmd
 }
 
 /// Execute a command over SSH and capture stdout.

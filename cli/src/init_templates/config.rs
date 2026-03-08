@@ -110,9 +110,7 @@ pub(crate) fn render_state_section(state: &Option<StateConfig>) -> String {
             )
         }
         Some(StateConfig::Gcs { bucket, region, .. }) => {
-            format!(
-                "\n[state]\nbackend = \"gcs\"\nbucket = \"{bucket}\"\nregion = \"{region}\"\n"
-            )
+            format!("\n[state]\nbackend = \"gcs\"\nbucket = \"{bucket}\"\nregion = \"{region}\"\n")
         }
     }
 }

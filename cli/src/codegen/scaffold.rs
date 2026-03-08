@@ -15,7 +15,10 @@ pub(crate) enum ScaffoldResult {
     Unchanged,
 }
 
-pub(crate) fn generate_main_tf(config: &EvmCloudConfig, project_root: &Path) -> Result<ScaffoldResult> {
+pub(crate) fn generate_main_tf(
+    config: &EvmCloudConfig,
+    project_root: &Path,
+) -> Result<ScaffoldResult> {
     let contents = render_main_tf(config);
     let path = project_root.join(GENERATED_DIR).join("main.tf");
 
@@ -59,17 +62,11 @@ fn render_main_tf(config: &EvmCloudConfig) -> String {
     let backend_block = config.state.as_ref().map(render_backend_hcl);
 
     let terraform_block = match backend_block {
-        Some(ref backend) => format!(
-            "terraform {{\n  required_version = \"{v}\"\n\n{backend}}}\n"
-        ),
-        None => format!(
-            "terraform {{\n  required_version = \"{v}\"\n}}\n"
-        ),
+        Some(ref backend) => format!("terraform {{\n  required_version = \"{v}\"\n\n{backend}}}\n"),
+        None => format!("terraform {{\n  required_version = \"{v}\"\n}}\n"),
     };
 
-    format!(
-        "{terraform_block}\nmodule \"evm_cloud\" {{\n{module_body}\n}}\n"
-    )
+    format!("{terraform_block}\nmodule \"evm_cloud\" {{\n{module_body}\n}}\n")
 }
 
 pub(crate) fn generate_variables_tf(config: &EvmCloudConfig, project_root: &Path) -> Result<()> {
@@ -393,9 +390,15 @@ key = "test/terraform.tfstate"
         assert_eq!(result, ScaffoldResult::Written);
 
         let content = std::fs::read_to_string(dir.join(GENERATED_DIR).join("main.tf")).unwrap();
-        assert!(content.contains("backend \"s3\" {}"), "expected empty backend block");
+        assert!(
+            content.contains("backend \"s3\" {}"),
+            "expected empty backend block"
+        );
         // Values now live in .tfbackend file, not inline
-        assert!(!content.contains("bucket"), "inline values should not appear in main.tf");
+        assert!(
+            !content.contains("bucket"),
+            "inline values should not appear in main.tf"
+        );
     }
 
     #[test]
@@ -417,8 +420,14 @@ prefix = "test"
         assert_eq!(result, ScaffoldResult::Written);
 
         let content = std::fs::read_to_string(dir.join(GENERATED_DIR).join("main.tf")).unwrap();
-        assert!(content.contains("backend \"gcs\" {}"), "expected empty backend block");
-        assert!(!content.contains("prefix"), "inline values should not appear in main.tf");
+        assert!(
+            content.contains("backend \"gcs\" {}"),
+            "expected empty backend block"
+        );
+        assert!(
+            !content.contains("prefix"),
+            "inline values should not appear in main.tf"
+        );
     }
 
     #[test]
@@ -458,7 +467,10 @@ region = "r"
 
         // Old main.tf is preserved (not overwritten) on BackendChanged.
         let after = std::fs::read_to_string(dir.join(GENERATED_DIR).join("main.tf")).unwrap();
-        assert_eq!(old_content, after, "main.tf should be unchanged on BackendChanged");
+        assert_eq!(
+            old_content, after,
+            "main.tf should be unchanged on BackendChanged"
+        );
     }
 
     #[test]

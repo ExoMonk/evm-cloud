@@ -49,7 +49,11 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
         .map(|c| format!(" [env: {}]", c.name))
         .unwrap_or_default();
     output::headline_red(
-        &format!("🏰 ⚒️ Removing Infra for {}{}", args.dir.display(), env_hint),
+        &format!(
+            "🏰 ⚒️ Removing Infra for {}{}",
+            args.dir.display(),
+            env_hint
+        ),
         color,
     );
 

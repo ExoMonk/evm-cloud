@@ -1,6 +1,8 @@
 use std::fs;
 
-use crate::config::schema::{ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode, StateConfig};
+use crate::config::schema::{
+    ComputeEngine, EvmCloudConfig, InfrastructureProvider, IngressMode, StateConfig,
+};
 use crate::error::{CliError, Result};
 
 pub(crate) fn validate(config: &EvmCloudConfig) -> Result<()> {
@@ -103,7 +105,13 @@ fn validate_ingress_engine(ingress: IngressMode, engine: ComputeEngine) -> Resul
 
 fn validate_state(state: &StateConfig) -> Result<()> {
     match state {
-        StateConfig::S3 { bucket, dynamodb_table, region, key, .. } => {
+        StateConfig::S3 {
+            bucket,
+            dynamodb_table,
+            region,
+            key,
+            ..
+        } => {
             validate_non_empty("state.bucket", bucket)?;
             validate_non_empty("state.dynamodb_table", dynamodb_table)?;
             validate_non_empty("state.region", region)?;
@@ -114,7 +122,11 @@ fn validate_state(state: &StateConfig) -> Result<()> {
                 validate_hcl_safe("state.key", k)?;
             }
         }
-        StateConfig::Gcs { bucket, region, prefix } => {
+        StateConfig::Gcs {
+            bucket,
+            region,
+            prefix,
+        } => {
             validate_non_empty("state.bucket", bucket)?;
             validate_non_empty("state.region", region)?;
             validate_hcl_safe("state.bucket", bucket)?;
@@ -149,7 +161,8 @@ const RESERVED_ENV_KEYS: &[&str] = &[
 
 fn validate_extra_env(extra_env: &std::collections::BTreeMap<String, String>) -> Result<()> {
     for (key, value) in extra_env {
-        if key.is_empty() || !key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        if key.is_empty()
+            || !key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
             || key.as_bytes()[0].is_ascii_digit()
         {
             return Err(CliError::ConfigValidation {

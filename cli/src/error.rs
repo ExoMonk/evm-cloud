@@ -195,11 +195,15 @@ pub(crate) enum CliError {
         expected: String,
     },
 
+    #[allow(dead_code)] // Used by future `env add` command
     #[error("multi-env deployments require a remote state backend.\n  Add [state] to evm-cloud.toml and run `evm-cloud bootstrap`")]
     EnvRequiresRemoteState,
 
     #[error("invalid environment name `{name}`: {reason}")]
     InvalidEnvName { name: String, reason: String },
+
+    #[error("invalid argument `{arg}`: {details}")]
+    InvalidArg { arg: String, details: String },
 
     #[error("interactive prompt failed: {0}")]
     PromptFailed(String),

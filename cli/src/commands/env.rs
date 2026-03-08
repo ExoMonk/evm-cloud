@@ -99,11 +99,15 @@ fn run_add(args: AddArgs, color: ColorMode) -> Result<()> {
         state.resolve_defaults(&project_name);
     }
 
-    let base_state = config.state.as_ref().ok_or_else(|| CliError::ConfigValidation {
-        field: "state".into(),
-        message: "multi-env requires a [state] section in evm-cloud.toml for remote state backend"
-            .into(),
-    })?;
+    let base_state = config
+        .state
+        .as_ref()
+        .ok_or_else(|| CliError::ConfigValidation {
+            field: "state".into(),
+            message:
+                "multi-env requires a [state] section in evm-cloud.toml for remote state backend"
+                    .into(),
+        })?;
 
     let envs_dir = project_root.join("envs");
     let is_easy_mode = project_root.join(".evm-cloud").is_dir();
@@ -130,7 +134,12 @@ fn run_add(args: AddArgs, color: ColorMode) -> Result<()> {
         let migration_result = if single_env {
             // Single-env conversion: just move existing files into envs/<name>/
             migrate_single_env(
-                &envs_dir, &args.name, &project_root, &project_name, base_state, is_easy_mode,
+                &envs_dir,
+                &args.name,
+                &project_root,
+                &project_name,
+                base_state,
+                is_easy_mode,
             )
         } else {
             migrate_to_multi_env(
@@ -156,7 +165,8 @@ fn run_add(args: AddArgs, color: ColorMode) -> Result<()> {
         }
 
         // Remove old tfbackend from original location (only after migration succeeded).
-        if let Err(e) = remove_old_tfbackend(&project_root, &project_name, base_state, is_easy_mode) {
+        if let Err(e) = remove_old_tfbackend(&project_root, &project_name, base_state, is_easy_mode)
+        {
             output::warn(&format!("Failed to remove old tfbackend: {e}"), color);
         }
 
@@ -177,9 +187,15 @@ fn run_add(args: AddArgs, color: ColorMode) -> Result<()> {
 
         eprintln!();
         eprintln!("     Note: Your existing Terraform state key has NOT been migrated.");
-        let migrated_env = if single_env { &args.name } else { &default_env_name };
+        let migrated_env = if single_env {
+            &args.name
+        } else {
+            &default_env_name
+        };
         eprintln!("     The env now uses key: {project_name}/{migrated_env}/terraform.tfstate");
-        eprintln!("     You may need to run `terraform init -migrate-state` in envs/{migrated_env}/");
+        eprintln!(
+            "     You may need to run `terraform init -migrate-state` in envs/{migrated_env}/"
+        );
     } else {
         // -------------------------------------------------------------------
         // envs/ already exists — just create new env
@@ -201,10 +217,7 @@ fn run_add(args: AddArgs, color: ColorMode) -> Result<()> {
         let backend_file = new_dir.join(new_state.tfbackend_filename(&project_name));
         codegen::write_atomic(&backend_file, &new_state.render_tfbackend())?;
 
-        output::success(
-            &format!("Created environment envs/{}/", args.name),
-            color,
-        );
+        output::success(&format!("Created environment envs/{}/", args.name), color);
     }
 
     // Handle --copy-from (overrides the default copy in migration path).
@@ -219,7 +232,10 @@ fn run_add(args: AddArgs, color: ColorMode) -> Result<()> {
         let target_dir = envs_dir.join(&args.name);
         copy_tfvars_between_envs(&source_dir, &target_dir, args.include_secrets)?;
         output::info(
-            &format!("Copied tfvars from envs/{source_env}/ to envs/{}/", args.name),
+            &format!(
+                "Copied tfvars from envs/{source_env}/ to envs/{}/",
+                args.name
+            ),
             color,
         );
     }
@@ -249,7 +265,10 @@ fn run_list(args: ListArgs, color: ColorMode) -> Result<()> {
 
     let envs_dir = project_root.join("envs");
     if !envs_dir.is_dir() {
-        output::info("No environments configured. Use `evm-cloud env add <name>` to create one.", color);
+        output::info(
+            "No environments configured. Use `evm-cloud env add <name>` to create one.",
+            color,
+        );
         return Ok(());
     }
 
@@ -265,10 +284,7 @@ fn run_list(args: ListArgs, color: ColorMode) -> Result<()> {
         if !path.is_dir() {
             continue;
         }
-        let name = entry
-            .file_name()
-            .to_string_lossy()
-            .to_string();
+        let name = entry.file_name().to_string_lossy().to_string();
 
         // Check if terraform has been initialized in this env.
         let initialized = path.join(".terraform").is_dir();
@@ -278,7 +294,10 @@ fn run_list(args: ListArgs, color: ColorMode) -> Result<()> {
     envs.sort_by(|a, b| a.0.cmp(&b.0));
 
     if envs.is_empty() {
-        output::info("envs/ directory exists but contains no environments.", color);
+        output::info(
+            "envs/ directory exists but contains no environments.",
+            color,
+        );
         return Ok(());
     }
 
@@ -336,7 +355,10 @@ fn run_remove(args: RemoveArgs, color: ColorMode) -> Result<()> {
         ),
         color,
     );
-    eprintln!("     If you have deployed resources, run `evm-cloud destroy --env {name}` first.", name = args.name);
+    eprintln!(
+        "     If you have deployed resources, run `evm-cloud destroy --env {name}` first.",
+        name = args.name
+    );
 
     if !args.yes {
         if !std::io::stdin().is_terminal() {
@@ -356,10 +378,7 @@ fn run_remove(args: RemoveArgs, color: ColorMode) -> Result<()> {
         path: env_dir,
     })?;
 
-    output::success(
-        &format!("Removed environment envs/{}/", args.name),
-        color,
-    );
+    output::success(&format!("Removed environment envs/{}/", args.name), color);
 
     Ok(())
 }
@@ -472,11 +491,7 @@ fn migrate_single_env(
 }
 
 /// Copy tfbackend and tfvars files from the original project location into an env dir.
-fn copy_existing_env_files(
-    project_root: &Path,
-    env_dir: &Path,
-    is_easy_mode: bool,
-) -> Result<()> {
+fn copy_existing_env_files(project_root: &Path, env_dir: &Path, is_easy_mode: bool) -> Result<()> {
     let source_dir = if is_easy_mode {
         project_root.join(".evm-cloud")
     } else {
@@ -604,10 +619,7 @@ key = "myproject/terraform.tfstate"
         let resolved = resolve_env_state(&base, "myproject", "staging");
         match resolved {
             StateConfig::S3 { key, .. } => {
-                assert_eq!(
-                    key.as_deref(),
-                    Some("myproject/staging/terraform.tfstate")
-                );
+                assert_eq!(key.as_deref(), Some("myproject/staging/terraform.tfstate"));
             }
             _ => panic!("expected S3"),
         }

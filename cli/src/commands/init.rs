@@ -195,7 +195,8 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
             match preflight.project_kind {
                 ProjectKind::EasyToml => {
-                    let (dir, scaffold) = easy_mode::prepare_workspace(&preflight.resolved_root, color)?;
+                    let (dir, scaffold) =
+                        easy_mode::prepare_workspace(&preflight.resolved_root, color)?;
                     if scaffold == crate::codegen::ScaffoldResult::BackendChanged {
                         easy_mode::warn_backend_changed(&preflight.resolved_root)?;
                         needs_reconfigure = true;
@@ -222,10 +223,7 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
                 let toml_path = args.dir.join("evm-cloud.toml");
                 if toml_path.exists() {
                     if let Ok((_, Some(state))) = loader::load_for_bootstrap(&toml_path) {
-                        output::checkline(
-                            "Preserving existing [state] from evm-cloud.toml",
-                            color,
-                        );
+                        output::checkline("Preserving existing [state] from evm-cloud.toml", color);
                         answers.state_config = Some(state);
                     }
                 }
@@ -281,7 +279,9 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
     let mut init_args = args.terraform_args.clone();
     if needs_reconfigure
-        && !init_args.iter().any(|a| a == "-reconfigure" || a == "-migrate-state")
+        && !init_args
+            .iter()
+            .any(|a| a == "-reconfigure" || a == "-migrate-state")
     {
         init_args.push("-reconfigure".to_string());
     }

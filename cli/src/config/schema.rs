@@ -517,7 +517,13 @@ encrypt = true
 "#;
         let config: StateConfig = toml::from_str(toml_str).expect("must parse S3 state config");
         match config {
-            StateConfig::S3 { bucket, dynamodb_table, region, key, encrypt } => {
+            StateConfig::S3 {
+                bucket,
+                dynamodb_table,
+                region,
+                key,
+                encrypt,
+            } => {
                 assert_eq!(bucket, "my-state-bucket");
                 assert_eq!(dynamodb_table, "my-lock-table");
                 assert_eq!(region, "us-east-1");
@@ -538,7 +544,11 @@ prefix = "my-project"
 "#;
         let config: StateConfig = toml::from_str(toml_str).expect("must parse GCS state config");
         match config {
-            StateConfig::Gcs { bucket, region, prefix } => {
+            StateConfig::Gcs {
+                bucket,
+                region,
+                prefix,
+            } => {
                 assert_eq!(bucket, "my-state-bucket");
                 assert_eq!(region, "us-central1");
                 assert_eq!(prefix.as_deref(), Some("my-project"));
@@ -581,26 +591,34 @@ region = "us-central1"
 
     #[test]
     fn resolve_defaults_fills_s3_key() {
-        let mut config: StateConfig = toml::from_str(r#"
+        let mut config: StateConfig = toml::from_str(
+            r#"
 backend = "s3"
 bucket = "b"
 dynamodb_table = "t"
 region = "r"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         config.resolve_defaults("demo");
         match config {
-            StateConfig::S3 { key, .. } => assert_eq!(key.as_deref(), Some("demo/terraform.tfstate")),
+            StateConfig::S3 { key, .. } => {
+                assert_eq!(key.as_deref(), Some("demo/terraform.tfstate"))
+            }
             _ => panic!("expected S3"),
         }
     }
 
     #[test]
     fn resolve_defaults_fills_gcs_prefix() {
-        let mut config: StateConfig = toml::from_str(r#"
+        let mut config: StateConfig = toml::from_str(
+            r#"
 backend = "gcs"
 bucket = "b"
 region = "us-central1"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         config.resolve_defaults("demo");
         match config {
             StateConfig::Gcs { prefix, .. } => assert_eq!(prefix.as_deref(), Some("demo")),
@@ -616,7 +634,10 @@ bucket = "my-bucket"
 "#;
         let err = toml::from_str::<StateConfig>(toml_str).expect_err("must reject unknown backend");
         let msg = err.to_string();
-        assert!(msg.contains("s3") || msg.contains("gcs"), "error should mention valid variants: {msg}");
+        assert!(
+            msg.contains("s3") || msg.contains("gcs"),
+            "error should mention valid variants: {msg}"
+        );
     }
 
     #[test]
@@ -633,44 +654,59 @@ bucket = "my-bucket"
 
     #[test]
     fn backend_type_s3() {
-        let config: StateConfig = toml::from_str(r#"
+        let config: StateConfig = toml::from_str(
+            r#"
 backend = "s3"
 bucket = "b"
 dynamodb_table = "t"
 region = "r"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         assert_eq!(config.backend_type(), "s3");
     }
 
     #[test]
     fn backend_type_gcs() {
-        let config: StateConfig = toml::from_str(r#"
+        let config: StateConfig = toml::from_str(
+            r#"
 backend = "gcs"
 bucket = "b"
 region = "r"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         assert_eq!(config.backend_type(), "gcs");
     }
 
     #[test]
     fn tfbackend_filename_format() {
-        let config: StateConfig = toml::from_str(r#"
+        let config: StateConfig = toml::from_str(
+            r#"
 backend = "s3"
 bucket = "b"
 dynamodb_table = "t"
 region = "r"
-"#).unwrap();
-        assert_eq!(config.tfbackend_filename("myproject"), "myproject.s3.tfbackend");
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.tfbackend_filename("myproject"),
+            "myproject.s3.tfbackend"
+        );
     }
 
     #[test]
     fn render_tfbackend_s3() {
-        let mut config: StateConfig = toml::from_str(r#"
+        let mut config: StateConfig = toml::from_str(
+            r#"
 backend = "s3"
 bucket = "my-bucket"
 dynamodb_table = "my-lock"
 region = "us-east-1"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         config.resolve_defaults("demo");
         let rendered = config.render_tfbackend();
         assert!(rendered.contains("bucket         = \"my-bucket\""));
@@ -683,11 +719,14 @@ region = "us-east-1"
 
     #[test]
     fn render_tfbackend_gcs() {
-        let mut config: StateConfig = toml::from_str(r#"
+        let mut config: StateConfig = toml::from_str(
+            r#"
 backend = "gcs"
 bucket = "my-bucket"
 region = "us-central1"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         config.resolve_defaults("demo");
         let rendered = config.render_tfbackend();
         assert!(rendered.contains("bucket = \"my-bucket\""));

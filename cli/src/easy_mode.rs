@@ -16,9 +16,7 @@ pub(crate) fn prepare_workspace(
     prepare_workspace_inner(project_root, Some(color))
 }
 
-pub(crate) fn prepare_workspace_quiet(
-    project_root: &Path,
-) -> Result<(PathBuf, ScaffoldResult)> {
+pub(crate) fn prepare_workspace_quiet(project_root: &Path) -> Result<(PathBuf, ScaffoldResult)> {
     prepare_workspace_inner(project_root, None)
 }
 
@@ -100,10 +98,7 @@ fn prepare_workspace_inner(
 pub(crate) fn handle_backend_changed(project_root: &Path) -> crate::error::CliError {
     match scaffold::backup_state_file(project_root) {
         Ok(Some(backup)) => {
-            eprintln!(
-                "     ℹ State backup saved to: {}",
-                backup.display()
-            );
+            eprintln!("     ℹ State backup saved to: {}", backup.display());
         }
         Ok(None) => {}
         Err(err) => {
@@ -130,10 +125,7 @@ pub(crate) fn handle_backend_changed(project_root: &Path) -> crate::error::CliEr
 pub(crate) fn warn_backend_changed(project_root: &Path) -> Result<()> {
     match scaffold::backup_state_file(project_root) {
         Ok(Some(backup)) => {
-            eprintln!(
-                "     ℹ State backup saved to: {}",
-                backup.display()
-            );
+            eprintln!("     ℹ State backup saved to: {}", backup.display());
         }
         Ok(None) => {}
         Err(err) => {
@@ -161,9 +153,7 @@ fn emit_state_warnings(state: &StateConfig, scaffold_result: ScaffoldResult) {
         eprintln!(
             "     ⚠ State encryption is disabled. State files may contain sensitive outputs (API keys, passwords)."
         );
-        eprintln!(
-            "       Set `encrypt = true` in [state] to enable server-side encryption."
-        );
+        eprintln!("       Set `encrypt = true` in [state] to enable server-side encryption.");
     }
 
     // Bootstrap notes only on first write — avoid noise on every subsequent run.

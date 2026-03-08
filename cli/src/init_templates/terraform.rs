@@ -7,7 +7,9 @@ pub(crate) fn render_versions_tf(state: Option<&StateConfig>) -> String {
     match state {
         Some(s) => {
             let backend = s.backend_type();
-            format!("terraform {{\n  required_version = \"{v}\"\n\n  backend \"{backend}\" {{}}\n}}\n")
+            format!(
+                "terraform {{\n  required_version = \"{v}\"\n\n  backend \"{backend}\" {{}}\n}}\n"
+            )
         }
         None => format!("terraform {{\n  required_version = \"{v}\"\n}}\n"),
     }
