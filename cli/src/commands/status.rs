@@ -22,6 +22,9 @@ pub(crate) struct StatusArgs {
     json: bool,
     #[arg(long)]
     allow_raw_terraform: bool,
+    /// Target environment for multi-env projects (envs/<name>/)
+    #[arg(long, env = "EVM_CLOUD_ENV")]
+    env: Option<String>,
     #[arg(long)]
     ssh_key: Option<PathBuf>,
     #[arg(long)]
@@ -69,12 +72,18 @@ pub(crate) struct ConnectionInfo {
 pub(crate) fn run(args: StatusArgs, color: ColorMode) -> Result<()> {
     let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
     let project_root = &preflight.resolved_root;
+    let env_ctx = crate::env::resolve_env(args.env.as_deref(), project_root)?;
+
     let terraform_dir = match &preflight.project_kind {
         ProjectKind::EasyToml => project_root.join(".evm-cloud"),
         ProjectKind::RawTerraform => project_root.clone(),
     };
 
     let runner = TerraformRunner::check_installed(&terraform_dir)?;
+    let runner = match env_ctx.as_ref() {
+        Some(ctx) => runner.with_env(ctx),
+        None => runner,
+    };
     let handoff = output::with_spinner("Loading deployment state", color, || {
         crate::handoff::load_from_state(&runner, &terraform_dir, &args.module_name)
     })?;

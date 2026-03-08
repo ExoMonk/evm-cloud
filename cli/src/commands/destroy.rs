@@ -30,18 +30,29 @@ pub(crate) struct DestroyArgs {
     yes: bool,
     #[arg(long)]
     allow_raw_terraform: bool,
+    /// Target environment for multi-env projects (envs/<name>/)
+    #[arg(long, env = "EVM_CLOUD_ENV")]
+    env: Option<String>,
     #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
     terraform_args: Vec<String>,
 }
 
 pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
     let started = Instant::now();
+
+    let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
+    let project_root = preflight.resolved_root.clone();
+    let env_ctx = crate::env::resolve_env(args.env.as_deref(), &project_root)?;
+
+    let env_hint = env_ctx
+        .as_ref()
+        .map(|c| format!(" [env: {}]", c.name))
+        .unwrap_or_default();
     output::headline_red(
-        &format!("🏰 ⚒️ Removing Infra for {}", args.dir.display()),
+        &format!("🏰 ⚒️ Removing Infra for {}{}", args.dir.display(), env_hint),
         color,
     );
 
-    let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
     let terraform_dir = match preflight.project_kind {
         ProjectKind::EasyToml => {
             // Silently regenerate bridge files — destroy needs matching variable
@@ -75,7 +86,30 @@ pub(crate) fn run(args: DestroyArgs, color: ColorMode) -> Result<()> {
         output::warn("running destroy in interactive mode", color);
     }
 
+    // Extra safety: require typing the env name for production environments.
+    if let Some(ref ctx) = env_ctx {
+        let lower = ctx.name.to_lowercase();
+        if (lower == "prod" || lower == "production") && !args.auto_approve {
+            let prompt = format!(
+                "You are about to destroy the '{}' environment. Type '{}' to confirm",
+                ctx.name, ctx.name
+            );
+            let input: String = dialoguer::Input::new()
+                .with_prompt(&prompt)
+                .interact_text()
+                .map_err(|err| CliError::PromptFailed(err.to_string()))?;
+            if input != ctx.name {
+                output::warn("Destroy cancelled — name did not match", color);
+                return Ok(());
+            }
+        }
+    }
+
     let runner = TerraformRunner::check_installed(&terraform_dir)?;
+    let runner = match env_ctx.as_ref() {
+        Some(ctx) => runner.with_env(ctx),
+        None => runner,
+    };
     let kube_target = is_kube_destroy_target(&runner, &terraform_dir);
 
     let mut effective_args = args.terraform_args.clone();

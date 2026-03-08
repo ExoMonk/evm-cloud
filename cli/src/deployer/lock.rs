@@ -11,8 +11,12 @@ pub(crate) struct DeployLockGuard {
 }
 
 impl DeployLockGuard {
-    pub(crate) fn acquire(root: &Path, color: ColorMode) -> Result<Self> {
-        let path = root.join(".evm-cloud-deploy.lock");
+    pub(crate) fn acquire(root: &Path, env_name: Option<&str>, color: ColorMode) -> Result<Self> {
+        let lock_filename = match env_name {
+            Some(name) => format!(".evm-cloud-deploy-{name}.lock"),
+            None => ".evm-cloud-deploy.lock".to_string(),
+        };
+        let path = root.join(lock_filename);
         let created = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -127,9 +131,9 @@ mod tests {
     fn lock_guard_blocks_concurrent_acquisition() {
         let dir = temp_dir("deploy-lock");
         let first =
-            DeployLockGuard::acquire(&dir, ColorMode::Never).expect("first lock must succeed");
+            DeployLockGuard::acquire(&dir, None, ColorMode::Never).expect("first lock must succeed");
         let second =
-            DeployLockGuard::acquire(&dir, ColorMode::Never).expect_err("second lock must fail");
+            DeployLockGuard::acquire(&dir, None, ColorMode::Never).expect_err("second lock must fail");
 
         match second {
             CliError::DeployLockBusy { .. } => {}
@@ -137,14 +141,14 @@ mod tests {
         }
 
         drop(first);
-        let third = DeployLockGuard::acquire(&dir, ColorMode::Never);
+        let third = DeployLockGuard::acquire(&dir, None, ColorMode::Never);
         assert!(third.is_ok());
     }
 
     #[test]
     fn lock_writes_pid_and_recovers_stale() {
         let dir = temp_dir("deploy-lock-pid");
-        let guard = DeployLockGuard::acquire(&dir, ColorMode::Never).expect("acquire lock");
+        let guard = DeployLockGuard::acquire(&dir, None, ColorMode::Never).expect("acquire lock");
         let lock_path = dir.join(".evm-cloud-deploy.lock");
         let contents = fs::read_to_string(&lock_path).expect("read lock");
         let pid = parse_lock_pid(&contents).expect("parse pid from lock");
@@ -159,7 +163,7 @@ mod tests {
         // Write a lock with a PID that almost certainly doesn't exist.
         fs::write(&lock_path, "{\"pid\":999999999,\"started_at\":0}").expect("write stale lock");
         // Should auto-recover (PID 999999999 is not alive).
-        let guard = DeployLockGuard::acquire(&dir, ColorMode::Never);
+        let guard = DeployLockGuard::acquire(&dir, None, ColorMode::Never);
         assert!(guard.is_ok(), "should recover stale lock from dead PID");
     }
 
@@ -177,5 +181,45 @@ mod tests {
     #[test]
     fn current_process_is_alive() {
         assert!(is_process_alive(std::process::id()));
+    }
+
+    #[test]
+    fn namespaced_lock_per_env() {
+        let dir = temp_dir("deploy-lock-ns");
+        let staging =
+            DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never)
+                .expect("staging lock must succeed");
+        // Different env should not conflict.
+        let production =
+            DeployLockGuard::acquire(&dir, Some("production"), ColorMode::Never)
+                .expect("production lock must succeed");
+
+        // Verify lock files have distinct names.
+        assert!(dir.join(".evm-cloud-deploy-staging.lock").exists());
+        assert!(dir.join(".evm-cloud-deploy-production.lock").exists());
+
+        drop(staging);
+        drop(production);
+    }
+
+    #[test]
+    fn namespaced_lock_same_env_conflicts() {
+        let dir = temp_dir("deploy-lock-ns-conflict");
+        let first =
+            DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never)
+                .expect("first staging lock must succeed");
+        let second =
+            DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never)
+                .expect_err("second staging lock must fail");
+
+        match second {
+            CliError::DeployLockBusy { .. } => {}
+            other => panic!("unexpected error: {other}"),
+        }
+
+        drop(first);
+        // After release, re-acquire should work.
+        let third = DeployLockGuard::acquire(&dir, Some("staging"), ColorMode::Never);
+        assert!(third.is_ok());
     }
 }

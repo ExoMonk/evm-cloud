@@ -61,6 +61,10 @@ pub(crate) struct DeployArgs {
     #[arg(long, value_enum)]
     only: Option<DeployPhase>,
 
+    /// Target environment for multi-env projects (envs/<name>/)
+    #[arg(long, env = "EVM_CLOUD_ENV")]
+    env: Option<String>,
+
     /// Extra arguments passed to terraform (plan/apply).
     /// Example: --tf-args='-var=foo=bar' --tf-args='-target=module.x'
     #[arg(long, allow_hyphen_values = true)]
@@ -109,24 +113,30 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
     let run_infra = !is_app_only;
     let run_app = !is_infra_only;
 
+    let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
+    let project_root = preflight.resolved_root.clone();
+    let env_ctx = crate::env::resolve_env(args.env.as_deref(), &project_root)?;
+
     if !args.json {
         let phase_hint = match args.only {
             Some(DeployPhase::Infra) => " (infra only)",
             Some(DeployPhase::App) => " (app only)",
             None => "",
         };
+        let env_hint = env_ctx
+            .as_ref()
+            .map(|c| format!(" [env: {}]", c.name))
+            .unwrap_or_default();
         output::headline(
             &format!(
-                "🏰 ⚒️ Deploying stack for {}{}",
+                "🏰 ⚒️ Deploying stack for {}{}{}",
                 args.dir.display(),
-                phase_hint
+                phase_hint,
+                env_hint,
             ),
             color,
         );
     }
-
-    let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
-    let project_root = preflight.resolved_root.clone();
     let terraform_dir = match preflight.project_kind {
         ProjectKind::EasyToml => {
             let (dir, scaffold) = easy_mode::prepare_workspace_quiet(&project_root)?;
@@ -157,6 +167,7 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
             auto_approve: args.auto_approve,
             json: args.json,
             color,
+            env_ctx: env_ctx.as_ref(),
         })? {
             InfraPhaseOutcome::DryRun {
                 log_path: lp,
@@ -205,10 +216,14 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
         }
 
         let runner = TerraformRunner::check_installed(&terraform_dir)?;
+        let runner = match env_ctx.as_ref() {
+            Some(ctx) => runner.with_env(ctx),
+            None => runner,
+        };
 
         // If we didn't run infra phase, we need to read handoff from existing state.
         if parsed_handoff.is_none() {
-            runner.init_if_needed(&terraform_dir, &[])?;
+            runner.init_if_needed(&terraform_dir, env_ctx.as_ref(), &[])?;
             let mut handoff_result =
                 handoff::load_from_state(&runner, &terraform_dir, &args.module_name)?;
 
@@ -291,6 +306,7 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
 
             let _lock = DeployLockGuard::acquire(
                 &project_root,
+                env_ctx.as_ref().map(|c| c.name.as_str()),
                 if args.json { ColorMode::Never } else { color },
             )?;
 

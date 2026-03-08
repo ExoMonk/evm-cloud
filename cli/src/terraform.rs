@@ -15,6 +15,7 @@ type VersionFloor = (VersionTuple, String);
 
 pub(crate) struct TerraformRunner {
     binary_path: PathBuf,
+    extra_env: Vec<(String, String)>,
 }
 
 /// Find a single `.tfbackend` file in `dir` (non-recursive).
@@ -82,7 +83,19 @@ impl TerraformRunner {
             });
         }
 
-        Ok(Self { binary_path })
+        Ok(Self {
+            binary_path,
+            extra_env: Vec::new(),
+        })
+    }
+
+    /// Configure the runner with environment-specific TF_DATA_DIR.
+    pub(crate) fn with_env(mut self, env_ctx: &crate::env::EnvContext) -> Self {
+        self.extra_env.push((
+            "TF_DATA_DIR".into(),
+            env_ctx.tf_data_dir.display().to_string(),
+        ));
+        self
     }
 
     pub(crate) fn init(&self, dir: &Path, passthrough_args: &[String]) -> Result<()> {
@@ -93,8 +106,19 @@ impl TerraformRunner {
 
     /// Skip init if `.terraform/` already exists and no passthrough args.
     /// Auto-injects `-backend-config=<file>` on first init or reconfigure.
-    pub(crate) fn init_if_needed(&self, dir: &Path, passthrough_args: &[String]) -> Result<bool> {
-        let terraform_exists = dir.join(".terraform").is_dir();
+    ///
+    /// When `env_ctx` is `Some`, uses the env's `tf_data_dir` for existence
+    /// checks and `tfbackend` for backend config injection.
+    pub(crate) fn init_if_needed(
+        &self,
+        dir: &Path,
+        env_ctx: Option<&crate::env::EnvContext>,
+        passthrough_args: &[String],
+    ) -> Result<bool> {
+        let terraform_exists = match env_ctx {
+            Some(ctx) => ctx.tf_data_dir.is_dir(),
+            None => dir.join(".terraform").is_dir(),
+        };
 
         // Fast path: already initialized and caller has no special flags.
         if terraform_exists && passthrough_args.is_empty() {
@@ -111,7 +135,11 @@ impl TerraformRunner {
                 || a == "--migrate-state"
         });
 
-        if !terraform_exists || has_reconfigure {
+        if let Some(ctx) = env_ctx {
+            // Env-aware: always inject -backend-config so Terraform uses the
+            // correct per-env backend, even on -upgrade or other passthrough args.
+            args.push(format!("-backend-config={}", ctx.tfbackend.display()));
+        } else if !terraform_exists || has_reconfigure {
             let (found, count) = find_tfbackend_inner(dir);
             match count.cmp(&1) {
                 std::cmp::Ordering::Equal => {
@@ -194,6 +222,7 @@ impl TerraformRunner {
         let output = Command::new(&self.binary_path)
             .args(["output", "-json", output_name])
             .current_dir(dir)
+            .envs(self.extra_env.iter().map(|(k, v)| (k, v)))
             .stdin(Stdio::inherit())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -237,6 +266,7 @@ impl TerraformRunner {
         let output = Command::new(&self.binary_path)
             .args(args)
             .current_dir(dir)
+            .envs(self.extra_env.iter().map(|(k, v)| (k, v)))
             .stdin(Stdio::inherit())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -264,6 +294,7 @@ impl TerraformRunner {
         let output = Command::new(&self.binary_path)
             .args(args)
             .current_dir(dir)
+            .envs(self.extra_env.iter().map(|(k, v)| (k, v)))
             .stdin(Stdio::inherit())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

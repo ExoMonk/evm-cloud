@@ -3,6 +3,7 @@ mod commands;
 mod config;
 mod deployer;
 mod easy_mode;
+mod env;
 mod error;
 mod examples;
 mod handoff;
@@ -32,6 +33,7 @@ use crate::commands::apply::ApplyArgs;
 use crate::commands::bootstrap::BootstrapArgs;
 use crate::commands::deploy::DeployArgs;
 use crate::commands::destroy::DestroyArgs;
+use crate::commands::env::EnvCommand;
 use crate::commands::init::InitArgs;
 use crate::commands::kubectl::KubectlArgs;
 use crate::commands::logs::LogsArgs;
@@ -65,6 +67,9 @@ enum Commands {
     Status(StatusArgs),
     Logs(LogsArgs),
     Destroy(DestroyArgs),
+    /// Manage deployment environments (add, list, remove)
+    #[command(subcommand)]
+    Env(EnvCommand),
     /// Manage the local dev stack (kind + Anvil + eRPC + ClickHouse + rindexer)
     #[command(subcommand)]
     Local(LocalCommand),
@@ -87,6 +92,7 @@ fn main() {
         Commands::Status(args) => commands::status::run(args, cli.color),
         Commands::Logs(args) => commands::logs::run(args, cli.color),
         Commands::Destroy(args) => commands::destroy::run(args, cli.color),
+        Commands::Env(cmd) => commands::env::run(cmd, cli.color),
         Commands::Local(cmd) => local::run(cmd, cli.color),
     };
 

@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::codegen::scaffold::{self, TfbackendResult};
@@ -34,6 +35,33 @@ fn prepare_workspace_inner(
 
     if let Some(c) = color {
         output::castle("Loaded evm-cloud.toml", c);
+    }
+
+    // Multi-env: skip .tfbackend generation — env-specific files are in envs/<name>/
+    let envs_dir = project_root.join("envs");
+    if envs_dir.is_dir() {
+        let has_env_dirs = fs::read_dir(&envs_dir)
+            .ok()
+            .map(|entries| entries.flatten().any(|e| e.path().is_dir()))
+            .unwrap_or(false);
+
+        if has_env_dirs {
+            tfvars::generate_tfvars(&config, project_root)?;
+            let main_tf_result = scaffold::generate_main_tf(&config, project_root)?;
+            scaffold::generate_variables_tf(&config, project_root)?;
+            scaffold::generate_outputs_tf(project_root)?;
+
+            let scaffold_result = match main_tf_result {
+                ScaffoldResult::BackendChanged => ScaffoldResult::BackendChanged,
+                _ => ScaffoldResult::Unchanged,
+            };
+
+            if let Some(c) = color {
+                output::success("Generated .evm-cloud terraform bridge files (multi-env)", c);
+            }
+
+            return Ok((project_root.join(".evm-cloud"), scaffold_result));
+        }
     }
 
     tfvars::generate_tfvars(&config, project_root)?;

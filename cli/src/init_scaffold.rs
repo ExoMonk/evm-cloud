@@ -189,15 +189,19 @@ fn update_gitignore(project_root: &Path, mode: InitMode) -> Result<()> {
         InitMode::Easy => {
             ensure_line(&mut lines, "terraform.auto.tfvars.json");
             ensure_line(&mut lines, ".evm-cloud/logs/");
-            ensure_line(&mut lines, ".evm-cloud-deploy.lock");
+            ensure_line(&mut lines, ".evm-cloud-deploy*.lock");
             ensure_line(&mut lines, "kubeconfig.yaml");
+            ensure_line(&mut lines, "envs/**/.terraform/");
+            ensure_line(&mut lines, "envs/**/secrets.auto.tfvars");
         }
         InitMode::Power => {
             ensure_line(&mut lines, "secrets.auto.tfvars");
             ensure_line(&mut lines, ".terraform/");
             ensure_line(&mut lines, "*.tfstate*");
-            ensure_line(&mut lines, ".evm-cloud-deploy.lock");
+            ensure_line(&mut lines, ".evm-cloud-deploy*.lock");
             ensure_line(&mut lines, "kubeconfig.yaml");
+            ensure_line(&mut lines, "envs/**/.terraform/");
+            ensure_line(&mut lines, "envs/**/secrets.auto.tfvars");
         }
     }
 

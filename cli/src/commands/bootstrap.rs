@@ -36,6 +36,9 @@ pub(crate) struct BootstrapArgs {
     /// DynamoDB lock table (S3 backend only)
     #[arg(long)]
     dynamodb_table: Option<String>,
+    /// Target environment for multi-env projects (envs/<name>/)
+    #[arg(long, env = "EVM_CLOUD_ENV")]
+    env: Option<String>,
 }
 
 pub(crate) fn run(args: BootstrapArgs, color: ColorMode) -> Result<()> {

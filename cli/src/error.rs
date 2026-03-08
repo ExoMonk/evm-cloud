@@ -176,6 +176,31 @@ pub(crate) enum CliError {
     )]
     DeployConfigFileMissing { file: String },
 
+    #[error("multi-env project detected (envs/). Specify which environment with --env <name>.\n  Available: {envs}\n  Hint: evm-cloud deploy --env <name>")]
+    EnvRequired { envs: String },
+
+    #[error("environment `{name}` not found under envs/.\n  Available: {available}\n  Hint: evm-cloud env add {name}")]
+    EnvNotFound { name: String, available: String },
+
+    #[error("--env was specified but this project has no envs/ directory.\n  Hint: use `evm-cloud env add <name>` to create a multi-env layout")]
+    EnvNotMultiEnv,
+
+    #[error("environment `{name}` is missing a .tfbackend file in envs/{name}/.\n  Hint: create envs/{name}/<name>.s3.tfbackend or run `evm-cloud env add {name}`")]
+    EnvMissingTfbackend { name: String },
+
+    #[error("TF_DATA_DIR is already set to `{existing}` but env `{env}` expects `{expected}`.\n  Unset TF_DATA_DIR or ensure it matches the env")]
+    TfDataDirConflict {
+        existing: String,
+        env: String,
+        expected: String,
+    },
+
+    #[error("multi-env deployments require a remote state backend.\n  Add [state] to evm-cloud.toml and run `evm-cloud bootstrap`")]
+    EnvRequiresRemoteState,
+
+    #[error("invalid environment name `{name}`: {reason}")]
+    InvalidEnvName { name: String, reason: String },
+
     #[error("interactive prompt failed: {0}")]
     PromptFailed(String),
 

@@ -20,6 +20,7 @@ pub(crate) struct InfraPhaseOpts<'a> {
     pub auto_approve: bool,
     pub json: bool,
     pub color: ColorMode,
+    pub env_ctx: Option<&'a crate::env::EnvContext>,
 }
 
 pub(crate) enum InfraPhaseOutcome {
@@ -49,19 +50,34 @@ pub(crate) fn run_infra_phase(opts: InfraPhaseOpts<'_>) -> Result<InfraPhaseOutc
     }
 
     let runner = TerraformRunner::check_installed(opts.terraform_dir)?;
+    let runner = match opts.env_ctx {
+        Some(ctx) => runner.with_env(ctx),
+        None => runner,
+    };
 
     let mut effective_args: Vec<String> = opts.tf_args.to_vec();
     if let Some(auto_var_file) = tfvars::auto_var_file_arg(opts.terraform_dir, &effective_args)? {
         effective_args.push(auto_var_file);
     }
+    // Auto-inject env-specific tfvars if present.
+    if let Some(ctx) = opts.env_ctx {
+        if let Some(ref tfvars_path) = ctx.tfvars {
+            let var_file_arg = format!("-var-file={}", tfvars_path.display());
+            if !effective_args.iter().any(|a| a == &var_file_arg) {
+                effective_args.push(var_file_arg);
+            }
+        }
+    }
     let mut plan_args = effective_args.clone();
     ensure_non_interactive_terraform(&mut plan_args);
 
-    runner.init_if_needed(opts.terraform_dir, &[])?;
+    runner.init_if_needed(opts.terraform_dir, opts.env_ctx, &[])?;
 
+    let env_name = opts.env_ctx.map(|c| c.name.as_str());
     let log_path = terraform_log_path(
         opts.terraform_dir,
         if opts.dry_run { "plan" } else { "apply" },
+        env_name,
     )?;
     let output_path = terraform_output_path(opts.terraform_dir)?;
 

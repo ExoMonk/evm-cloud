@@ -21,7 +21,11 @@ pub(crate) fn ensure_non_interactive_terraform(args: &mut Vec<String>) {
     args.push("-input=false".to_string());
 }
 
-pub(crate) fn terraform_log_path(terraform_dir: &Path, op: &str) -> Result<PathBuf> {
+pub(crate) fn terraform_log_path(
+    terraform_dir: &Path,
+    op: &str,
+    env_name: Option<&str>,
+) -> Result<PathBuf> {
     let logs_dir = if terraform_dir.file_name().and_then(|v| v.to_str()) == Some(".evm-cloud") {
         terraform_dir.join("logs")
     } else {
@@ -38,7 +42,11 @@ pub(crate) fn terraform_log_path(terraform_dir: &Path, op: &str) -> Result<PathB
         .map_err(|err| CliError::SystemClock(err.to_string()))?
         .as_secs();
 
-    Ok(logs_dir.join(format!("terraform-{op}-{ts}.log")))
+    let filename = match env_name {
+        Some(env) => format!("terraform-{op}-{env}-{ts}.log"),
+        None => format!("terraform-{op}-{ts}.log"),
+    };
+    Ok(logs_dir.join(filename))
 }
 
 pub(crate) fn terraform_output_path(terraform_dir: &Path) -> Result<PathBuf> {
@@ -73,6 +81,9 @@ pub(crate) struct ApplyArgs {
     allow_raw_terraform: bool,
     #[arg(long)]
     json: bool,
+    /// Target environment for multi-env projects (envs/<name>/)
+    #[arg(long, env = "EVM_CLOUD_ENV")]
+    env: Option<String>,
     #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
     terraform_args: Vec<String>,
 }
@@ -87,15 +98,24 @@ pub(crate) fn run(args: ApplyArgs, color: ColorMode) -> Result<()> {
     }
 
     let preflight = preflight::run_checks(&args.dir, args.allow_raw_terraform)?;
+    let project_root = preflight.resolved_root.clone();
+    let env_ctx = crate::env::resolve_env(args.env.as_deref(), &project_root)?;
+
+    if !args.json {
+        if let Some(ref ctx) = env_ctx {
+            output::subline(&format!("[env: {}]", ctx.name), color);
+        }
+    }
+
     let terraform_dir = match preflight.project_kind {
         ProjectKind::EasyToml => {
-            let (dir, scaffold) = easy_mode::prepare_workspace_quiet(&preflight.resolved_root)?;
+            let (dir, scaffold) = easy_mode::prepare_workspace_quiet(&project_root)?;
             if scaffold == crate::codegen::ScaffoldResult::BackendChanged {
-                return Err(easy_mode::handle_backend_changed(&preflight.resolved_root));
+                return Err(easy_mode::handle_backend_changed(&project_root));
             }
             dir
         }
-        ProjectKind::RawTerraform => preflight.resolved_root.clone(),
+        ProjectKind::RawTerraform => project_root.clone(),
     };
 
     match infra::run_infra_phase(InfraPhaseOpts {
@@ -106,6 +126,7 @@ pub(crate) fn run(args: ApplyArgs, color: ColorMode) -> Result<()> {
         auto_approve: args.auto_approve,
         json: args.json,
         color,
+        env_ctx: env_ctx.as_ref(),
     })? {
         InfraPhaseOutcome::DryRun {
             log_path,

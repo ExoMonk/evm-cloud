@@ -37,11 +37,20 @@ pub(crate) struct InitArgs {
     bootstrap: bool,
     #[arg(long)]
     skip_terraform_init: bool,
+    /// Target environment for multi-env projects (envs/<name>/)
+    #[arg(long, env = "EVM_CLOUD_ENV")]
+    env: Option<String>,
     #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
     terraform_args: Vec<String>,
 }
 
 pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
+    if args.env.is_some() {
+        return Err(CliError::FlagConflict {
+            message: "--env is not supported for `init`. Use `evm-cloud env add <name>` to create a new environment.".to_string(),
+        });
+    }
+
     let started = std::time::Instant::now();
     let allow_raw_terraform = args.allow_raw_terraform || args.example.is_some();
 
