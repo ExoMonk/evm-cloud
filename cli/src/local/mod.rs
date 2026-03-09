@@ -153,7 +153,7 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
     output::headline("🏰 ⚒️ Starting local dev stack", color);
 
     // Load user-provided eRPC config if present (config/erpc.yaml).
-    let user_erpc: Option<String> = config::resolve_erpc_config_path()
+    let user_erpc: Option<String> = config::resolve_erpc_config_path(args.config_dir.as_deref())
         .map(|p| config::load_user_erpc_config(&p))
         .transpose()?;
 

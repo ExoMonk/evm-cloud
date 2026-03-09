@@ -293,8 +293,28 @@ pub(crate) fn data_dir() -> String {
     format!("{home}/.evm-cloud/local-data")
 }
 
-/// Returns `config/erpc.yaml` if it exists in the current working directory.
-pub(crate) fn resolve_erpc_config_path() -> Option<PathBuf> {
+/// Returns the path to `erpc.yaml` if it exists.
+/// Checks explicit config dir first, then falls back to `config/erpc.yaml`.
+pub(crate) fn resolve_erpc_config_path(explicit: Option<&Path>) -> Option<PathBuf> {
+    if let Some(dir) = explicit {
+        // Explicit path may be a directory or a file.
+        if dir.is_dir() {
+            let candidate = dir.join("erpc.yaml");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+        // If explicit points to a file, check its sibling erpc.yaml.
+        if dir.is_file() {
+            if let Some(parent) = dir.parent() {
+                let candidate = parent.join("erpc.yaml");
+                if candidate.is_file() {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+
     let p = PathBuf::from("config").join("erpc.yaml");
     if p.is_file() { Some(p) } else { None }
 }
