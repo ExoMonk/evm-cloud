@@ -7,6 +7,7 @@ mod prerequisites;
 mod profiles;
 
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::time::Instant;
 
 use clap::{Args, Subcommand, ValueEnum};
@@ -30,6 +31,8 @@ pub(crate) enum LocalCommand {
     Status(StatusArgs),
     /// Reset: tear down, clean data, and restart
     Reset(ResetArgs),
+    /// Stream logs from a local stack service
+    Logs(LocalLogsArgs),
 }
 
 #[derive(Args)]
@@ -75,6 +78,21 @@ pub(crate) struct DownArgs;
 pub(crate) struct StatusArgs;
 
 #[derive(Args)]
+pub(crate) struct LocalLogsArgs {
+    /// Service to stream logs from (rindexer, erpc, clickhouse)
+    #[arg(default_value = "rindexer")]
+    service: String,
+
+    /// Follow log output (stream continuously)
+    #[arg(short = 'f', long)]
+    follow: bool,
+
+    /// Number of historical lines to show
+    #[arg(long, default_value_t = 100)]
+    tail: u32,
+}
+
+#[derive(Args)]
 pub(crate) struct ResetArgs {
     /// RPC URL for Anvil to fork from.
     /// With --mainnet: used as the direct RPC upstream (no Anvil).
@@ -116,6 +134,7 @@ pub(crate) fn run(cmd: LocalCommand, color: ColorMode) -> Result<()> {
         LocalCommand::Down(_) => run_down(color),
         LocalCommand::Status(_) => run_status(color),
         LocalCommand::Reset(args) => run_reset(args, color),
+        LocalCommand::Logs(args) => run_logs(args, color),
     }
 }
 
@@ -133,8 +152,27 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
 
     output::headline("🏰 ⚒️ Starting local dev stack", color);
 
-    // Determine RPC mode and chain ID
-    let (fork_url, chain_id) = resolve_fork_mode(&args.rpc, args.fresh, mainnet, color)?;
+    // Load user-provided eRPC config if present (config/erpc.yaml).
+    let user_erpc: Option<String> = config::resolve_erpc_config_path()
+        .map(|p| config::load_user_erpc_config(&p))
+        .transpose()?;
+
+    // Determine RPC mode and chain ID.
+    // Optimisation: if mainnet + no --rpc + config/erpc.yaml with parseable chainId,
+    // skip the DEFAULT_FORK_RPC network probe entirely.
+    let (fork_url, chain_id) = if mainnet && args.rpc.is_none() {
+        if let Some(cid) = user_erpc.as_deref().and_then(config::parse_chain_id_from_erpc) {
+            output::subline(
+                &format!("Mainnet mode — chain_id={cid} (from config/erpc.yaml), no Anvil"),
+                color,
+            );
+            (None, cid)
+        } else {
+            resolve_fork_mode(&args.rpc, args.fresh, mainnet, color)?
+        }
+    } else {
+        resolve_fork_mode(&args.rpc, args.fresh, mainnet, color)?
+    };
 
     // Load or generate rindexer config
     let (rindexer_yaml, abis) =
@@ -169,10 +207,14 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
     output::checkline("ClickHouse ready — localhost:8123", color);
 
     if mainnet {
-        // Mainnet mode: no Anvil — eRPC points directly at the user's RPC
-        let rpc_url = fork_url.as_deref().expect("mainnet mode requires rpc url");
-        let erpc_values =
-            config::generate_erpc_values_mainnet(chain_id, rpc_url, &profile_res.erpc);
+        // Mainnet mode: no Anvil — eRPC points directly at the user's RPC (or custom config).
+        let erpc_values = if let Some(ref content) = user_erpc {
+            output::subline("Using custom eRPC config: config/erpc.yaml", color);
+            config::generate_erpc_values_from_file(content, &profile_res.erpc)
+        } else {
+            let rpc_url = fork_url.as_deref().expect("mainnet mode requires --rpc");
+            config::generate_erpc_values_mainnet(chain_id, rpc_url, &profile_res.erpc)
+        };
         output::with_spinner("Deploying eRPC", color, || {
             deploy::deploy_erpc(&erpc_values, color)
         })?;
@@ -261,34 +303,115 @@ fn run_status(color: ColorMode) -> Result<()> {
     }
 
     output::headline(
-        &format!("🏰 evm-cloud local stack — {}", cluster::name()),
+        &format!(
+            " evm-cloud local status — {} (kind · local)",
+            cluster::name()
+        ),
         color,
     );
 
-    let anvil_ok = health::wait_for_anvil(4).is_ok();
-    let erpc_ok = health::wait_for_http("http://localhost:4000", 4).is_ok();
-    let ch_ok = health::wait_for_http("http://localhost:8123/ping", 4).is_ok();
-    let idx_ok = health::wait_for_http("http://localhost:18080/health", 4).is_ok();
+    // Detect which services are deployed via helm releases.
+    let anvil_deployed = helm_release_exists("local-anvil");
 
-    print_health_line("Anvil", anvil_ok, "http://localhost:8545", color);
-    print_health_line("eRPC", erpc_ok, "http://localhost:4000", color);
-    print_health_line("ClickHouse", ch_ok, "http://localhost:8123", color);
-    print_health_line("rindexer", idx_ok, "http://localhost:18080", color);
-
-    if anvil_ok {
-        if let Ok(cid) = health::probe_chain_id("http://localhost:8545") {
-            if cid == 31337 {
-                output::subline("Chain ID: 31337 (Anvil fresh)", color);
-            } else {
-                output::subline(&format!("Chain ID: {cid} (fork mode)"), color);
-            }
-        }
+    // Probe each service (4s timeout each).
+    struct LocalService {
+        name: &'static str,
+        healthy: bool,
+        detail: String,
     }
 
+    let mut services: Vec<LocalService> = Vec::new();
+
+    if anvil_deployed {
+        let ok = health::wait_for_anvil(4).is_ok();
+        let detail = if ok {
+            health::probe_chain_id("http://localhost:8545")
+                .ok()
+                .map(|cid| {
+                    if cid == 31337 {
+                        format!("http://localhost:8545 · chain_id={cid} (fresh)")
+                    } else {
+                        format!("http://localhost:8545 · chain_id={cid} (fork)")
+                    }
+                })
+                .unwrap_or_else(|| "http://localhost:8545".to_string())
+        } else {
+            "http://localhost:8545".to_string()
+        };
+        services.push(LocalService {
+            name: "Anvil",
+            healthy: ok,
+            detail,
+        });
+    }
+
+    let erpc_ok = health::wait_for_http("http://localhost:4000", 4).is_ok();
+    services.push(LocalService {
+        name: "eRPC",
+        healthy: erpc_ok,
+        detail: "http://localhost:4000".to_string(),
+    });
+
+    let ch_ok = health::wait_for_http("http://localhost:8123/ping", 4).is_ok();
+    services.push(LocalService {
+        name: "ClickHouse",
+        healthy: ch_ok,
+        detail: "http://localhost:8123".to_string(),
+    });
+
+    let idx_ok = health::wait_for_http("http://localhost:18080/health", 4).is_ok();
+    let idx_detail = {
+        let replicas = kubectl_local_ready("local-indexer");
+        match replicas {
+            Some((ready, total)) => format!("http://localhost:18080 · {ready}/{total} replicas"),
+            None => "http://localhost:18080".to_string(),
+        }
+    };
+    services.push(LocalService {
+        name: "rindexer",
+        healthy: idx_ok,
+        detail: idx_detail,
+    });
+
+    // Render service table.
+    output::section_line("🏰 Services", color);
+    let mut healthy_count = 0usize;
+    for svc in &services {
+        let (icon, status_text) = if svc.healthy {
+            healthy_count += 1;
+            ("🟢", "UP")
+        } else {
+            ("🔴", "DOWN")
+        };
+        output::status_line(svc.name, icon, status_text, &svc.detail, color);
+    }
+
+    // Connection block.
+    output::section_line("🔌 Connection", color);
     output::subline(
-        "forge create src/MyContract.sol:MyContract --rpc-url http://localhost:8545",
+        "kubectl   kubectl --context kind-evm-cloud-local get pods -n default",
         color,
     );
+    output::subline("logs      evm-cloud local logs rindexer", color);
+    if anvil_deployed {
+        output::subline(
+            "deploy    forge create src/MyContract.sol:MyContract --rpc-url http://localhost:8545",
+            color,
+        );
+    }
+
+    // Overall verdict.
+    eprintln!();
+    let total = services.len();
+    if healthy_count == total {
+        output::checkline(&format!("All {total} services healthy"), color);
+    } else {
+        let down = total - healthy_count;
+        output::error(
+            &format!("{down} service{} down", if down == 1 { "" } else { "s" }),
+            color,
+        );
+    }
 
     Ok(())
 }
@@ -443,10 +566,126 @@ fn print_summary(fork_url: Option<&str>, chain_id: u64, mainnet: bool, color: Co
     eprintln!("     👉🏻 Tear down: evm-cloud local down");
 }
 
-fn print_health_line(name: &str, ok: bool, url: &str, _color: ColorMode) {
-    if ok {
-        eprintln!("     👉🏻 {name:<14}{url}");
-    } else {
-        eprintln!("     ❌ {name:<14}{url} — DOWN");
+// ── local logs ──────────────────────────────────────────────────────────────
+
+const LOCAL_VALID_SERVICES: &[&str] = &["rindexer", "erpc", "clickhouse"];
+
+fn run_logs(args: LocalLogsArgs, color: ColorMode) -> Result<()> {
+    let service = args.service.to_lowercase();
+    if !LOCAL_VALID_SERVICES.contains(&service.as_str()) {
+        return Err(CliError::InvalidArg {
+            arg: service,
+            details: format!(
+                "unknown service. Valid: {}",
+                LOCAL_VALID_SERVICES.join(", ")
+            ),
+        });
     }
+
+    if !cluster::cluster_exists()? {
+        output::error(
+            &format!(
+                "No {} cluster found. Run `evm-cloud local up` first.",
+                cluster::name()
+            ),
+            color,
+        );
+        return Ok(());
+    }
+
+    let label = match service.as_str() {
+        "rindexer" => "app.kubernetes.io/name=indexer",
+        "erpc" => "app.kubernetes.io/name=rpc-proxy",
+        "clickhouse" => "app=clickhouse",
+        _ => unreachable!(),
+    };
+
+    output::info(&format!("Tailing {service} logs..."), color);
+
+    let mut cmd = Command::new("kubectl");
+    cmd.args([
+        "logs",
+        "-l",
+        label,
+        "-n",
+        "default",
+        "--context",
+        "kind-evm-cloud-local",
+        "--tail",
+        &args.tail.to_string(),
+        "--all-containers=true",
+        "--prefix",
+        "--max-log-requests=20",
+    ]);
+    if args.follow {
+        cmd.arg("-f");
+    }
+    cmd.stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+
+    let status = cmd.status().map_err(|err| CliError::CommandSpawn {
+        command: "kubectl".to_string(),
+        source: err,
+    })?;
+
+    crate::error::tool_exit_status(status, "kubectl")
+}
+
+// ── Local-stack helpers ──────────────────────────────────────────────────────
+
+/// Returns true if the given Helm release exists in the local kind cluster.
+fn helm_release_exists(release: &str) -> bool {
+    let Ok(output) = Command::new("helm")
+        .args([
+            "list",
+            "-n",
+            "default",
+            "--kube-context",
+            "kind-evm-cloud-local",
+            "-q",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return false;
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout.lines().any(|l| l.trim() == release)
+}
+
+/// Returns (readyReplicas, totalReplicas) for the Helm release's deployment in the local cluster.
+/// Best-effort: returns None on any error.
+fn kubectl_local_ready(helm_release: &str) -> Option<(u64, u64)> {
+    let label = format!("app.kubernetes.io/instance={helm_release}");
+    let output = Command::new("kubectl")
+        .args([
+            "get",
+            "deployments",
+            "-n",
+            "default",
+            "--context",
+            "kind-evm-cloud-local",
+            "-l",
+            &label,
+            "-o",
+            "json",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    let item = json.get("items")?.as_array()?.first()?;
+    let total = item
+        .pointer("/spec/replicas")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1);
+    let ready = item
+        .pointer("/status/readyReplicas")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    Some((ready, total))
 }

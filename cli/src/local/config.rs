@@ -293,6 +293,67 @@ pub(crate) fn data_dir() -> String {
     format!("{home}/.evm-cloud/local-data")
 }
 
+/// Returns `config/erpc.yaml` if it exists in the current working directory.
+pub(crate) fn resolve_erpc_config_path() -> Option<PathBuf> {
+    let p = PathBuf::from("config").join("erpc.yaml");
+    if p.is_file() { Some(p) } else { None }
+}
+
+/// Read the contents of a user-provided erpc.yaml.
+pub(crate) fn load_user_erpc_config(path: &Path) -> Result<String> {
+    fs::read_to_string(path).map_err(|source| CliError::Io {
+        source,
+        path: path.to_path_buf(),
+    })
+}
+
+/// Parse the first `chainId:` value found in an eRPC yaml config.
+/// Best-effort: returns None if not found or unparseable.
+pub(crate) fn parse_chain_id_from_erpc(content: &str) -> Option<u64> {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("chainId:") {
+            if let Ok(id) = rest.trim().parse::<u64>() {
+                return Some(id);
+            }
+        }
+    }
+    None
+}
+
+/// Generate eRPC Helm values using user-provided erpc.yaml content.
+/// Wraps the user's yaml in the Helm chart envelope (service, resources, etc.).
+pub(crate) fn generate_erpc_values_from_file(content: &str, res: &ResourceSet) -> String {
+    let indented = content
+        .lines()
+        .map(|l| format!("    {l}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"fullnameOverride: local-erpc
+service:
+  type: NodePort
+  nodePort: 30400
+  port: 4000
+resources:
+  requests:
+    cpu: {cpu_req}
+    memory: {mem_req}
+  limits:
+    cpu: {cpu_lim}
+    memory: {mem_lim}
+config:
+  erpcYaml: |
+{indented}
+"#,
+        cpu_req = res.cpu_req,
+        mem_req = res.mem_req,
+        cpu_lim = res.cpu_lim,
+        mem_lim = res.mem_lim,
+    )
+}
+
 pub(crate) fn resolve_config_path(explicit: Option<&Path>) -> Option<std::path::PathBuf> {
     if let Some(p) = explicit {
         if p.is_file() {
