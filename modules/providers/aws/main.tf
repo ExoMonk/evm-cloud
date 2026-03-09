@@ -417,9 +417,10 @@ module "k8s_addons" {
     helm       = helm
   }
 
-  project_name      = var.project_name
-  eso_enabled       = var.secrets_mode != "inline"
-  eso_chart_version = var.eso_chart_version
+  project_name                 = var.project_name
+  eso_enabled                  = var.secrets_mode != "inline"
+  eso_chart_version            = var.eso_chart_version
+  eso_service_account_role_arn = try(module.eks_irsa_eso[0].role_arn, "")
 
   # Monitoring
   monitoring_enabled                             = var.monitoring_enabled
@@ -441,6 +442,77 @@ module "k8s_addons" {
   aws_region                                     = var.aws_region
 }
 
+# --- IRSA: ESO role for Secrets Manager access (provider mode only) ---
+
+module "eks_irsa_eso" {
+  source = "./eks/irsa-eso"
+  count  = (local.any_eks_compute && var.secrets_mode == "provider") ? 1 : 0
+
+  oidc_provider_arn = module.eks_cluster[0].oidc_provider_arn
+  project_name      = var.project_name
+  secret_arns       = [local.workload_secret_arn]
+  kms_key_arn       = var.secrets_manager_kms_key_id
+}
+
+# --- ClusterSecretStore for ESO (provider mode, EKS only) ---
+# Uses null_resource + kubectl to avoid kubernetes_manifest CRD-at-plan-time issues.
+
+resource "null_resource" "eks_cluster_secret_store" {
+  count = (local.any_eks_compute && local.terraform_manages_workloads && var.secrets_mode == "provider") ? 1 : 0
+
+  depends_on = [module.k8s_addons]
+
+  triggers = {
+    store_name   = "${var.project_name}-aws-sm"
+    region       = var.aws_region
+    cluster_name = module.eks_cluster[0].cluster_name
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      KUBECONFIG_PATH="/tmp/evm-cloud-eks-${self.triggers.cluster_name}-$$.kubeconfig"
+      trap 'rm -f "$KUBECONFIG_PATH"' EXIT
+      aws eks update-kubeconfig --name ${self.triggers.cluster_name} \
+        --region ${self.triggers.region} \
+        --kubeconfig "$KUBECONFIG_PATH"
+      export KUBECONFIG="$KUBECONFIG_PATH"
+      kubectl wait --for=condition=Available deployment/external-secrets \
+        -n external-secrets --timeout=120s
+      cat <<EOF | kubectl apply -f -
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: ${self.triggers.store_name}
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: ${self.triggers.region}
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets
+            namespace: external-secrets
+EOF
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      KUBECONFIG_PATH="/tmp/evm-cloud-eks-${self.triggers.cluster_name}-$$.kubeconfig"
+      trap 'rm -f "$KUBECONFIG_PATH"' EXIT
+      aws eks update-kubeconfig --name ${self.triggers.cluster_name} \
+        --region ${self.triggers.region} \
+        --kubeconfig "$KUBECONFIG_PATH"
+      KUBECONFIG="$KUBECONFIG_PATH" \
+        kubectl delete clustersecretstore ${self.triggers.store_name} --ignore-not-found
+    EOT
+  }
+}
+
 # --- RPC Proxy: eRPC (EKS) ---
 
 module "eks_rpc_proxy" {
@@ -456,8 +528,9 @@ module "eks_rpc_proxy" {
 # --- Indexer: rindexer (EKS) ---
 
 module "eks_indexer" {
-  source = "../../core/k8s/indexer"
-  count  = (var.indexer_enabled && var.compute_engine == "eks" && local.terraform_manages_workloads) ? 1 : 0
+  source     = "../../core/k8s/indexer"
+  count      = (var.indexer_enabled && var.compute_engine == "eks" && local.terraform_manages_workloads) ? 1 : 0
+  depends_on = [module.k8s_addons, null_resource.eks_cluster_secret_store]
 
   project_name         = var.project_name
   image                = var.indexer_image
@@ -479,4 +552,12 @@ module "eks_indexer" {
 
   # Extra env vars
   extra_env = merge(var.indexer_extra_env, var.indexer_extra_secret_env)
+
+  # Secrets mode (ESO integration)
+  secrets_mode       = var.secrets_mode
+  secrets_store_name = var.secrets_mode == "provider" ? "${var.project_name}-aws-sm" : var.external_secret_store_name
+  secrets_store_kind = "ClusterSecretStore"
+  secrets_secret_key = var.secrets_mode == "provider" ? "evm-cloud/${var.project_name}/env" : var.external_secret_key
+  eks_cluster_name   = module.eks_cluster[0].cluster_name
+  aws_region         = var.aws_region
 }

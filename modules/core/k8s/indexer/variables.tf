@@ -122,3 +122,46 @@ variable "extra_env" {
   default     = {}
   sensitive   = true
 }
+
+# --- Secrets Mode (ESO integration) ---
+
+variable "secrets_mode" {
+  description = "Secrets delivery mode: inline (K8s Secret from Terraform), provider (ESO + AWS SM), or external (ESO + user-managed store)."
+  type        = string
+  default     = "inline"
+
+  validation {
+    condition     = contains(["inline", "provider", "external"], var.secrets_mode)
+    error_message = "secrets_mode must be one of: inline, provider, external."
+  }
+}
+
+variable "secrets_store_name" {
+  description = "ClusterSecretStore name for ESO (provider/external mode)."
+  type        = string
+  default     = ""
+}
+
+variable "secrets_store_kind" {
+  description = "SecretStore kind: ClusterSecretStore or SecretStore."
+  type        = string
+  default     = "ClusterSecretStore"
+}
+
+variable "secrets_secret_key" {
+  description = "Key path in the secret store (SM secret name for provider, or external key)."
+  type        = string
+  default     = ""
+}
+
+variable "eks_cluster_name" {
+  description = "EKS cluster name (needed for kubectl provisioners in non-inline mode)."
+  type        = string
+  default     = ""
+}
+
+variable "aws_region" {
+  description = "AWS region (needed for kubectl provisioners in non-inline mode)."
+  type        = string
+  default     = ""
+}

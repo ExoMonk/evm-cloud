@@ -21,6 +21,12 @@ variable "eso_chart_version" {
   default     = "0.9.13"
 }
 
+variable "eso_service_account_role_arn" {
+  description = "IRSA role ARN for ESO ServiceAccount annotation (EKS only)."
+  type        = string
+  default     = ""
+}
+
 # --- Monitoring ---
 
 variable "monitoring_enabled" {

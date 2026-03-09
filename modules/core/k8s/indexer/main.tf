@@ -1,6 +1,9 @@
 locals {
   is_postgres = var.storage_backend == "postgres"
 
+  # Stable secret name — used by both inline (kubernetes_secret) and ESO (ExternalSecret target).
+  secret_name = "${var.project_name}-indexer-secrets"
+
   secret_data = local.is_postgres ? {
     DATABASE_URL = var.database_url
     } : {
@@ -43,15 +46,79 @@ resource "kubernetes_config_map" "abis" {
   data = var.rindexer_abis
 }
 
-# Secrets (DATABASE_URL or CLICKHOUSE_PASSWORD)
+# Secrets (DATABASE_URL or CLICKHOUSE_PASSWORD) — inline mode only.
+# In provider/external mode, ESO creates a K8s Secret with the same name via ExternalSecret.
 resource "kubernetes_secret" "indexer" {
   #checkov:skip=CKV_K8S_21:Default namespace acceptable for Tier 0
+  count = var.secrets_mode == "inline" ? 1 : 0
+
   metadata {
-    name      = "${var.project_name}-indexer-secrets"
+    name      = local.secret_name
     namespace = var.namespace
   }
 
   data = local.secret_data
+}
+
+# ExternalSecret for provider/external mode — creates a K8s Secret synced from a backing store.
+# Uses null_resource + kubectl apply to avoid kubernetes_manifest CRD-at-plan-time issues.
+# Shape must match deployers/charts/indexer/templates/external-secret.yaml exactly.
+resource "null_resource" "external_secret" {
+  count = var.secrets_mode != "inline" ? 1 : 0
+
+  triggers = {
+    secret_name  = local.secret_name
+    namespace    = var.namespace
+    store_name   = var.secrets_store_name
+    store_kind   = var.secrets_store_kind
+    secret_key   = var.secrets_secret_key
+    cluster_name = var.eks_cluster_name
+    region       = var.aws_region
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      KUBECONFIG_PATH="/tmp/evm-cloud-eks-${self.triggers.cluster_name}-$$.kubeconfig"
+      trap 'rm -f "$KUBECONFIG_PATH"' EXIT
+      aws eks update-kubeconfig --name ${self.triggers.cluster_name} \
+        --region ${self.triggers.region} \
+        --kubeconfig "$KUBECONFIG_PATH"
+      export KUBECONFIG="$KUBECONFIG_PATH"
+      cat <<EOF | kubectl apply -f -
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: ${self.triggers.secret_name}
+  namespace: ${self.triggers.namespace}
+spec:
+  refreshInterval: 60s
+  secretStoreRef:
+    name: ${self.triggers.store_name}
+    kind: ${self.triggers.store_kind}
+  target:
+    name: ${self.triggers.secret_name}
+  dataFrom:
+    - extract:
+        key: ${self.triggers.secret_key}
+EOF
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue
+    command    = <<-EOT
+      KUBECONFIG_PATH="/tmp/evm-cloud-eks-${self.triggers.cluster_name}-$$.kubeconfig"
+      trap 'rm -f "$KUBECONFIG_PATH"' EXIT
+      aws eks update-kubeconfig --name ${self.triggers.cluster_name} \
+        --region ${self.triggers.region} \
+        --kubeconfig "$KUBECONFIG_PATH"
+      KUBECONFIG="$KUBECONFIG_PATH" \
+        kubectl delete externalsecret ${self.triggers.secret_name} \
+        -n ${self.triggers.namespace} --ignore-not-found
+    EOT
+  }
 }
 
 # Single-writer constraint: rindexer must run exactly one active writer per
@@ -164,14 +231,15 @@ resource "kubernetes_deployment" "indexer" {
             }
           }
 
-          # Secret env vars
+          # Secret env vars — references the K8s Secret by stable name.
+          # In inline mode, Terraform creates the secret; in provider/external, ESO syncs it.
           dynamic "env" {
             for_each = local.secret_data
             content {
               name = env.key
               value_from {
                 secret_key_ref {
-                  name = kubernetes_secret.indexer.metadata[0].name
+                  name = local.secret_name
                   key  = env.key
                 }
               }

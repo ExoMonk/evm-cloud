@@ -67,8 +67,9 @@ output "workload_handoff" {
       } : null
 
       eks_irsa_role_arns = var.compute_engine == "eks" ? {
-        rpc_proxy = null
-        indexer   = null
+        rpc_proxy        = null
+        indexer          = null
+        external_secrets = try(module.eks_irsa_eso[0].role_arn, null)
       } : null
     }
 

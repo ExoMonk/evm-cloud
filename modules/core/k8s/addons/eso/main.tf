@@ -18,4 +18,13 @@ resource "helm_release" "external_secrets" {
     name  = "installCRDs"
     value = "true"
   }
+
+  # IRSA annotation for EKS — allows ESO pods to assume an IAM role via ServiceAccount
+  dynamic "set" {
+    for_each = var.service_account_role_arn != "" ? [1] : []
+    content {
+      name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+      value = var.service_account_role_arn
+    }
+  }
 }

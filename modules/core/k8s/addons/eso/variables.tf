@@ -9,3 +9,9 @@ variable "eso_chart_version" {
   type        = string
   default     = "0.9.13"
 }
+
+variable "service_account_role_arn" {
+  description = "IRSA role ARN to annotate the ESO ServiceAccount. Empty string skips annotation."
+  type        = string
+  default     = ""
+}

@@ -102,7 +102,7 @@ curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/latest/download/install
 ### Pinned version
 
 ```bash
-curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha7/install.sh | bash -s -- 0.0.1-alpha7
+curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha8/install.sh | bash -s -- 0.0.1-alpha8
 ```
 
 ### Source build
@@ -116,7 +116,7 @@ cargo install --path .
 
 ```yaml
 - name: Install evm-cloud
-  run: curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha7/install.sh | bash -s -- 0.0.1-alpha7
+  run: curl -fsSL https://github.com/ExoMonk/evm-cloud/releases/download/0.0.1-alpha8/install.sh | bash -s -- 0.0.1-alpha8
 ```
 
 ## Architecture

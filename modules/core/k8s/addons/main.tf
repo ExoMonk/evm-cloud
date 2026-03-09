@@ -10,8 +10,9 @@
 module "eso" {
   source = "./eso"
 
-  enabled           = var.eso_enabled
-  eso_chart_version = var.eso_chart_version
+  enabled                  = var.eso_enabled
+  eso_chart_version        = var.eso_chart_version
+  service_account_role_arn = var.eso_service_account_role_arn
 }
 
 module "monitoring" {
