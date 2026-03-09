@@ -87,6 +87,7 @@ pub(super) fn backfill_inline_clickhouse_password(
     handoff: &mut handoff::WorkloadHandoff,
     project_root: &Path,
     project_kind: &ProjectKind,
+    env_ctx: Option<&crate::env::EnvContext>,
 ) -> Result<()> {
     if handoff.compute_engine != ComputeEngine::K3s {
         return Ok(());
@@ -118,16 +119,27 @@ pub(super) fn backfill_inline_clickhouse_password(
         return Ok(());
     }
 
-    let secrets_path = match project_kind {
-        ProjectKind::EasyToml => project_root.join(".evm-cloud").join("secrets.auto.tfvars"),
-        ProjectKind::RawTerraform => project_root.join("secrets.auto.tfvars"),
+    // Check env-specific paths first, then fall back to project root.
+    let mut candidates = match project_kind {
+        ProjectKind::EasyToml => vec![
+            project_root.join(".evm-cloud").join("secrets.auto.tfvars"),
+            project_root.join("secrets.auto.tfvars"),
+        ],
+        ProjectKind::RawTerraform => vec![project_root.join("secrets.auto.tfvars")],
     };
-    if !secrets_path.is_file() {
-        return Ok(());
+    if let Some(ctx) = env_ctx {
+        for path in ctx.auto_tfvars.iter().rev() {
+            candidates.insert(0, path.clone());
+        }
     }
 
+    let secrets_path = match candidates.iter().find(|p| p.is_file()) {
+        Some(p) => p,
+        None => return Ok(()),
+    };
+
     let Some(password) =
-        crate::tfvars_parser::lookup(&secrets_path, "indexer_clickhouse_password")?
+        crate::tfvars_parser::lookup(secrets_path, "indexer_clickhouse_password")?
     else {
         return Ok(());
     };
@@ -146,8 +158,9 @@ pub(super) struct SshVars {
 pub(super) fn resolve_ssh_vars_from_tfvars(
     project_root: &Path,
     project_kind: &ProjectKind,
+    env_ctx: Option<&crate::env::EnvContext>,
 ) -> Result<SshVars> {
-    let candidates = match project_kind {
+    let mut candidates = match project_kind {
         ProjectKind::EasyToml => vec![
             project_root.join(".evm-cloud").join("secrets.auto.tfvars"),
             project_root.join("secrets.auto.tfvars"),
@@ -158,6 +171,12 @@ pub(super) fn resolve_ssh_vars_from_tfvars(
             project_root.join("terraform.tfvars"),
         ],
     };
+    // Prepend env-specific auto.tfvars so they take precedence.
+    if let Some(ctx) = env_ctx {
+        for path in ctx.auto_tfvars.iter().rev() {
+            candidates.insert(0, path.clone());
+        }
+    }
 
     let vars = crate::tfvars_parser::parse_all_existing(&candidates)?;
 
@@ -239,14 +258,21 @@ pub(super) fn generate_env_file(
     project_root: &Path,
     project_kind: &ProjectKind,
     handoff: &handoff::WorkloadHandoff,
+    env_ctx: Option<&crate::env::EnvContext>,
 ) -> Result<()> {
-    let candidates = match project_kind {
+    let mut candidates = match project_kind {
         ProjectKind::EasyToml => vec![
             project_root.join(".evm-cloud").join("secrets.auto.tfvars"),
             project_root.join("secrets.auto.tfvars"),
         ],
         ProjectKind::RawTerraform => vec![project_root.join("secrets.auto.tfvars")],
     };
+    // Prepend env-specific auto.tfvars so they take precedence.
+    if let Some(ctx) = env_ctx {
+        for path in ctx.auto_tfvars.iter().rev() {
+            candidates.insert(0, path.clone());
+        }
+    }
 
     let tfvars = crate::tfvars_parser::parse_first_existing(&candidates)?;
     build_and_write_env(config_dir, &tfvars, handoff)
@@ -470,7 +496,7 @@ mod tests {
         )
         .unwrap();
 
-        let vars = resolve_ssh_vars_from_tfvars(dir.path(), &ProjectKind::EasyToml).unwrap();
+        let vars = resolve_ssh_vars_from_tfvars(dir.path(), &ProjectKind::EasyToml, None).unwrap();
         assert_eq!(vars.key_path.as_deref(), Some("/home/user/.ssh/id_rsa"));
     }
 
@@ -484,7 +510,7 @@ mod tests {
         )
         .unwrap();
 
-        let vars = resolve_ssh_vars_from_tfvars(dir.path(), &ProjectKind::RawTerraform).unwrap();
+        let vars = resolve_ssh_vars_from_tfvars(dir.path(), &ProjectKind::RawTerraform, None).unwrap();
         assert_eq!(vars.key_path.as_deref(), Some("/keys/bm"));
         assert_eq!(vars.user.as_deref(), Some("deploy"));
         assert_eq!(vars.port.as_deref(), Some("2222"));
@@ -545,7 +571,7 @@ mod tests {
         handoff.secrets.mode = Some("inline".into());
         handoff.data.backend = Some("clickhouse".into());
 
-        backfill_inline_clickhouse_password(&mut handoff, dir.path(), &ProjectKind::EasyToml)
+        backfill_inline_clickhouse_password(&mut handoff, dir.path(), &ProjectKind::EasyToml, None)
             .unwrap();
 
         assert_eq!(
@@ -570,7 +596,7 @@ mod tests {
             ..Default::default()
         });
 
-        backfill_inline_clickhouse_password(&mut handoff, dir.path(), &ProjectKind::EasyToml)
+        backfill_inline_clickhouse_password(&mut handoff, dir.path(), &ProjectKind::EasyToml, None)
             .unwrap();
 
         assert_eq!(
@@ -586,7 +612,7 @@ mod tests {
         handoff.compute_engine = ComputeEngine::Ec2;
         handoff.data.backend = Some("clickhouse".into());
 
-        backfill_inline_clickhouse_password(&mut handoff, dir.path(), &ProjectKind::EasyToml)
+        backfill_inline_clickhouse_password(&mut handoff, dir.path(), &ProjectKind::EasyToml, None)
             .unwrap();
 
         assert!(handoff.data.clickhouse.is_none());

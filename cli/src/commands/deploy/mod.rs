@@ -231,6 +231,7 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
                 &mut handoff_result,
                 &project_root,
                 &preflight.project_kind,
+                env_ctx.as_ref(),
             )?;
             parsed_handoff = Some(handoff_result);
         }
@@ -246,7 +247,7 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
             }
         } else {
             // Backfill for handoffs that came from the infra phase too.
-            backfill_inline_clickhouse_password(handoff, &project_root, &preflight.project_kind)?;
+            backfill_inline_clickhouse_password(handoff, &project_root, &preflight.project_kind, env_ctx.as_ref())?;
             handoff::validate_for_action(handoff, Action::Deploy, &args.deployer_args)?;
 
             let mut effective_deployer_args = args.deployer_args.clone();
@@ -271,7 +272,7 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
                 ComputeEngine::Ec2 | ComputeEngine::DockerCompose
             ) {
                 if let Some(ref config_dir) = resolved_config_dir {
-                    generate_env_file(config_dir, &project_root, &preflight.project_kind, handoff)?;
+                    generate_env_file(config_dir, &project_root, &preflight.project_kind, handoff, env_ctx.as_ref())?;
                 }
             }
 
@@ -282,7 +283,7 @@ pub(crate) fn run(args: DeployArgs, color: ColorMode) -> Result<()> {
                 ComputeEngine::Ec2 | ComputeEngine::DockerCompose
             ) {
                 let ssh_vars =
-                    resolve_ssh_vars_from_tfvars(&project_root, &preflight.project_kind)?;
+                    resolve_ssh_vars_from_tfvars(&project_root, &preflight.project_kind, env_ctx.as_ref())?;
 
                 if !has_flag_with_value(&effective_deployer_args, "--ssh-key") {
                     if let Some(ref key_path) = ssh_vars.key_path {

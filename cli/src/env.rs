@@ -31,6 +31,10 @@ pub(crate) struct EnvContext {
     pub tfbackend: PathBuf,
     /// Optional per-env tfvars file (`envs/<name>/<name>.tfvars`).
     pub tfvars: Option<PathBuf>,
+    /// Auto-discovered `*.auto.tfvars` files in `envs/<name>/`.
+    /// Terraform only auto-loads these from its cwd (project root), so the CLI
+    /// must explicitly pass them as `-var-file` when running with `--env`.
+    pub auto_tfvars: Vec<PathBuf>,
     /// Isolated terraform data directory (`envs/<name>/.terraform/`).
     pub tf_data_dir: PathBuf,
 }
@@ -221,6 +225,12 @@ pub(crate) fn build_env_context(name: &str, project_root: &Path) -> Result<EnvCo
         None
     };
 
+    // Collect *.auto.tfvars files — Terraform only auto-loads these from its
+    // cwd (the project root), so we must explicitly inject them when the env
+    // directory differs from the project root.
+    let mut auto_tfvars = collect_auto_tfvars(&env_dir)?;
+    auto_tfvars.sort();
+
     let tf_data_dir = env_dir.join(".terraform");
 
     Ok(EnvContext {
@@ -228,8 +238,30 @@ pub(crate) fn build_env_context(name: &str, project_root: &Path) -> Result<EnvCo
         dir: env_dir,
         tfbackend,
         tfvars,
+        auto_tfvars,
         tf_data_dir,
     })
+}
+
+/// Collect `*.auto.tfvars` files from a directory.
+fn collect_auto_tfvars(dir: &Path) -> Result<Vec<PathBuf>> {
+    let entries = fs::read_dir(dir).map_err(|source| CliError::Io {
+        source,
+        path: dir.to_path_buf(),
+    })?;
+
+    let mut paths = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.ends_with(".auto.tfvars") {
+                    paths.push(path);
+                }
+            }
+        }
+    }
+    Ok(paths)
 }
 
 /// List subdirectory names inside `envs/`.

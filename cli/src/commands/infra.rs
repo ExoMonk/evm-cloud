@@ -61,6 +61,15 @@ pub(crate) fn run_infra_phase(opts: InfraPhaseOpts<'_>) -> Result<InfraPhaseOutc
     }
     // Auto-inject env-specific tfvars if present.
     if let Some(ctx) = opts.env_ctx {
+        // Inject *.auto.tfvars from the env directory (Terraform only
+        // auto-loads these from its cwd, which is the project root).
+        for auto_path in &ctx.auto_tfvars {
+            let var_file_arg = format!("-var-file={}", auto_path.display());
+            if !effective_args.iter().any(|a| a == &var_file_arg) {
+                effective_args.push(var_file_arg);
+            }
+        }
+        // Inject the named <env>.tfvars file.
         if let Some(ref tfvars_path) = ctx.tfvars {
             let var_file_arg = format!("-var-file={}", tfvars_path.display());
             if !effective_args.iter().any(|a| a == &var_file_arg) {
