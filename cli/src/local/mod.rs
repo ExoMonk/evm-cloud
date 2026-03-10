@@ -233,7 +233,7 @@ fn run_up(args: UpArgs, color: ColorMode) -> Result<()> {
     }
 
     let indexer_values =
-        config::generate_indexer_values(&rindexer_yaml, &abis, chain_id, &profile_res.indexer);
+        config::generate_indexer_values(&rindexer_yaml, &abis, chain_id, &profile_res.indexer, user_erpc.is_some());
     output::with_spinner("Deploying rindexer", color, || {
         deploy::deploy_rindexer(&indexer_values, color)
     })?;

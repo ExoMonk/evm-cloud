@@ -200,6 +200,7 @@ pub(crate) fn generate_indexer_values(
     abis: &[(String, String)],
     chain_id: u64,
     res: &ResourceSet,
+    custom_erpc: bool,
 ) -> String {
     let indented_yaml = rindexer_yaml
         .lines()
@@ -213,11 +214,21 @@ pub(crate) fn generate_indexer_values(
         .collect::<Vec<_>>()
         .join("\n");
 
+    // When using a custom eRPC config, the rindexer YAML handles per-chain
+    // routing via ${RPC_URL}/<project>/evm/<chain_id>, so RPC_URL should be
+    // just the base URL. With the default local eRPC (single-chain, project
+    // "local"), we include the full path.
+    let rpc_url = if custom_erpc {
+        "http://local-erpc:4000".to_string()
+    } else {
+        format!("http://local-erpc:4000/local/evm/{chain_id}")
+    };
+
     format!(
         r#"fullnameOverride: local-indexer
 storageBackend: clickhouse
 secretsMode: inline
-rpcUrl: http://local-erpc:4000/local/evm/{chain_id}
+rpcUrl: {rpc_url}
 clickhouse:
   url: http://clickhouse:8123
   user: default
