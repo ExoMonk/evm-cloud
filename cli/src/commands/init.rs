@@ -209,6 +209,34 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
                 }
             }
         }
+        Err(CliError::RawTerraformOptInRequired { .. }) => {
+            // Existing .tf files detected but no evm-cloud.toml or mode marker.
+            // Create a minimal TOML + power mode marker so the CLI can track
+            // the project without overwriting existing Terraform files.
+            let default_name = args
+                .dir
+                .canonicalize()
+                .ok()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                .unwrap_or_else(|| "evm-cloud-project".to_string());
+
+            let name = if args.non_interactive {
+                default_name
+            } else {
+                output::info(
+                    "Detected existing Terraform files — creating minimal project metadata.",
+                    color,
+                );
+                dialoguer::Input::<String>::new()
+                    .with_prompt("Project name")
+                    .default(default_name)
+                    .interact()
+                    .unwrap_or_else(|_| "evm-cloud-project".to_string())
+            };
+
+            init_scaffold::scaffold_raw_project(&args.dir, &name, &None, args.force, color)?;
+            args.dir.clone()
+        }
         Err(CliError::NoProjectDetected { .. }) => {
             let mut answers = init_wizard::collect_answers(
                 args.config.as_deref(),

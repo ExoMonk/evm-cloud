@@ -1,6 +1,6 @@
 # Examples
 
-9 ready-to-use deployment examples. Each is a complete deployment you can run with `evm-cloud deploy` (or raw Terraform).
+10 ready-to-use deployment examples. Each is a complete deployment you can run with `evm-cloud deploy` (or raw Terraform).
 
 ## Which Example Should I Use?
 
@@ -15,6 +15,7 @@
 | [minimal_aws_external_ec2_byo](./external-ec2.mdx) | AWS | EC2 | ClickHouse (BYODB) | external | ~$15-35 | CI/CD owns workloads |
 | [aws_k3s_cloudflare_ingress](./k3s-cloudflare.mdx) | AWS | k3s on EC2 | ClickHouse (BYODB) | external | ~$17 | k3s + Cloudflare TLS |
 | [baremetal_k3s_byo_db](./bare-metal-k3s.mdx) | Bare Metal | k3s | PostgreSQL (BYODB) | external | Your VPS | k3s on any VPS |
+| [baremetal_defi_k3s_with_api](./defi-k3s-swap-api.mdx) | Bare Metal | k3s | ClickHouse (BYODB) | external | Your VPS | Custom service + indexer |
 
 ## How to Choose
 
@@ -23,6 +24,7 @@
 - **Want Kubernetes?** Use [EKS](./eks-clickhouse.mdx) for production, [k3s](./k3s-clickhouse.mdx) for budget single-node K8s, [k3s + Cloudflare](./k3s-cloudflare.mdx) for k3s with production TLS, or [k3s multi-node](./k3s-multi-clickhouse.mdx) for live+backfill separation with spot workers.
 - **No AWS account?** Use [baremetal_byo_clickhouse](./bare-metal-clickhouse.mdx) (Docker Compose) or [bare_metal_k3s](./bare-metal-k3s.mdx) (k3s + ESO) -- works on any VPS (Hetzner, OVH, DigitalOcean).
 - **Separate infra from app deploy?** Use [external_ec2](./external-ec2.mdx) -- Terraform provisions infrastructure, your CI/CD deploys workloads.
+- **Custom services alongside indexer?** Use [baremetal_defi_k3s_with_api](./defi-k3s-swap-api.mdx) -- Uniswap V4 multi-chain Swap indexer + custom API on any VPS.
 
 ## Common Prerequisites
 

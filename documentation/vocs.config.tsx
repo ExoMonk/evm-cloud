@@ -126,6 +126,10 @@ export default defineConfig({
           text: "Prod: k3s Multi-Node + ClickHouse",
           link: "/docs/examples/k3s-multi-clickhouse",
         },
+        {
+          text: "DeFi: Bare Metal k3s + Swap API",
+          link: "/docs/examples/defi-k3s-swap-api",
+        },
       ],
     },
     {

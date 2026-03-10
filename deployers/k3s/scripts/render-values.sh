@@ -43,6 +43,7 @@ ERPC_HOSTNAME=$(jq -r '.ingress.erpc_hostname // empty' "$HANDOFF")
 
 cat > "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
 fullnameOverride: ${PROJECT}-erpc
+priorityClassName: evm-cloud-system
 service:
   port: ${RPC_PORT}
 config:
@@ -101,6 +102,7 @@ render_indexer_values() {
 
   cat > "$OUT_FILE" <<EOF
 fullnameOverride: ${PROJECT}-${INSTANCE_NAME}
+priorityClassName: evm-cloud-system
 workloadType: ${WORKLOAD_TYPE}
 storageBackend: ${BACKEND}
 replicas: 1
@@ -216,6 +218,7 @@ render_custom_service_values() {
 
   cat > "$OUT_FILE" <<EOF
 fullnameOverride: ${PROJECT}-${NAME}
+priorityClassName: evm-cloud-custom
 image:
   repository: ${IMAGE_REPO}
   tag: "${IMAGE_TAG}"

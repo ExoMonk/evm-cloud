@@ -1,0 +1,193 @@
+# DeFi: Bare Metal k3s + Uniswap V4 Swap Indexer + Custom API
+
+Indexes Uniswap V4 **Swap** events on Ethereum and Base into ClickHouse, with a TypeScript API deployed alongside via [`custom_services`](../variable-reference#custom-services). Runs on any VPS — no AWS account needed.
+
+The indexer streams swaps to the API in real-time via [rindexer webhook](https://rindexer.xyz/docs/streams/webhooks) — the API flags whale swaps above a configurable threshold.
+
+## Architecture
+
+```
+Ethereum RPC ─┐                                  ┌──────────────────────┐
+              ├→ eRPC → rindexer ─── writes ────→ │ ClickHouse (BYODB)   │
+Base RPC ─────┘           │                       └──────────┬───────────┘
+                          │                                  │
+                   webhook stream                       reads│
+                   (Swap events)                             │
+                          │         ┌────────────────────────┘
+                          ▼         ▼
+                      ┌─────────────────┐
+                      │    swap-api      │
+                      │  GET /swaps      │  ← query indexed data
+                      │  GET /stats      │
+                      │  GET /alerts     │  ← whale swap alerts
+                      │  POST /webhooks  │  ← rindexer stream
+                      └─────────────────┘
+
+Runs on a single VPS (Hetzner, OVH, DigitalOcean, etc.) with k3s.
+```
+
+## What Gets Deployed
+
+**Phase 1 (Terraform):**
+- k3s installed on your VPS via SSH provisioner
+- Workload handoff JSON including `custom_services` and webhook env vars
+
+**Phase 2 (evm-cloud deploy):**
+- **eRPC** — multi-chain RPC proxy (Ethereum + Base)
+- **rindexer** — indexes Uniswap V4 `Swap` events, streams to webhook
+- **swap-api** — TypeScript custom service: query endpoint + whale alerts
+- PriorityClasses, ResourceQuota, NetworkPolicy
+
+## Uniswap V4 PoolManager
+
+| Chain | Address |
+|-------|---------|
+| Ethereum | `0x000000000004444c5dc75cB358380D2e3dE08A90` |
+| Base | `0x498581fF718922c3f8e6A244956aF099B2652b2b` |
+
+Source: [Uniswap V4 Deployments](https://docs.uniswap.org/contracts/v4/deployments)
+
+## Prerequisites
+
+- Terraform/OpenTofu >= 1.14.6
+- A VPS with SSH access (Ubuntu recommended, 4GB+ RAM)
+- `kubectl` and `helm`
+- A ClickHouse instance ([ClickHouse Cloud](https://clickhouse.cloud/) or self-hosted)
+- Docker (to build the API image)
+
+## Quick Start
+
+```bash
+git clone https://github.com/ExoMonk/evm-cloud.git
+cd evm-cloud/examples/baremetal_defi_k3s_with_api
+
+# Build the API image
+cd api && docker build -t swap-api:latest . && cd ..
+# Push to your registry (update swap_api_image in secrets.auto.tfvars)
+
+# Configure
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# Edit: bare_metal_host, ssh_private_key_path, ClickHouse creds, webhook_secret
+
+# Deploy
+evm-cloud init
+evm-cloud apply
+evm-cloud deploy
+```
+
+## Configuration
+
+### Custom Service + Webhook Wiring
+
+The `main.tf` wires three things together:
+
+1. **Indexer env vars** — tells rindexer where to send webhooks:
+   ```hcl
+   indexer_extra_env = {
+     WEBHOOK_URL = "http://${var.project_name}-swap-api:3000"
+   }
+   indexer_extra_secret_env = {
+     RINDEXER_WEBHOOK_SECRET = var.webhook_secret
+   }
+   ```
+
+2. **Rindexer config** — webhook stream in `config/rindexer.yaml`:
+   ```yaml
+   streams:
+     webhooks:
+       - endpoint: ${WEBHOOK_URL}/webhooks/rindexer
+         shared_secret: ${RINDEXER_WEBHOOK_SECRET}
+         networks: [ethereum, base]
+         events:
+           - event_name: Swap
+   ```
+
+3. **Custom service** — the API with matching secret:
+   ```hcl
+   custom_services = [
+     {
+       name           = "swap-api"
+       image          = var.swap_api_image
+       port           = 3000
+       health_path    = "/health"
+       env = { WHALE_THRESHOLD = var.whale_threshold }
+       secret_env = { WEBHOOK_SECRET = var.webhook_secret }
+     }
+   ]
+   ```
+
+### Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `bare_metal_host` | *(required)* | IP or hostname of your VPS |
+| `bare_metal_ssh_user` | `ubuntu` | SSH user |
+| `ssh_private_key_path` | *(required)* | Path to SSH private key |
+| `webhook_secret` | *(required)* | Shared secret for rindexer → API authentication |
+| `whale_threshold` | `1000000000000000000` | Whale alert threshold (raw token units, default: 1e18) |
+| `swap_api_image` | `ghcr.io/myorg/swap-api:latest` | Your API container image |
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/swaps?limit=20&network=base` | GET | Recent swaps from ClickHouse |
+| `/stats` | GET | Per-network aggregates |
+| `/alerts?network=ethereum` | GET | Whale swap alerts (in-memory ring buffer) |
+| `/webhooks/rindexer` | POST | Rindexer webhook receiver |
+
+### How Whale Detection Works
+
+1. rindexer indexes `Swap` events → writes to ClickHouse
+2. Simultaneously streams each event via webhook to `swap-api`
+3. API checks if `|amount0|` or `|amount1|` exceeds `WHALE_THRESHOLD`
+4. Matches stored in a ring buffer (last 100), logged to stdout
+5. Query via `GET /alerts`
+
+## The API (TypeScript)
+
+The `api/` directory contains a self-contained TypeScript service:
+
+```
+api/
+├── Dockerfile              # Multi-stage build (node:22-alpine)
+├── package.json            # hono + @clickhouse/client
+├── tsconfig.json
+└── src/
+    ├── index.ts            # Routes: /health, /swaps, /stats, /alerts, /webhooks/rindexer
+    ├── db.ts               # ClickHouse client (reads auto-injected env vars)
+    └── types.ts            # RindexerWebhookPayload, WhaleAlert types
+```
+
+**Stack:** [Hono](https://hono.dev/) + [@clickhouse/client](https://clickhouse.com/docs/en/integrations/language-clients/javascript)
+
+The API reads auto-injected env vars (`DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `ERPC_URL`) — no manual connection string wiring needed.
+
+## Verification
+
+```bash
+# Check all pods are running
+evm-cloud status
+
+# Check indexer logs (should see Swap events being indexed)
+evm-cloud logs indexer
+
+# Check swap-api logs (should see webhook receipts + whale alerts)
+evm-cloud logs swap-api
+
+# Port-forward to test API locally
+kubectl port-forward -n evm-cloud svc/defi-swaps-swap-api 3000:3000
+curl http://localhost:3000/health
+curl http://localhost:3000/alerts
+```
+
+## Estimated Cost
+
+Your VPS cost + ClickHouse BYODB. A 4GB VPS (~$5-20/mo on Hetzner/OVH) is sufficient.
+
+## Next Steps
+
+- Add `ingress_hostname` to expose the API publicly — see [TLS & Ingress guide](../guides/tls-ingress)
+- Persist whale alerts to ClickHouse instead of in-memory
+- Add more custom services — see [Custom Services guide](../guides/custom-services)

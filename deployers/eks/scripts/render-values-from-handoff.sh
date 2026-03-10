@@ -29,6 +29,7 @@ mkdir -p "$OUT_DIR"
 
 cat > "$OUT_DIR/rpc-proxy-values.yaml" <<EOF
 fullnameOverride: ${PROJECT}-erpc
+priorityClassName: evm-cloud-system
 service:
   port: ${RPC_PORT}
 config:
@@ -44,6 +45,7 @@ EOF
 
 cat > "$OUT_DIR/indexer-values.yaml" <<EOF
 fullnameOverride: ${PROJECT}-indexer
+priorityClassName: evm-cloud-system
 storageBackend: ${BACKEND}
 replicas: 1
 strategy:
@@ -92,6 +94,7 @@ if [[ "$CUSTOM_SERVICES" != "null" && "$CUSTOM_SERVICES" != "[]" ]]; then
 
     cat > "$OUT_DIR/custom-${SVC_NAME}-values.yaml" <<EOF
 fullnameOverride: ${PROJECT}-${SVC_NAME}
+priorityClassName: evm-cloud-custom
 image:
   repository: ${SVC_IMAGE_REPO}
   tag: "${SVC_IMAGE_TAG}"

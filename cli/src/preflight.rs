@@ -142,7 +142,7 @@ fn has_explicit_tf_root(path: &Path) -> bool {
     path.join("main.tf").is_file() && path.join("versions.tf").is_file()
 }
 
-fn has_any_tf_files(path: &Path) -> Result<bool> {
+pub(crate) fn has_any_tf_files(path: &Path) -> Result<bool> {
     let entries = fs::read_dir(path).map_err(|source| CliError::Io {
         source,
         path: path.to_path_buf(),

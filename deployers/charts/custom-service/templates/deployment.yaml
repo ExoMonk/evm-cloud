@@ -19,7 +19,9 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         evm-cloud/component: custom-service
     spec:
-      priorityClassName: evm-cloud-custom
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       containers:
         - name: {{ include "custom-service.name" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

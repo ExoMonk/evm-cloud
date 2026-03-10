@@ -18,7 +18,9 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       restartPolicy: Never
-      priorityClassName: evm-cloud-system
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       containers:
         - name: indexer
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

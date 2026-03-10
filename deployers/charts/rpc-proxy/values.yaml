@@ -32,6 +32,8 @@ ingress:
   clusterIssuer: "letsencrypt-prod"
   annotations: {}
 
+priorityClassName: ""
+
 podAnnotations: {}
 nodeSelector: {}
 tolerations: []

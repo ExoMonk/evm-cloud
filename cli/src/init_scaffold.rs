@@ -150,6 +150,36 @@ pub(crate) fn scaffold_project(
     Ok(())
 }
 
+/// Scaffold a raw Terraform project: write minimal evm-cloud.toml + mode marker.
+/// Used when `evm-cloud init` detects existing .tf files without an evm-cloud.toml.
+pub(crate) fn scaffold_raw_project(
+    project_root: &Path,
+    project_name: &str,
+    state_config: &Option<crate::config::schema::StateConfig>,
+    force: bool,
+    color: ColorMode,
+) -> Result<()> {
+    let toml_path = project_root.join("evm-cloud.toml");
+    let mode_path = project_root.join(MODE_MARKER_REL);
+
+    if toml_path.exists() && !force {
+        return Err(CliError::InitFileExists { path: toml_path });
+    }
+
+    let state_section = crate::init_templates::render_state_section(state_config);
+    let toml_content = format!(
+        "schema_version = 1\n\n[project]\nname = \"{project_name}\"\n{state_section}"
+    );
+
+    write_atomic(&toml_path, &toml_content)?;
+    write_atomic(&mode_path, "power\n")?;
+
+    update_gitignore(project_root, InitMode::Power)?;
+
+    output::success("Created minimal evm-cloud.toml (raw Terraform mode)", color);
+    Ok(())
+}
+
 fn managed_files(answers: &InitAnswers) -> Vec<&'static str> {
     let mut files = vec![
         "evm-cloud.toml",
