@@ -1,0 +1,276 @@
+# Custom Services
+
+Deploy your own containerized services alongside the evm-cloud indexer stack. Custom services share the same Kubernetes namespace, networking, and database access — without managing separate infrastructure.
+
+## Overview
+
+The `custom_services` Terraform variable lets you declare 1-N containerized services that are deployed as Helm releases alongside the indexer and eRPC. Each service automatically receives infrastructure environment variables (database credentials, eRPC URL) so it can interact with the indexed data immediately.
+
+```
+┌─────────────────────────────────────────────────┐
+│  evm-cloud namespace                            │
+│                                                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │  eRPC    │  │ Indexer  │  │ Grafana  │     │
+│  │ (system) │  │ (system) │  │ (system) │     │
+│  └──────────┘  └──────────┘  └──────────┘     │
+│                                                 │
+│  ┌──────────┐  ┌──────────┐                    │
+│  │  my-api  │  │ worker   │  ← custom services │
+│  │ (custom) │  │ (custom) │                    │
+│  └──────────┘  └──────────┘                    │
+│                                                 │
+│  PriorityClass: system=1000, custom=100         │
+│  ResourceQuota: 2 CPU / 2Gi (custom services)   │
+└─────────────────────────────────────────────────┘
+```
+
+## Quick Start
+
+Add `custom_services` to your Terraform config:
+
+```hcl
+custom_services = [
+  {
+    name        = "api"
+    image       = "ghcr.io/myorg/my-api:v1.2.0"
+    port        = 3000
+    health_path = "/health"
+    env = {
+      LOG_LEVEL = "info"
+    }
+  }
+]
+```
+
+After `terraform apply` + `evm-cloud deploy`, your API service will be running in the cluster with automatic access to the database and eRPC.
+
+## Supported Engines
+
+Custom services work on all three compute engines:
+
+| Engine | How It Deploys | Details |
+|--------|---------------|---------|
+| **k3s** | `helm upgrade --install` per service | Full Helm lifecycle, PriorityClasses, ResourceQuota |
+| **EKS** | Values files scaffolded for ArgoCD | GitOps-compatible — ArgoCD syncs the Helm releases |
+| **Docker Compose** | `.env.<service-name>` files generated | Env files uploaded via SCP alongside compose stack |
+
+## Configuration Comparison
+
+Custom services and indexer instances share many configuration options but differ in key areas:
+
+| Capability | Indexer (`indexer_instances`) | Custom Service (`custom_services`) |
+|-----------|-----|----------------|
+| **Image** | Fixed (`indexer_image`) | User-specified per service |
+| **Replicas** | 1 (fixed) | Configurable (`replicas`, default: 1) |
+| **CPU request/limit** | Managed by chart defaults | Configurable (`cpu_request`, `cpu_limit`) |
+| **Memory request/limit** | Managed by chart defaults | Configurable (`memory_request`, `memory_limit`) |
+| **Health probes** | Always enabled (rindexer `/health`) | Configurable path, disable with `health_path = ""` |
+| **Node pinning** | `node_role` (nodeSelector) | `node_role` + `tolerations` (for tainted node groups) |
+| **Workload type** | Deployment or Job (`workload_type`) | Deployment only |
+| **Config injection** | `rindexer_config_yaml` + ABIs | `env` + `secret_env` maps |
+| **Auto-injected env** | `RPC_URL`, `DATABASE_URL` | `ERPC_URL`, `DB_HOST`, `DB_USER`, `DB_NAME`, `DB_PASSWORD`, `DB_BACKEND` |
+| **NetworkPolicy** | None (system priority) | Per-service (ingress + egress rules) |
+| **PriorityClass** | `evm-cloud-system` (1000) | `evm-cloud-custom` (100) |
+| **Ingress** | Via eRPC hostname | Per-service (`ingress_hostname` + `ingress_path`) |
+
+## Multi-Instance Deployment
+
+Both indexers and custom services support running multiple instances:
+
+### Multiple Indexers
+
+Use `indexer_instances` to run independent rindexer instances (e.g. live + backfill):
+
+```hcl
+indexer_instances = [
+  { name = "indexer", node_role = "server" },
+  { name = "backfill", config_key = "backfill", node_role = "indexer", workload_type = "job" },
+]
+```
+
+Each instance gets its own Helm release with an independent config.
+
+### Multiple Custom Services
+
+Each entry in `custom_services` becomes a separate Helm release:
+
+```hcl
+custom_services = [
+  {
+    name  = "api"
+    image = "ghcr.io/myorg/api:v1"
+    port  = 3000
+  },
+  {
+    name         = "worker"
+    image        = "ghcr.io/myorg/worker:v1"
+    port         = 8080
+    health_path  = ""
+    node_role    = "indexer"
+    enable_egress = true
+  },
+  {
+    name           = "dashboard"
+    image          = "ghcr.io/myorg/dashboard:v1"
+    port           = 8080
+    ingress_hostname = "dashboard.example.com"
+  }
+]
+```
+
+## Node Pinning
+
+Pin custom services to specific nodes using `node_role` and `tolerations`.
+
+### nodeSelector (all engines)
+
+`node_role` maps to `nodeSelector: { evm-cloud/role: <value> }`. Use this with k3s worker nodes:
+
+```hcl
+# k3s worker with role label
+k3s_worker_nodes = [
+  { name = "api-node", role = "api", instance_type = "t3.medium" },
+]
+
+# Pin custom service to that node
+custom_services = [
+  {
+    name      = "api"
+    image     = "ghcr.io/myorg/api:v1"
+    port      = 3000
+    node_role = "api"
+  }
+]
+```
+
+### Tolerations (EKS tainted node groups)
+
+On EKS, dedicated node groups often use taints to prevent general workloads from scheduling. Add matching tolerations:
+
+```hcl
+custom_services = [
+  {
+    name      = "api"
+    image     = "ghcr.io/myorg/api:v1"
+    port      = 3000
+    node_role = "api"
+    tolerations = [
+      {
+        key      = "dedicated"
+        operator = "Equal"
+        value    = "custom-api"
+        effect   = "NoSchedule"
+      }
+    ]
+  }
+]
+```
+
+## Auto-Injected Environment Variables
+
+Every custom service pod automatically receives these infrastructure variables:
+
+| Variable | Description |
+|----------|-------------|
+| `ERPC_URL` | Internal eRPC endpoint (e.g. `http://myproject-erpc:4000`) |
+| `DB_HOST` | Database hostname |
+| `DB_USER` | Database username |
+| `DB_NAME` | Database name |
+| `DB_PASSWORD` | Database password (injected via K8s Secret) |
+| `DB_BACKEND` | Storage backend type (`postgres` or `clickhouse`) |
+
+Your service can read indexed data directly — no manual connection string wiring.
+
+## Network Isolation
+
+Each custom service gets a `NetworkPolicy` that restricts traffic:
+
+- **Ingress**: Allowed from nginx ingress controller and pods in the same namespace
+- **Egress**: Allowed to DNS (kube-dns) and pods in the same namespace
+- **Internet egress**: Blocked by default. Set `enable_egress = true` to allow outbound internet (e.g. for calling external APIs)
+
+## Resource Isolation
+
+Custom services are isolated from system workloads via Kubernetes scheduling primitives:
+
+### PriorityClasses
+
+| Class | Priority | Workloads |
+|-------|----------|-----------|
+| `evm-cloud-system` | 1000 | Indexer, eRPC, monitoring |
+| `evm-cloud-custom` | 100 | Custom services |
+
+Under resource pressure, Kubernetes preempts custom service pods before system pods.
+
+### ResourceQuota
+
+A namespace-scoped `ResourceQuota` caps aggregate custom service resource consumption:
+
+| Resource | Default Limit |
+|----------|--------------|
+| CPU (requests) | 2 |
+| Memory (requests) | 2Gi |
+
+To adjust these limits, edit the ResourceQuota block in `deployers/k3s/deploy.sh`.
+
+## Scaling
+
+### Static Replicas
+
+Set `replicas` per service for fixed horizontal scaling:
+
+```hcl
+custom_services = [
+  {
+    name     = "api"
+    image    = "ghcr.io/myorg/api:v1"
+    port     = 3000
+    replicas = 3
+  }
+]
+```
+
+### Horizontal Pod Autoscaler (HPA)
+
+:::warning[Coming Soon]
+**HPA is not yet implemented.** Automatic scaling based on CPU/memory metrics is planned for a future release. For now, use static `replicas` and monitor resource usage via the Grafana dashboards.
+
+Workaround: After deployment, you can manually create an HPA resource targeting the custom service Deployment:
+
+```bash
+kubectl autoscale deployment myproject-api \
+  --cpu-percent=70 --min=1 --max=5 -n evm-cloud
+```
+:::
+
+## Secrets
+
+Custom services support two types of user-provided secrets:
+
+- **`secret_env`**: Key-value pairs stored in a Kubernetes Secret and injected as environment variables
+- **`DB_PASSWORD`**: Auto-injected from the infrastructure database credentials (via K8s Secret)
+
+```hcl
+custom_services = [
+  {
+    name = "api"
+    image = "ghcr.io/myorg/api:v1"
+    port  = 3000
+    secret_env = {
+      API_KEY      = "sk-abc123"
+      SIGNING_KEY  = "0xdeadbeef"
+    }
+  }
+]
+```
+
+:::warning
+On k3s/EKS with `workload_mode = "external"`, `secret_env` values flow through the handoff JSON. Ensure your handoff file is not committed to source control.
+:::
+
+## Reserved Names
+
+Service names must not conflict with system components. The following names are rejected at `terraform validate` time:
+
+`erpc`, `indexer`, `dashboards`, `monitoring`, `ingress-nginx`, `external-secrets`, `cert-manager`, `loki`, `promtail`

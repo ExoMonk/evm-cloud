@@ -86,6 +86,10 @@ export default defineConfig({
           link: "/docs/guides/two-phase-workflow",
         },
         {
+          text: "Custom Services",
+          link: "/docs/guides/custom-services",
+        },
+        {
           text: "External Deployers",
           link: "/docs/guides/external-deployers",
         },

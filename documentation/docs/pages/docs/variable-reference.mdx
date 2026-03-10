@@ -248,6 +248,106 @@ On K3s/EKS with `workload_mode = "external"` (the default), `indexer_extra_secre
 
 ---
 
+## Custom Services
+
+Deploy your own containerized services (APIs, workers, backends) alongside the indexer stack. Each service gets its own Helm release with auto-injected infrastructure environment variables.
+
+See the [Custom Services guide](./guides/custom-services.mdx) for architecture details, scaling options, and configuration comparison with indexers.
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `custom_services` | `list(object)` | `[]` | User-defined services deployed alongside the indexer stack. See fields below. |
+
+### Service Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `string` | (required) | Service name. Becomes Helm release `<project>-<name>`. Must not use reserved names (`erpc`, `indexer`, `monitoring`, etc.). |
+| `image` | `string` | (required) | Container image (e.g. `ghcr.io/myorg/my-api:v1`). |
+| `port` | `number` | (required) | Container port to expose via ClusterIP Service. |
+| `health_path` | `string` | `"/health"` | HTTP health check path. Set to `""` to disable probes. |
+| `replicas` | `number` | `1` | Number of pod replicas (static). |
+| `cpu_request` | `string` | `"250m"` | CPU request per pod. |
+| `memory_request` | `string` | `"256Mi"` | Memory request per pod. |
+| `cpu_limit` | `string` | `"500m"` | CPU limit per pod. |
+| `memory_limit` | `string` | `"512Mi"` | Memory limit per pod. |
+| `env` | `map(string)` | `{}` | Plaintext environment variables. |
+| `secret_env` | `map(string)` | `{}` | Sensitive environment variables (stored in K8s Secret). |
+| `ingress_hostname` | `string` | `""` | Public hostname for ingress (requires `ingress_mode != "none"`). |
+| `ingress_path` | `string` | `"/"` | Ingress path prefix. |
+| `node_role` | `string` | `""` | Pin to nodes with `evm-cloud/role=<value>` label via `nodeSelector`. |
+| `tolerations` | `list(object)` | `[]` | Kubernetes tolerations for tainted nodes (e.g. EKS dedicated node groups). |
+| `enable_egress` | `bool` | `false` | Allow outbound internet access. By default, pods can only reach services in the same namespace + DNS. |
+
+### Toleration Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `key` | `string` | (required) | Taint key to match. |
+| `operator` | `string` | `"Equal"` | `Equal` or `Exists`. |
+| `value` | `string` | `""` | Taint value (required when `operator = "Equal"`). |
+| `effect` | `string` | `"NoSchedule"` | `NoSchedule`, `PreferNoSchedule`, or `NoExecute`. |
+
+### Example
+
+```hcl
+custom_services = [
+  {
+    name           = "api"
+    image          = "ghcr.io/myorg/my-api:v1.2.0"
+    port           = 3000
+    health_path    = "/health"
+    replicas       = 2
+    memory_request = "256Mi"
+    memory_limit   = "512Mi"
+    env = {
+      LOG_LEVEL = "info"
+    }
+    secret_env = {
+      API_KEY = "sk-abc123"
+    }
+  },
+  {
+    name         = "worker"
+    image        = "ghcr.io/myorg/my-worker:v1.2.0"
+    port         = 8080
+    health_path  = ""
+    node_role    = "indexer"
+    enable_egress = true
+  }
+]
+```
+
+### Auto-Injected Environment Variables
+
+Every custom service automatically receives these infrastructure variables — no manual wiring needed:
+
+| Variable | Source | Example Value |
+|----------|--------|---------------|
+| `ERPC_URL` | eRPC internal service | `http://myproject-erpc:4000` |
+| `DB_HOST` | Database endpoint | `myproject-db.abc123.us-east-1.rds.amazonaws.com` |
+| `DB_USER` | Database username | `rindexer` |
+| `DB_NAME` | Database name | `rindexer` |
+| `DB_PASSWORD` | Database password (via K8s Secret) | *(injected from secret)* |
+| `DB_BACKEND` | Storage backend | `postgres` or `clickhouse` |
+
+### Resource Isolation
+
+Custom services run with lower scheduling priority than system workloads:
+
+| PriorityClass | Value | Applied To |
+|---------------|-------|------------|
+| `evm-cloud-system` | 1000 | Indexer, eRPC, monitoring |
+| `evm-cloud-custom` | 100 | Custom services |
+
+A `ResourceQuota` caps aggregate custom service usage at **2 CPU / 2Gi memory** per namespace (configurable by editing `deploy.sh`).
+
+Each custom service also gets a `NetworkPolicy`:
+- **Ingress**: from nginx ingress controller + same namespace
+- **Egress**: DNS + same namespace. Internet access only when `enable_egress = true`.
+
+---
+
 ## Secrets Management
 
 Control how credentials reach workloads. See the [Secrets Management guide](./guides/secrets-management.mdx) for architecture details.
