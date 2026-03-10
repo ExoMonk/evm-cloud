@@ -366,6 +366,36 @@ variable "indexer_extra_secret_env" {
   sensitive   = true
 }
 
+# --- Custom Services ---
+
+variable "custom_services" {
+  description = "User-defined containerized services deployed alongside the indexer stack."
+  type = list(object({
+    name             = string
+    image            = string
+    port             = number
+    health_path      = optional(string, "/health")
+    replicas         = optional(number, 1)
+    cpu_request      = optional(string, "250m")
+    memory_request   = optional(string, "256Mi")
+    cpu_limit        = optional(string, "500m")
+    memory_limit     = optional(string, "512Mi")
+    env              = optional(map(string), {})
+    secret_env       = optional(map(string), {})
+    ingress_hostname = optional(string)
+    ingress_path     = optional(string, "/")
+    node_role        = optional(string)
+    tolerations = optional(list(object({
+      key      = string
+      operator = optional(string, "Equal")
+      value    = optional(string)
+      effect   = optional(string, "NoSchedule")
+    })), [])
+    enable_egress = optional(bool, false)
+  }))
+  default = []
+}
+
 # --- k3s ---
 
 variable "k3s_version" {

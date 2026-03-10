@@ -1,0 +1,5 @@
+apiVersion: v2
+name: custom-service
+description: Generic Helm chart for user-defined BYO services in evm-cloud
+version: 0.1.0
+appVersion: "1.0"

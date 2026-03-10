@@ -192,4 +192,129 @@ else
   render_indexer_values "indexer" "" "$OUT_DIR/indexer-values.yaml"
 fi
 
+# --- Custom service values ---
+
+render_custom_service_values() {
+  local SVC_JSON="$1"
+  local OUT_FILE="$2"
+
+  local NAME=$(echo "$SVC_JSON" | jq -r '.name')
+  local IMAGE=$(echo "$SVC_JSON" | jq -r '.image')
+  local IMAGE_REPO="${IMAGE%%:*}"
+  local IMAGE_TAG="${IMAGE##*:}"
+  if [[ "$IMAGE_REPO" == "$IMAGE_TAG" ]]; then IMAGE_TAG="latest"; fi
+
+  local PORT=$(echo "$SVC_JSON" | jq -r '.port')
+  local HEALTH_PATH=$(echo "$SVC_JSON" | jq -r '.health_path // "/health"')
+  local REPLICAS=$(echo "$SVC_JSON" | jq -r '.replicas // 1')
+  local CPU_REQ=$(echo "$SVC_JSON" | jq -r '.cpu_request // "250m"')
+  local MEM_REQ=$(echo "$SVC_JSON" | jq -r '.memory_request // "256Mi"')
+  local CPU_LIM=$(echo "$SVC_JSON" | jq -r '.cpu_limit // "500m"')
+  local MEM_LIM=$(echo "$SVC_JSON" | jq -r '.memory_limit // "512Mi"')
+  local NODE_ROLE=$(echo "$SVC_JSON" | jq -r '.node_role // empty')
+  local ENABLE_EGRESS=$(echo "$SVC_JSON" | jq -r '.enable_egress // false')
+
+  cat > "$OUT_FILE" <<EOF
+fullnameOverride: ${PROJECT}-${NAME}
+image:
+  repository: ${IMAGE_REPO}
+  tag: "${IMAGE_TAG}"
+replicas: ${REPLICAS}
+service:
+  port: ${PORT}
+healthPath: "${HEALTH_PATH}"
+resources:
+  requests:
+    cpu: ${CPU_REQ}
+    memory: ${MEM_REQ}
+  limits:
+    cpu: ${CPU_LIM}
+    memory: ${MEM_LIM}
+enableEgress: ${ENABLE_EGRESS}
+EOF
+
+  # Auto-injected infra env vars
+  echo "infraEnv:" >> "$OUT_FILE"
+  echo "  ERPC_URL: \"${RPC_URL}\"" >> "$OUT_FILE"
+  echo "  DB_BACKEND: \"${BACKEND}\"" >> "$OUT_FILE"
+  if [[ "$BACKEND" == "clickhouse" ]]; then
+    echo "  DB_HOST: \"${CH_URL}\"" >> "$OUT_FILE"
+    echo "  DB_USER: \"${CH_USER}\"" >> "$OUT_FILE"
+    echo "  DB_NAME: \"${CH_DB}\"" >> "$OUT_FILE"
+  elif [[ -n "$PG_URL" ]]; then
+    echo "  DB_HOST: \"${PG_URL}\"" >> "$OUT_FILE"
+  fi
+
+  # DB password (inline mode only)
+  if [[ "$SECRETS_MODE" == "inline" && "$BACKEND" == "clickhouse" && -n "$CH_PASSWORD" ]]; then
+    echo "dbPassword: \"${CH_PASSWORD}\"" >> "$OUT_FILE"
+  fi
+
+  # nodeSelector
+  if [[ -n "$NODE_ROLE" && "$NODE_ROLE" != "null" ]]; then
+    cat >> "$OUT_FILE" <<EOF
+nodeSelector:
+  evm-cloud/role: "${NODE_ROLE}"
+EOF
+  fi
+
+  # tolerations
+  local TOLERATIONS=$(echo "$SVC_JSON" | jq -c '.tolerations // []')
+  if [[ "$TOLERATIONS" != "[]" && "$TOLERATIONS" != "null" ]]; then
+    echo "tolerations:" >> "$OUT_FILE"
+    echo "$TOLERATIONS" | jq -r '.[] | "  - key: \(.key)\n    operator: \(.operator // "Equal")\n    value: \(.value // "")\n    effect: \(.effect // "NoSchedule")"' >> "$OUT_FILE"
+  fi
+
+  # Ingress
+  local INGRESS_HOSTNAME=$(echo "$SVC_JSON" | jq -r '.ingress_hostname // empty')
+  if [[ -n "$INGRESS_HOSTNAME" && "$INGRESS_HOSTNAME" != "null" ]]; then
+    local INGRESS_PATH=$(echo "$SVC_JSON" | jq -r '.ingress_path // "/"')
+    cat >> "$OUT_FILE" <<EOF
+ingress:
+  enabled: true
+  host: "${INGRESS_HOSTNAME}"
+  path: "${INGRESS_PATH}"
+EOF
+    if [[ "$INGRESS_MODE" == "cloudflare" ]]; then
+      cat >> "$OUT_FILE" <<EOF
+  tlsProvider: "cloudflare"
+  tlsSecretName: "cloudflare-origin-tls"
+EOF
+    elif [[ "$INGRESS_MODE" == "ingress_nginx" ]]; then
+      local TLS_STAGING=$(jq -r '.ingress.tls_staging // false' "$HANDOFF")
+      local ISSUER="letsencrypt-prod"
+      if [[ "$TLS_STAGING" == "true" ]]; then ISSUER="letsencrypt-staging"; fi
+      cat >> "$OUT_FILE" <<EOF
+  tlsProvider: "cert-manager"
+  clusterIssuer: "${ISSUER}"
+EOF
+    fi
+  fi
+
+  # User-defined env vars
+  local EXTRA_ENV_JSON=$(echo "$SVC_JSON" | jq -c '.env // {}')
+  if [[ "$EXTRA_ENV_JSON" != "{}" && "$EXTRA_ENV_JSON" != "null" ]]; then
+    echo "extraEnv:" >> "$OUT_FILE"
+    echo "$EXTRA_ENV_JSON" | jq -r 'to_entries[] | "  \(.key): \(.value | @json)"' >> "$OUT_FILE"
+  fi
+
+  # User-defined secret env vars
+  local EXTRA_SECRET_ENV_JSON=$(echo "$SVC_JSON" | jq -c '.secret_env // {}')
+  if [[ "$EXTRA_SECRET_ENV_JSON" != "{}" && "$EXTRA_SECRET_ENV_JSON" != "null" ]]; then
+    echo "extraSecretEnv:" >> "$OUT_FILE"
+    echo "$EXTRA_SECRET_ENV_JSON" | jq -r 'to_entries[] | "  \(.key): \(.value | @json)"' >> "$OUT_FILE"
+  fi
+
+  echo "Wrote $OUT_FILE"
+}
+
+CUSTOM_SERVICES=$(jq -c '.services.custom_services // null' "$HANDOFF")
+
+if [[ "$CUSTOM_SERVICES" != "null" && "$CUSTOM_SERVICES" != "[]" ]]; then
+  for SVC in $(echo "$CUSTOM_SERVICES" | jq -c '.[]'); do
+    SVC_NAME=$(echo "$SVC" | jq -r '.name')
+    render_custom_service_values "$SVC" "$OUT_DIR/custom-${SVC_NAME}-values.yaml"
+  done
+fi
+
 echo "Wrote $OUT_DIR/rpc-proxy-values.yaml"

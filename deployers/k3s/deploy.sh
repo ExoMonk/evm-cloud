@@ -234,6 +234,27 @@ fi
 
 kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
 
+# --- Resource isolation: PriorityClasses ---
+
+kubectl apply -f - <<PCEOF
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: evm-cloud-system
+value: 1000
+globalDefault: false
+description: "Priority for evm-cloud core services (eRPC, indexer). Evicts custom services under pressure."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: evm-cloud-custom
+value: 100
+globalDefault: false
+description: "Priority for user-defined custom services. Evicted before core services."
+PCEOF
+echo "[evm-cloud] PriorityClasses applied."
+
 # --- Ingress setup ---
 
 INGRESS_MODE=$(jq -r '.ingress.mode // "none"' "$HANDOFF_FILE")
@@ -633,6 +654,55 @@ if [[ "$INDEXER_ENABLED" == "true" ]]; then
 
   if [[ "$DEPLOY_FAILED" -ne 0 ]]; then
     echo "ERROR: One or more indexer instances failed to deploy." >&2
+    exit 1
+  fi
+fi
+
+# --- Deploy custom services ---
+
+CUSTOM_SERVICES_JSON=$(jq -c '.services.custom_services // null' "$HANDOFF_FILE")
+
+if [[ "$CUSTOM_SERVICES_JSON" != "null" && "$CUSTOM_SERVICES_JSON" != "[]" ]]; then
+  # ResourceQuota: cap aggregate custom service consumption
+  kubectl apply -f - <<RQEOF
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: custom-services-quota
+  namespace: ${NS}
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 2Gi
+    limits.cpu: "4"
+    limits.memory: 4Gi
+RQEOF
+  echo "[evm-cloud] ResourceQuota for custom services applied."
+
+  CUSTOM_DEPLOY_FAILED=0
+
+  for SVC in $(echo "$CUSTOM_SERVICES_JSON" | jq -c '.[]'); do
+    SVC_NAME=$(echo "$SVC" | jq -r '.name')
+    VALUES_FILE="${VALUES_DIR}/custom-${SVC_NAME}-values.yaml"
+
+    if [[ ! -f "$VALUES_FILE" ]]; then
+      echo "ERROR: Values file not found for custom service '${SVC_NAME}': ${VALUES_FILE}" >&2
+      CUSTOM_DEPLOY_FAILED=1
+      continue
+    fi
+
+    echo "[evm-cloud] Deploying custom service (${PROJECT}-${SVC_NAME})..."
+    if ! helm upgrade --install "${PROJECT}-${SVC_NAME}" "${CHARTS_DIR}/custom-service/" \
+      -n "${NS}" -f "$VALUES_FILE" --rollback-on-failure --timeout 300s; then
+      echo "ERROR: Failed to deploy custom service ${PROJECT}-${SVC_NAME}" >&2
+      CUSTOM_DEPLOY_FAILED=1
+    else
+      echo "[evm-cloud] ${PROJECT}-${SVC_NAME} deployed."
+    fi
+  done
+
+  if [[ "$CUSTOM_DEPLOY_FAILED" -ne 0 ]]; then
+    echo "ERROR: One or more custom services failed to deploy." >&2
     exit 1
   fi
 fi

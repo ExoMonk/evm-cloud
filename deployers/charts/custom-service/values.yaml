@@ -1,0 +1,43 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ""
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+service:
+  type: ClusterIP
+  port: 3000
+
+healthPath: "/health"
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Auto-injected infra env vars (eRPC URL, DB creds)
+infraEnv: {}
+
+# User-defined plaintext env vars
+extraEnv: {}
+
+# User-defined secret env vars (stored in K8s Secret, referenced via secretKeyRef)
+extraSecretEnv: {}
+
+# DB password for inline mode (stored in K8s Secret)
+dbPassword: ""
+
+# NetworkPolicy: allow egress to internet (default: deny, only eRPC + DB + DNS allowed)
+enableEgress: false

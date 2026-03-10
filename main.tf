@@ -228,6 +228,9 @@ module "provider_aws" {
   indexer_extra_env        = var.indexer_extra_env
   indexer_extra_secret_env = var.indexer_extra_secret_env
 
+  # Custom Services
+  custom_services = var.custom_services
+
   # ClickHouse BYODB
   indexer_clickhouse_url      = var.indexer_clickhouse_url
   indexer_clickhouse_user     = var.indexer_clickhouse_user
@@ -315,8 +318,12 @@ module "provider_bare_metal" {
   indexer_extra_env        = var.indexer_extra_env
   indexer_extra_secret_env = var.indexer_extra_secret_env
   indexer_mem_limit        = var.bare_metal_indexer_mem_limit
-  rindexer_config_yaml     = var.rindexer_config_yaml
-  rindexer_abis            = var.rindexer_abis
+
+  # Custom Services
+  custom_services = var.custom_services
+
+  rindexer_config_yaml = var.rindexer_config_yaml
+  rindexer_abis        = var.rindexer_abis
 
   # ClickHouse BYODB
   indexer_clickhouse_url      = var.indexer_clickhouse_url

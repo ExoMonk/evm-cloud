@@ -142,6 +142,49 @@ else
   ssh $SSH_OPTS "${SSH_USER}@${SSH_HOST}" "touch ${REMOTE_DIR}/.env"
 fi
 
+# --- Generate custom service environment files ---
+
+CUSTOM_SERVICES=$(jq -c '.services.custom_services // null' "$HANDOFF_FILE")
+
+if [[ "$CUSTOM_SERVICES" != "null" && "$CUSTOM_SERVICES" != "[]" ]]; then
+  echo "[evm-cloud] Generating env files for custom services..."
+
+  CS_BACKEND=$(jq -r '.data.backend // "postgres"' "$HANDOFF_FILE")
+  CS_RPC_URL=$(jq -r '.services.rpc_proxy.internal_url // empty' "$HANDOFF_FILE")
+  CS_CH_URL=$(jq -r '.data.clickhouse.url // empty' "$HANDOFF_FILE")
+  CS_CH_USER=$(jq -r '.data.clickhouse.user // "default"' "$HANDOFF_FILE")
+  CS_CH_DB=$(jq -r '.data.clickhouse.db // "default"' "$HANDOFF_FILE")
+  CS_CH_PASSWORD=$(jq -r '.data.clickhouse.password // empty' "$HANDOFF_FILE")
+  CS_PG_URL=$(jq -r '.data.postgres.url // empty' "$HANDOFF_FILE")
+
+  for SVC in $(echo "$CUSTOM_SERVICES" | jq -c '.[]'); do
+    SVC_NAME=$(echo "$SVC" | jq -r '.name')
+    ENV_FILE=$(mktemp /tmp/custom-${SVC_NAME}-env.XXXXXX)
+
+    # Auto-injected infra vars
+    echo "ERPC_URL=${CS_RPC_URL}" >> "$ENV_FILE"
+    echo "DB_BACKEND=${CS_BACKEND}" >> "$ENV_FILE"
+    if [[ "$CS_BACKEND" == "clickhouse" ]]; then
+      echo "DB_HOST=${CS_CH_URL}" >> "$ENV_FILE"
+      echo "DB_USER=${CS_CH_USER}" >> "$ENV_FILE"
+      echo "DB_NAME=${CS_CH_DB}" >> "$ENV_FILE"
+      echo "DB_PASSWORD=${CS_CH_PASSWORD}" >> "$ENV_FILE"
+    elif [[ -n "$CS_PG_URL" ]]; then
+      echo "DB_HOST=${CS_PG_URL}" >> "$ENV_FILE"
+    fi
+
+    # User-defined env
+    echo "$SVC" | jq -r '.env // {} | to_entries[] | "\(.key)=\(.value)"' >> "$ENV_FILE"
+    # User-defined secret env
+    echo "$SVC" | jq -r '.secret_env // {} | to_entries[] | "\(.key)=\(.value)"' >> "$ENV_FILE"
+
+    scp $SCP_OPTS "$ENV_FILE" "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/.env.${SVC_NAME}"
+    ssh $SSH_OPTS "${SSH_USER}@${SSH_HOST}" "chmod 0600 ${REMOTE_DIR}/.env.${SVC_NAME}"
+    rm -f "$ENV_FILE"
+    echo "[evm-cloud] Uploaded .env.${SVC_NAME}"
+  done
+fi
+
 # --- Restart containers ---
 
 echo "[evm-cloud] Restarting containers..."

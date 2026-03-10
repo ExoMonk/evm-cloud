@@ -180,6 +180,8 @@ output "workload_handoff" {
         grafana_hostname                               = var.grafana_hostname
         ingress_class_name                             = var.ingress_class_name
       } : null
+
+      custom_services = length(var.custom_services) > 0 ? var.custom_services : null
     }
 
     data = {

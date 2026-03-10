@@ -83,6 +83,8 @@ pub(crate) struct HandoffServices {
     pub(crate) rpc_proxy: Option<RpcProxyService>,
     #[serde(default)]
     pub(crate) monitoring: Option<MonitoringService>,
+    #[serde(default)]
+    pub(crate) custom_services: Option<Vec<CustomServiceEntry>>,
     #[serde(flatten)]
     pub(crate) extra: HashMap<String, Value>,
 }
@@ -101,6 +103,57 @@ pub(crate) struct MonitoringService {
     pub(crate) grafana_hostname: Option<String>,
     #[serde(default)]
     pub(crate) grafana_admin_password_secret_name: Option<String>,
+    #[serde(flatten)]
+    pub(crate) extra: HashMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub(crate) struct CustomServiceEntry {
+    pub(crate) name: String,
+    pub(crate) image: String,
+    #[serde(default, deserialize_with = "deserialize_string_or_number")]
+    pub(crate) port: Option<String>,
+    #[serde(default)]
+    pub(crate) health_path: Option<String>,
+    #[serde(default)]
+    pub(crate) replicas: Option<u32>,
+    #[serde(default)]
+    pub(crate) cpu_request: Option<String>,
+    #[serde(default)]
+    pub(crate) memory_request: Option<String>,
+    #[serde(default)]
+    pub(crate) cpu_limit: Option<String>,
+    #[serde(default)]
+    pub(crate) memory_limit: Option<String>,
+    #[serde(default)]
+    pub(crate) env: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub(crate) secret_env: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub(crate) ingress_hostname: Option<String>,
+    #[serde(default)]
+    pub(crate) ingress_path: Option<String>,
+    #[serde(default)]
+    pub(crate) node_role: Option<String>,
+    #[serde(default)]
+    pub(crate) tolerations: Option<Vec<TolerationEntry>>,
+    #[serde(default)]
+    pub(crate) enable_egress: Option<bool>,
+    #[serde(flatten)]
+    pub(crate) extra: HashMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub(crate) struct TolerationEntry {
+    pub(crate) key: String,
+    #[serde(default)]
+    pub(crate) operator: Option<String>,
+    #[serde(default)]
+    pub(crate) value: Option<String>,
+    #[serde(default)]
+    pub(crate) effect: Option<String>,
+    #[serde(default)]
+    pub(crate) toleration_seconds: Option<u64>,
     #[serde(flatten)]
     pub(crate) extra: HashMap<String, Value>,
 }
@@ -387,6 +440,70 @@ mod tests {
             handoff.compute_engine,
             crate::config::schema::ComputeEngine::K3s
         );
+    }
+
+    #[test]
+    fn parses_custom_services() {
+        let mut value = sample_handoff();
+        value["services"]["custom_services"] = json!([{
+            "name": "my-api",
+            "image": "ghcr.io/example/api:v1",
+            "port": 3000,
+            "health_path": "/health",
+            "replicas": 1,
+            "env": { "FOO": "bar" },
+            "secret_env": { "API_KEY": "secret" },
+            "node_role": "worker",
+            "tolerations": [{ "key": "dedicated", "value": "api", "effect": "NoSchedule" }],
+            "enable_egress": false
+        }]);
+
+        let handoff = parse_handoff_value(value).expect("must parse");
+        let custom = handoff
+            .services
+            .custom_services
+            .expect("custom_services must be Some");
+        assert_eq!(custom.len(), 1);
+        assert_eq!(custom[0].name, "my-api");
+        assert_eq!(custom[0].image, "ghcr.io/example/api:v1");
+        assert_eq!(custom[0].port.as_deref(), Some("3000"));
+        assert_eq!(custom[0].health_path.as_deref(), Some("/health"));
+        assert_eq!(custom[0].replicas, Some(1));
+        assert_eq!(custom[0].enable_egress, Some(false));
+        assert_eq!(
+            custom[0].env.as_ref().and_then(|m| m.get("FOO")).map(|s| s.as_str()),
+            Some("bar")
+        );
+        assert_eq!(custom[0].node_role.as_deref(), Some("worker"));
+        let tolerations = custom[0].tolerations.as_ref().expect("tolerations must be Some");
+        assert_eq!(tolerations.len(), 1);
+        assert_eq!(tolerations[0].key, "dedicated");
+        assert_eq!(tolerations[0].effect.as_deref(), Some("NoSchedule"));
+    }
+
+    #[test]
+    fn parses_empty_custom_services() {
+        let mut value = sample_handoff();
+        value["services"]["custom_services"] = json!([]);
+
+        let handoff = parse_handoff_value(value).expect("must parse");
+        let custom = handoff.services.custom_services.expect("must be Some");
+        assert!(custom.is_empty());
+    }
+
+    #[test]
+    fn parses_null_custom_services() {
+        let mut value = sample_handoff();
+        value["services"]["custom_services"] = json!(null);
+        let handoff = parse_handoff_value(value).expect("must parse");
+        assert!(handoff.services.custom_services.is_none());
+    }
+
+    #[test]
+    fn parses_absent_custom_services() {
+        let value = sample_handoff();
+        let handoff = parse_handoff_value(value).expect("must parse");
+        assert!(handoff.services.custom_services.is_none());
     }
 
     #[test]
