@@ -222,6 +222,7 @@ priorityClassName: evm-cloud-custom
 image:
   repository: ${IMAGE_REPO}
   tag: "${IMAGE_TAG}"
+  pullPolicy: IfNotPresent
 replicas: ${REPLICAS}
 service:
   port: ${PORT}

@@ -616,49 +616,7 @@ if [[ "$RPC_PROXY_ENABLED" == "true" ]]; then
   echo "[evm-cloud] eRPC deployed."
 fi
 
-if [[ "$INDEXER_ENABLED" == "true" ]]; then
-  # Multi-instance support: loop over instances[] if present, fallback to single release
-  INSTANCES=$(jq -c '.services.indexer.instances // [{"name":"indexer","config_key":"default"}]' "$HANDOFF_FILE")
-  DEPLOY_FAILED=0
-
-  for INSTANCE in $(echo "$INSTANCES" | jq -c '.[]'); do
-    NAME=$(echo "$INSTANCE" | jq -r '.name')
-
-    # --instance filter: skip instances that don't match
-    if [[ -n "$INSTANCE_FILTER" && "$NAME" != "$INSTANCE_FILTER" ]]; then
-      echo "[evm-cloud] Skipping ${PROJECT}-${NAME} (filtered by --instance ${INSTANCE_FILTER})"
-      continue
-    fi
-
-    VALUES_FILE="${VALUES_DIR}/${NAME}-values.yaml"
-
-    # Fallback: if per-instance values file doesn't exist, use the default indexer-values.yaml
-    if [[ ! -f "$VALUES_FILE" ]]; then
-      VALUES_FILE="${VALUES_DIR}/indexer-values.yaml"
-    fi
-
-    HELM_EXTRA_ARGS=""
-    if [[ "$JOB_MODE" == "true" ]]; then
-      HELM_EXTRA_ARGS="--set workloadType=job"
-    fi
-
-    echo "[evm-cloud] Deploying rindexer instance (${PROJECT}-${NAME})..."
-    if ! helm upgrade --install "${PROJECT}-${NAME}" "${CHARTS_DIR}/indexer/" \
-      -n "${NS}" -f "$VALUES_FILE" $HELM_EXTRA_ARGS --rollback-on-failure --timeout 300s; then
-      echo "ERROR: Failed to deploy ${PROJECT}-${NAME}" >&2
-      DEPLOY_FAILED=1
-    else
-      echo "[evm-cloud] ${PROJECT}-${NAME} deployed."
-    fi
-  done
-
-  if [[ "$DEPLOY_FAILED" -ne 0 ]]; then
-    echo "ERROR: One or more indexer instances failed to deploy." >&2
-    exit 1
-  fi
-fi
-
-# --- Deploy custom services ---
+# --- Deploy custom services (before indexer — indexer webhooks may target custom services) ---
 
 CUSTOM_SERVICES_JSON=$(jq -c '.services.custom_services // null' "$HANDOFF_FILE")
 
@@ -703,6 +661,50 @@ RQEOF
 
   if [[ "$CUSTOM_DEPLOY_FAILED" -ne 0 ]]; then
     echo "ERROR: One or more custom services failed to deploy." >&2
+    exit 1
+  fi
+fi
+
+# --- Deploy indexer (after custom services so webhook targets are reachable) ---
+
+if [[ "$INDEXER_ENABLED" == "true" ]]; then
+  # Multi-instance support: loop over instances[] if present, fallback to single release
+  INSTANCES=$(jq -c '.services.indexer.instances // [{"name":"indexer","config_key":"default"}]' "$HANDOFF_FILE")
+  DEPLOY_FAILED=0
+
+  for INSTANCE in $(echo "$INSTANCES" | jq -c '.[]'); do
+    NAME=$(echo "$INSTANCE" | jq -r '.name')
+
+    # --instance filter: skip instances that don't match
+    if [[ -n "$INSTANCE_FILTER" && "$NAME" != "$INSTANCE_FILTER" ]]; then
+      echo "[evm-cloud] Skipping ${PROJECT}-${NAME} (filtered by --instance ${INSTANCE_FILTER})"
+      continue
+    fi
+
+    VALUES_FILE="${VALUES_DIR}/${NAME}-values.yaml"
+
+    # Fallback: if per-instance values file doesn't exist, use the default indexer-values.yaml
+    if [[ ! -f "$VALUES_FILE" ]]; then
+      VALUES_FILE="${VALUES_DIR}/indexer-values.yaml"
+    fi
+
+    HELM_EXTRA_ARGS=""
+    if [[ "$JOB_MODE" == "true" ]]; then
+      HELM_EXTRA_ARGS="--set workloadType=job"
+    fi
+
+    echo "[evm-cloud] Deploying rindexer instance (${PROJECT}-${NAME})..."
+    if ! helm upgrade --install "${PROJECT}-${NAME}" "${CHARTS_DIR}/indexer/" \
+      -n "${NS}" -f "$VALUES_FILE" $HELM_EXTRA_ARGS --rollback-on-failure --timeout 300s; then
+      echo "ERROR: Failed to deploy ${PROJECT}-${NAME}" >&2
+      DEPLOY_FAILED=1
+    else
+      echo "[evm-cloud] ${PROJECT}-${NAME} deployed."
+    fi
+  done
+
+  if [[ "$DEPLOY_FAILED" -ne 0 ]]; then
+    echo "ERROR: One or more indexer instances failed to deploy." >&2
     exit 1
   fi
 fi

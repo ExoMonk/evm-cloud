@@ -1,0 +1,12 @@
+secrets.auto.tfvars
+.terraform/
+.terraform.lock.hcl
+*.tfstate*
+.evm-cloud-deploy*.lock
+kubeconfig.yaml
+evm-cloud.toml
+.evm-cloud/
+api/node_modules/
+api/dist/
+envs/**/.terraform/
+envs/**/secrets.auto.tfvars

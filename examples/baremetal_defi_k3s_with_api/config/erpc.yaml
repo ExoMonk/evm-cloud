@@ -1,0 +1,27 @@
+logLevel: error
+projects:
+  - id: main
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 1
+      - architecture: evm
+        evm:
+          chainId: 8453
+    upstreams:
+      - id: eth-primary
+        endpoint: https://ethereum-rpc.publicnode.com
+        type: evm
+        evm:
+          chainId: 1
+      - id: base-primary
+        endpoint: https://base-rpc.publicnode.com
+        type: evm
+        evm:
+          chainId: 8453
+      - endpoint: repository://evm-public-endpoints.erpc.cloud
+        type: evm
+server:
+  listenV4: true
+  httpHostV4: 0.0.0.0
+  httpPort: 4000

@@ -90,9 +90,18 @@ pub(super) fn format_deploy_line(
             ));
         }
     }
-    // <name> deployed. (rindexer completion)
+    // Deploying custom service (<name>)...
+    if let Some(rest) = msg.strip_prefix("Deploying custom service (") {
+        if let Some(name) = rest.strip_suffix(")...") {
+            return Some(format!(
+                "     {icon} custom: {}",
+                orange(name, color)
+            ));
+        }
+    }
+    // <name> deployed. (rindexer/custom service completion)
     if msg.ends_with(" deployed.") && !msg.starts_with("eRPC") {
-        return None; // suppress rindexer completion echoes
+        return None; // suppress completion echoes
     }
     if msg == "All workloads deployed successfully." {
         return None; // the CLI prints its own success banner

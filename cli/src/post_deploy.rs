@@ -234,6 +234,22 @@ pub(crate) fn print_summary(handoff: &WorkloadHandoff, _mode: ColorMode) {
         push_row(&mut rows, "Postgres", format_postgres_url(handoff));
     }
 
+    // Custom services
+    if let Some(ref services) = handoff.services.custom_services {
+        for (i, svc) in services.iter().enumerate() {
+            let label = if let Some(ref hostname) = svc.ingress_hostname {
+                if hostname.is_empty() {
+                    svc.name.clone()
+                } else {
+                    format!("{} → {}", svc.name, build_https_url(hostname.clone()))
+                }
+            } else {
+                svc.name.clone()
+            };
+            push_row(&mut rows, "Custom", Some(format!("#{}: {}", i + 1, label)));
+        }
+    }
+
     let has_k3s_kubeconfig = handoff
         .runtime
         .k3s

@@ -41,5 +41,15 @@ extraSecretEnv: {}
 # DB password for inline mode (stored in K8s Secret)
 dbPassword: ""
 
+# Ingress
+ingress:
+  enabled: false
+  host: ""
+  path: "/"
+  tlsProvider: ""
+  tlsSecretName: ""
+  clusterIssuer: ""
+  annotations: {}
+
 # NetworkPolicy: allow egress to internet (default: deny, only eRPC + DB + DNS allowed)
 enableEgress: false
