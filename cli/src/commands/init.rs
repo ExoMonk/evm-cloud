@@ -14,6 +14,57 @@ use crate::output::{self, ColorMode};
 use crate::preflight::{self, ProjectKind};
 use crate::terraform::TerraformRunner;
 
+/// Parse `config/rindexer.yaml` and extract network names + RPC endpoints.
+/// Uses regex to avoid adding serde_yaml as a production dependency.
+fn detect_template_context(
+    project_root: &std::path::Path,
+) -> Option<init_wizard::TemplateContext> {
+    let rindexer_path = project_root.join("config/rindexer.yaml");
+    let erpc_exists = project_root.join("config/erpc.yaml").exists();
+
+    // Only return context if this looks like a template-generated project
+    if !erpc_exists {
+        return None;
+    }
+
+    let content = std::fs::read_to_string(&rindexer_path).ok()?;
+
+    // Extract network names and RPC endpoints from YAML like:
+    //   - name: ethereum
+    //     chain_id: 1
+    //     rpc: ${RPC_URL}/main/evm/1
+    let mut chains = Vec::new();
+    let mut rpc_endpoints = std::collections::BTreeMap::new();
+    let mut current_name: Option<String> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("- name:") {
+            current_name = Some(rest.trim().to_string());
+        } else if let Some(rest) = trimmed.strip_prefix("name:") {
+            // Could also appear without the list prefix on first item
+            if current_name.is_none() {
+                current_name = Some(rest.trim().to_string());
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("rpc:") {
+            if let Some(name) = current_name.take() {
+                let rpc = rest.trim().to_string();
+                rpc_endpoints.insert(name.clone(), rpc);
+                chains.push(name);
+            }
+        }
+    }
+
+    if chains.is_empty() {
+        return None;
+    }
+
+    Some(init_wizard::TemplateContext {
+        chains,
+        rpc_endpoints,
+    })
+}
+
 #[derive(Args)]
 pub(crate) struct InitArgs {
     #[arg(short, long, default_value = ".")]
@@ -207,10 +258,19 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
                             dir
                         }
                         Err(CliError::ConfigParse { .. }) => {
-                            output::info(
-                                "Partial evm-cloud.toml detected — running setup wizard to complete configuration.",
-                                color,
-                            );
+                            // Detect chains from config/rindexer.yaml if templates apply was run
+                            let template_ctx = detect_template_context(&preflight.resolved_root);
+                            if template_ctx.is_some() {
+                                output::info(
+                                    "Template config detected — chains, indexer, and eRPC config pre-populated from config/rindexer.yaml.",
+                                    color,
+                                );
+                            } else {
+                                output::info(
+                                    "Partial evm-cloud.toml detected — running setup wizard to complete configuration.",
+                                    color,
+                                );
+                            }
 
                             // Preserve existing [state] if present
                             let toml_path = preflight.resolved_root.join("evm-cloud.toml");
@@ -218,10 +278,11 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
                                 .ok()
                                 .and_then(|(_, s)| s);
 
-                            let mut answers = init_wizard::collect_answers(
+                            let mut answers = init_wizard::collect_answers_with_context(
                                 args.config.as_deref(),
                                 args.non_interactive,
                                 args.mode,
+                                template_ctx,
                             )?;
                             should_bootstrap = answers.auto_bootstrap || args.bootstrap;
 
