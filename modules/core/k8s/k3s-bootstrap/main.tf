@@ -28,6 +28,8 @@ resource "null_resource" "k3s_install" {
     ssh_user           = var.ssh_user
     ssh_private_key    = var.ssh_private_key_path
     ssh_port           = var.ssh_port
+    # NOTE: project_name intentionally excluded — k3s is per-host, not per-project.
+    # Multiple projects can share one k3s cluster on the same host.
   }
 
   connection {
@@ -39,10 +41,23 @@ resource "null_resource" "k3s_install" {
     timeout     = "2m"
   }
 
-  # Install k3s with security hardening
+  # Install k3s with security hardening (idempotent — skips if already running)
   provisioner "remote-exec" {
     inline = [
       "set -eu",
+
+      # Skip install if k3s is already running on this host
+      "if systemctl is-active --quiet k3s 2>/dev/null; then",
+      "  echo '[evm-cloud] k3s is already running on this host, skipping install.'",
+      "  echo '[evm-cloud] Ensuring kubeconfig is available...'",
+      "  mkdir -p $HOME/.kube",
+      "  sudo cp /etc/rancher/k3s/k3s.yaml $HOME/.kube/k3s-kubeconfig.yaml",
+      "  sudo chown $(whoami) $HOME/.kube/k3s-kubeconfig.yaml",
+      "  chmod 0600 $HOME/.kube/k3s-kubeconfig.yaml",
+      "  sed -i \"s|127.0.0.1|${var.host_address}|g\" $HOME/.kube/k3s-kubeconfig.yaml",
+      "  exit 0",
+      "fi",
+
       "echo '[evm-cloud] Installing k3s ${var.k3s_version}...'",
 
       # Download k3s binary and verify checksum
@@ -71,7 +86,9 @@ resource "null_resource" "k3s_install" {
       "CONF",
       "if [ -f /run/systemd/resolve/resolv.conf ]; then echo 'resolv-conf: \"/run/systemd/resolve/resolv.conf\"' | sudo tee -a /etc/rancher/k3s/config.yaml > /dev/null; fi",
 
-      "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_VERSION='${var.k3s_version}' sh -s - server ${local.tls_san_flags} --disable=traefik --disable=servicelb --secrets-encryption --write-kubeconfig-mode=0600 --node-name ${local.node_name} ${var.extra_server_flags}",
+      # Use hostname for node name so it's stable across projects on the same host
+      "NODE_NAME=$(hostname | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')-server-0",
+      "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_VERSION='${var.k3s_version}' sh -s - server ${local.tls_san_flags} --disable=traefik --disable=servicelb --secrets-encryption --write-kubeconfig-mode=0600 --node-name $NODE_NAME ${var.extra_server_flags}",
 
       # Readiness check — wait for k3s API server
       "echo '[evm-cloud] Waiting for k3s to become ready...'",

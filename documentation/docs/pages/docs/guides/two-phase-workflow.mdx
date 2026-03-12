@@ -171,13 +171,15 @@ terraform output -json workload_handoff | ./../../deployers/k3s/deploy.sh /dev/s
 ### 4. Verify
 
 ```bash
-# Check pods are running
-evm-cloud kubectl get pods -n evm-cloud
+# Check pods are running (namespace = your project name)
+evm-cloud kubectl get pods -n <project-name>
 
 # Check logs
 evm-cloud logs rindexer --tail 50
 evm-cloud logs erpc --tail 50
 ```
+
+The workload namespace is derived from your `project_name` (lowercased, sanitized to DNS-1123). For example, project `my-indexer` deploys to namespace `my-indexer`.
 
 You should see both `erpc` and `rindexer` pods in `Running` state.
 

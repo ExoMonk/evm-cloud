@@ -8,4 +8,5 @@ pub(crate) mod init;
 pub(crate) mod kubectl;
 pub(crate) mod logs;
 pub(crate) mod status;
+pub(crate) mod templates;
 pub(crate) mod tfvars;

@@ -1,0 +1,373 @@
+# Protocol Templates
+
+Pre-built indexer configurations for popular DeFi protocols. Templates set up everything needed to index a protocol — rindexer config, ABIs, ClickHouse materialized views, and Grafana dashboards — in a single command.
+
+---
+
+## Available templates
+
+| Template | Category | Chains | Description |
+|----------|----------|--------|-------------|
+| `uniswap-v4` | DEX | ethereum, arbitrum, base | Swaps, liquidity changes, hook usage, pool initialization |
+| `aave-v3` | Lending | ethereum, polygon, arbitrum, optimism, base | Supply, borrow, repay, liquidation, utilization metrics |
+| `aave-v4` | Lending | ethereum | Hub & Spoke lending, Dutch auction liquidations, risk premiums |
+| `erc20-transfers` | Token | ethereum, polygon, arbitrum, optimism, base | ERC-20 Transfer events for any token |
+| `erc721-transfers` | Token | ethereum, polygon, arbitrum, optimism, base | ERC-721 Transfer events for any NFT collection |
+
+Browse the latest list:
+
+```bash
+evm-cloud templates list
+```
+
+Filter by chain:
+
+```bash
+evm-cloud templates list --chain base
+```
+
+---
+
+## End-to-end walkthrough: Uniswap V4
+
+This walks through deploying a Uniswap V4 indexer on a bare-metal server with k3s, BYO ClickHouse, and Cloudflare ingress. Adapt the init wizard answers to your setup.
+
+### 1. Apply the template
+
+```bash
+mkdir uniswap-v4 && cd uniswap-v4
+evm-cloud templates apply uniswap-v4 --chains ethereum,base
+```
+
+This generates:
+
+```text
+uniswap-v4/
+├── config/
+│   ├── rindexer.yaml          # 2 networks (ethereum + base), PoolManager contract per chain
+│   ├── erpc.yaml              # eRPC proxy with public upstreams for both chains
+│   └── abis/
+│       ├── PoolManager.json   # Initialize, Swap, ModifyLiquidity events
+│       └── ERC20.json
+├── clickhouse/
+│   └── materialized_views.sql # Hourly volume + hook usage analytics
+├── grafana/
+│   └── dashboard.json         # Uniswap V4 Grafana dashboard
+├── evm-cloud.toml             # Minimal config (completed by init)
+├── .evm-cloud/
+│   └── template-lock.toml     # Applied template metadata
+└── README.md
+```
+
+### 2. Initialize infrastructure
+
+```bash
+evm-cloud init
+```
+
+The wizard detects the partial `evm-cloud.toml` from the template and asks for infrastructure choices. Example answers for a bare-metal k3s setup:
+
+| Prompt | Value |
+|--------|-------|
+| Compute engine | `k3s` |
+| Infrastructure provider | `bare_metal` |
+| Database mode | `self_hosted` |
+| Storage backend | `clickhouse` |
+| Ingress mode | `cloudflare` |
+| Secrets mode | `inline` |
+
+After the wizard completes, `evm-cloud init` runs `terraform init` and scaffolds the Terraform files in `.evm-cloud/`.
+
+### 3. Configure secrets
+
+Create `secrets.auto.tfvars` (gitignored) with your credentials:
+
+```hcl
+# Bare metal host access
+bare_metal_host        = "HOST"         # Your server IP
+ssh_private_key_path   = "~/.ssh/id_rsa"
+bare_metal_ssh_user    = "ubuntu"
+bare_metal_ssh_port    = 22
+
+# ClickHouse credentials (BYO instance)
+indexer_clickhouse_url      = "clickhouse://your-host:9000/default"
+indexer_clickhouse_password = "your-password"
+
+# Cloudflare origin certificates (from Cloudflare dashboard > SSL/TLS > Origin Server)
+ingress_cloudflare_origin_cert = <<-EOT
+-----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
+EOT
+
+ingress_cloudflare_origin_key = <<-EOT
+-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----
+EOT
+```
+
+### 4. Review variables
+
+Key variables in `variables.tf` you may want to customize:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `monitoring_enabled` | `true` | Deploys Prometheus + Grafana + Alertmanager |
+| `grafana_hostname` | `""` | Hostname for Grafana ingress (e.g. `grafana.yourdomain.com`) |
+| `indexer_clickhouse_db` | `rindexer` | ClickHouse database name — rindexer creates its own database using `{indexer_name}_{contract_name}` convention, so this is for the connection string only |
+| `rpc_proxy_enabled` | `true` | Enables eRPC proxy (required — rindexer config routes through eRPC) |
+| `k3s_version` | `v1.30.4+k3s1` | k3s version |
+
+### 5. Prepare ClickHouse
+
+Before deploying, create the database that rindexer will use. rindexer auto-creates tables using the naming convention `{indexer_name}_{contract_name}` in snake_case.
+
+For this template (indexer name `UniswapV4Analytics`, contract `PoolManager`):
+
+```bash
+clickhouse-client --host <your-host> \
+  --query "CREATE DATABASE IF NOT EXISTS uniswap_v4_analytics_pool_manager"
+```
+
+rindexer will auto-create these tables on startup:
+- `uniswap_v4_analytics_pool_manager.initialize` — Pool creation events
+- `uniswap_v4_analytics_pool_manager.swap` — Swap events
+- `uniswap_v4_analytics_pool_manager.modify_liquidity` — Liquidity change events
+
+Each table uses `ReplacingMergeTree` with `ORDER BY (network, block_number, tx_hash, log_index)`.
+
+### 6. Deploy
+
+```bash
+evm-cloud deploy
+```
+
+For k3s on bare metal, this is a [two-phase deployment](/docs/guides/two-phase-workflow):
+1. **Phase 1 (infra)**: Terraform provisions the server, installs k3s, configures networking
+2. **Phase 2 (app)**: The k3s deployer runs Helm charts to deploy eRPC, rindexer, monitoring, ingress, and your custom Grafana dashboards
+
+### 7. Verify
+
+```bash
+# Check workload pods (namespace = project name)
+evm-cloud kubectl get pods -n uniswap-v4
+
+# Check monitoring pods
+evm-cloud kubectl get pods -n monitoring
+
+# Check logs
+evm-cloud logs rindexer --tail 50
+evm-cloud logs erpc --tail 50
+```
+
+You should see `erpc` and `rindexer` pods in `Running` state. rindexer will begin indexing from the configured `start_block` for each chain.
+
+### 8. Apply materialized views
+
+Once rindexer has started and created its base tables, apply the analytics views:
+
+```bash
+clickhouse-client --host <your-host> \
+  -d uniswap_v4_analytics_pool_manager \
+  < clickhouse/materialized_views.sql
+```
+
+This creates:
+- **`volume_hourly`** — Hourly swap volume per pool (amount0, amount1, swap count)
+- **`hook_usage`** — Hook analytics (pool count, swap count, liquidity changes per hook address)
+
+### 9. Access Grafana
+
+```bash
+# Via port-forward (no ingress)
+evm-cloud kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+
+# Default credentials: admin / prom-operator
+```
+
+Or via ingress at `https://<grafana_hostname>` if configured.
+
+The template's Uniswap V4 dashboard and the built-in dashboards (rindexer, eRPC, infrastructure) are auto-loaded by the Grafana sidecar.
+
+---
+
+## Quick start (minimal)
+
+For other templates or simpler setups, the flow is the same three commands:
+
+```bash
+evm-cloud templates apply <template> --chains <chain1,chain2>
+evm-cloud init
+evm-cloud deploy
+```
+
+---
+
+## Multi-chain support
+
+Templates generate proper multi-chain configurations. When you specify multiple chains, the rendered `rindexer.yaml` includes:
+
+- **One network block per chain** with chain-specific RPC URLs (routed through eRPC: `${RPC_URL}/main/evm/{chain_id}`)
+- **Per-chain contract addresses** from the template manifest (protocol templates like aave-v3 have verified addresses per chain)
+- **Unified eRPC config** with all chain upstreams using `repository://evm-public-endpoints.erpc.cloud`
+
+Example with aave-v3 on three chains:
+
+```bash
+evm-cloud templates apply aave-v3 --chains ethereum,polygon,base
+```
+
+The generated `config/rindexer.yaml` will have three network entries and three contract detail entries, each with the correct Pool proxy address for that chain.
+
+---
+
+## Template variables
+
+Some templates accept `--var` overrides for customization.
+
+### Token templates (erc20, erc721)
+
+These require a contract address since they index arbitrary tokens:
+
+```bash
+evm-cloud templates apply erc20-transfers \
+  --chains polygon \
+  --var token_address=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 \
+  --var token_symbol=USDC
+```
+
+### Protocol templates (uniswap-v4, aave-v3)
+
+These have contract addresses baked into the template manifest — no `--var` needed for addresses:
+
+```bash
+evm-cloud templates apply uniswap-v4 --chains ethereum
+```
+
+### Aave V4 (pre-launch)
+
+Aave V4 uses placeholder addresses. Override with actual addresses once deployed:
+
+```bash
+evm-cloud templates apply aave-v4 --chains ethereum \
+  --var spoke_address=0x... \
+  --var spoke_start_block=21000000
+```
+
+---
+
+## What each template includes
+
+### Indexer config (`config/rindexer.yaml`)
+
+Multi-chain rindexer configuration with:
+- Network definitions with chain IDs and eRPC-routed RPC URLs
+- Contract addresses and start blocks per chain
+- Storage configuration (ClickHouse enabled)
+- Event filtering (only relevant events per protocol)
+
+### ABIs (`config/abis/`)
+
+Verified contract ABIs for each protocol's tracked contracts.
+
+### ClickHouse materialized views (`clickhouse/materialized_views.sql`)
+
+Analytics aggregations built on top of rindexer's auto-created tables:
+- Hourly volume aggregations, daily stats
+- Protocol-specific analytics (e.g., hook usage for Uniswap V4)
+
+rindexer automatically creates the base event tables (using `ReplacingMergeTree`) when it starts. The database must exist beforehand — rindexer uses the naming convention `{indexer_name}_{contract_name}` in snake_case for the database name. Apply the materialized views after rindexer has created the base tables.
+
+### Grafana dashboard (`grafana/dashboard.json`)
+
+Protocol-specific dashboard panels. The k3s deployer automatically deploys any `.json` files in the `grafana/` directory as Grafana ConfigMaps. For power-mode (Terraform-managed) deployments, wire them via [`grafana_extra_dashboards`](/docs/guides/observability#custom-dashboards):
+
+```hcl
+grafana_extra_dashboards = {
+  for f in fileset("${path.module}/grafana", "*.json") :
+  f => file("${path.module}/grafana/${f}")
+}
+```
+
+### eRPC config (`config/erpc.yaml`)
+
+Auto-generated eRPC configuration with:
+- One network entry per selected chain
+- Universal upstream: `repository://evm-public-endpoints.erpc.cloud` (covers all EVM chains)
+- Listening on `0.0.0.0:4000`
+
+---
+
+## ClickHouse database naming
+
+rindexer creates its own database using `camel_to_snake(indexer_name)_camel_to_snake(contract_name)`. Here are the database names for each template:
+
+| Template | Indexer Name | Contract | Database |
+|----------|-------------|----------|----------|
+| `uniswap-v4` | UniswapV4Analytics | PoolManager | `uniswap_v4_analytics_pool_manager` |
+| `aave-v3` | AaveV3Analytics | Pool | `aave_v3_analytics_pool` |
+| `erc20-transfers` | ERC20Transfers | ERC20 | `erc_20_transfers_erc_20` |
+
+Create the database before deploying:
+
+```bash
+clickhouse-client --query "CREATE DATABASE IF NOT EXISTS <database_name>"
+```
+
+---
+
+## Multi-project on the same host
+
+Multiple evm-cloud projects can share a single k3s cluster on the same bare-metal host. Each project deploys to its own Kubernetes namespace (derived from `project_name`).
+
+```bash
+# First project — installs k3s + monitoring + deploys workloads
+cd ~/sandglasses && evm-cloud deploy
+
+# Second project — detects k3s already running, skips install, deploys to separate namespace
+cd ~/uniswap-v4 && evm-cloud deploy
+```
+
+Shared cluster-wide resources (monitoring, ingress-nginx, cert-manager) are installed once by the first project and reused by subsequent projects. Prometheus scrapes all namespaces, and Grafana auto-discovers dashboards from all projects.
+
+---
+
+## Template lock
+
+Applied templates are tracked in `.evm-cloud/template-lock.toml`:
+
+```toml
+[[templates]]
+name = "uniswap-v4"
+version = "0.1.0"
+chains = ["ethereum", "base"]
+init_date = "2026-03-12"
+
+[templates.variables]
+```
+
+This enables future features like `templates update` to pull newer template versions.
+
+---
+
+## Combining templates
+
+You can apply multiple templates to the same project. Each `templates apply` appends to the lock file:
+
+```bash
+evm-cloud templates apply uniswap-v4 --chains ethereum,base
+evm-cloud templates apply aave-v3 --chains ethereum
+```
+
+Note: the `rindexer.yaml` will be overwritten by the second apply. For multi-protocol setups, you may want to manually merge the rindexer configs.
+
+---
+
+## Related pages
+
+- **[CLI Reference — templates](/docs/cli-reference#templates)** — Full command syntax
+- **[Two-Phase Deployment](/docs/guides/two-phase-workflow)** — How k3s deployment works
+- **[Observability — Custom Dashboards](/docs/guides/observability#custom-dashboards)** — Wiring Grafana dashboards
+- **[Rindexer & eRPC Config](/docs/guides/rindexer-config)** — Manual config editing
+- **[Variable Reference](/docs/variable-reference)** — All Terraform variables

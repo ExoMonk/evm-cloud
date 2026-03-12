@@ -1,0 +1,42 @@
+[registry]
+version = 1
+
+[[templates]]
+name = "erc20-transfers"
+path = "erc20-transfers"
+version = "0.1.0"
+description = "ERC-20 Transfer event indexing — track any token's transfers with volume analytics"
+chains = ["ethereum", "polygon", "arbitrum", "optimism", "base"]
+category = "token"
+
+[[templates]]
+name = "erc721-transfers"
+path = "erc721-transfers"
+version = "0.1.0"
+description = "ERC-721 Transfer tracking — NFT ownership history, mint activity, holder distribution"
+chains = ["ethereum", "polygon", "arbitrum", "optimism", "base"]
+category = "nft"
+
+[[templates]]
+name = "uniswap-v4"
+path = "uniswap-v4"
+version = "0.1.0"
+description = "Uniswap V4 analytics — swaps, liquidity changes, hook usage, pool initialization"
+chains = ["ethereum", "arbitrum", "base"]
+category = "dex"
+
+[[templates]]
+name = "aave-v3"
+path = "aave-v3"
+version = "0.1.0"
+description = "Aave V3 lending analytics — supply, borrow, repay, liquidation, utilization metrics"
+chains = ["ethereum", "polygon", "arbitrum", "optimism", "base"]
+category = "lending"
+
+[[templates]]
+name = "aave-v4"
+path = "aave-v4"
+version = "0.1.0"
+description = "Aave V4 Hub & Spoke analytics — share-based lending, Dutch auction liquidations, risk premiums"
+chains = ["ethereum"]
+category = "lending"

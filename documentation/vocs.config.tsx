@@ -63,6 +63,7 @@ export default defineConfig({
     {
       text: "Guides",
       items: [
+        { text: "Protocol Templates", link: "/docs/guides/templates" },
         { text: "Rindexer & eRPC Config", link: "/docs/guides/rindexer-config" },
         { text: "Local Dev Stack", link: "/docs/guides/local-dev" },
         {

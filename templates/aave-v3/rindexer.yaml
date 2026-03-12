@@ -1,0 +1,24 @@
+name: AaveV3Analytics
+description: Aave V3 lending analytics — supply, borrow, repay, liquidation
+repository: https://github.com/evm-cloud/evm-cloud
+project_type: no-code
+timestamps: true
+
+networks:
+  {{evm:networks}}
+
+storage:
+  clickhouse:
+    enabled: true
+
+contracts:
+  - name: AaveV3Pool
+    details:
+      {{evm:contract_details}}
+    abi: ./abis/AaveV3Pool.json
+    include_events:
+      - Supply
+      - Withdraw
+      - Borrow
+      - Repay
+      - LiquidationCall

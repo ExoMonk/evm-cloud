@@ -1,0 +1,37 @@
+[template]
+name = "erc20-transfers"
+version = "0.1.0"
+description = "ERC-20 Transfer event indexing — track any token's transfers with volume analytics"
+category = "token"
+min_evm_cloud_version = "0.0.2"
+
+[template.chains]
+[template.chains.ethereum]
+contracts = {}
+
+[template.chains.polygon]
+contracts = {}
+
+[template.chains.arbitrum]
+contracts = {}
+
+[template.chains.optimism]
+contracts = {}
+
+[template.chains.base]
+contracts = {}
+
+[template.variables]
+[template.variables.token_address]
+type = "string"
+description = "Contract address of the ERC-20 token to index"
+
+[template.variables.token_symbol]
+type = "string"
+default = "TOKEN"
+description = "Symbol used for naming the contract in rindexer config"
+
+[template.variables.start_block]
+type = "string"
+default = "0"
+description = "Block number to start indexing from"

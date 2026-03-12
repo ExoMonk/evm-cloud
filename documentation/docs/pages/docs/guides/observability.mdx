@@ -90,7 +90,7 @@ All components deploy as a single kube-prometheus-stack Helm release (one Promet
 
 ## Dashboards
 
-Three dashboards are auto-provisioned as ConfigMaps with the `grafana_dashboard: "1"` label.
+Three dashboards are auto-provisioned as ConfigMaps with the `grafana_dashboard: "1"` label. You can also add [custom dashboards](#custom-dashboards) via `grafana_extra_dashboards`.
 
 ### rindexer
 
@@ -129,6 +129,35 @@ Three dashboards are auto-provisioned as ConfigMaps with the `grafana_dashboard:
 | Disk Usage | `node_filesystem_avail_bytes` | Alert at 80% for PVC or root disk |
 | Pod Restarts | `kube_pod_container_status_restarts_total` | Non-zero = investigate |
 | Node CPU | `node_cpu_seconds_total` | Overall node utilization |
+
+---
+
+## Custom dashboards
+
+You can add your own Grafana dashboards alongside the built-in ones. Any JSON file passed via `grafana_extra_dashboards` is deployed as a Kubernetes ConfigMap with the `grafana_dashboard: "1"` label, which Grafana's sidecar auto-discovers.
+
+### From template
+
+If you used `evm-cloud templates apply`, a protocol-specific dashboard is already in `grafana/dashboard.json`. Wire it into your deployment:
+
+```hcl
+grafana_extra_dashboards = {
+  for f in fileset("${path.module}/grafana", "*.json") :
+  f => file("${path.module}/grafana/${f}")
+}
+```
+
+### Manual
+
+Drop any valid Grafana dashboard JSON file and reference it:
+
+```hcl
+grafana_extra_dashboards = {
+  "my-dashboard.json" = file("path/to/my-dashboard.json")
+}
+```
+
+Multiple dashboards are supported — each entry creates its own ConfigMap.
 
 ---
 
@@ -273,7 +302,7 @@ curl https://grafana.yourdomain.com/api/health
 
 ## Related pages
 
-- **[Variable Reference — Monitoring](../variable-reference.mdx#monitoring)** — All 17 monitoring variables
+- **[Variable Reference — Monitoring](../variable-reference.mdx#monitoring)** — All monitoring variables
 - **[Production Checklist](./production-checklist.mdx)** — Pre-launch checklist including monitoring
 - **[TLS & Ingress](./tls-ingress.mdx)** — Ingress modes for Grafana exposure
 - **[Outputs Reference](../outputs-reference.mdx)** — `services.monitoring` in workload handoff

@@ -1,2 +1,3 @@
 monitoringRelease: "monitoring"
 projectName: "evm-cloud"
+workloadNamespace: "evm-cloud"

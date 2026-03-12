@@ -195,13 +195,55 @@ pub(crate) fn run(args: InitArgs, color: ColorMode) -> Result<()> {
 
             match preflight.project_kind {
                 ProjectKind::EasyToml => {
-                    let (dir, scaffold) =
-                        easy_mode::prepare_workspace(&preflight.resolved_root, color)?;
-                    if scaffold == crate::codegen::ScaffoldResult::BackendChanged {
-                        easy_mode::warn_backend_changed(&preflight.resolved_root)?;
-                        needs_reconfigure = true;
+                    // Try loading the full config. If it fails (e.g. minimal TOML
+                    // from `templates apply`), fall through to the wizard to fill
+                    // in the missing infrastructure sections.
+                    match easy_mode::prepare_workspace(&preflight.resolved_root, color) {
+                        Ok((dir, scaffold)) => {
+                            if scaffold == crate::codegen::ScaffoldResult::BackendChanged {
+                                easy_mode::warn_backend_changed(&preflight.resolved_root)?;
+                                needs_reconfigure = true;
+                            }
+                            dir
+                        }
+                        Err(CliError::ConfigParse { .. }) => {
+                            output::info(
+                                "Partial evm-cloud.toml detected — running setup wizard to complete configuration.",
+                                color,
+                            );
+
+                            // Preserve existing [state] if present
+                            let toml_path = preflight.resolved_root.join("evm-cloud.toml");
+                            let existing_state = loader::load_for_bootstrap(&toml_path)
+                                .ok()
+                                .and_then(|(_, s)| s);
+
+                            let mut answers = init_wizard::collect_answers(
+                                args.config.as_deref(),
+                                args.non_interactive,
+                                args.mode,
+                            )?;
+                            should_bootstrap = answers.auto_bootstrap || args.bootstrap;
+
+                            if answers.state_config.is_none() {
+                                if let Some(state) = existing_state {
+                                    output::checkline("Preserving existing [state] from evm-cloud.toml", color);
+                                    answers.state_config = Some(state);
+                                }
+                            }
+
+                            init_scaffold::scaffold_project(&preflight.resolved_root, &answers, true, color)?;
+
+                            let (dir, scaffold) =
+                                easy_mode::prepare_workspace(&preflight.resolved_root, color)?;
+                            if scaffold == crate::codegen::ScaffoldResult::BackendChanged {
+                                easy_mode::warn_backend_changed(&preflight.resolved_root)?;
+                                needs_reconfigure = true;
+                            }
+                            dir
+                        }
+                        Err(other) => return Err(other),
                     }
-                    dir
                 }
                 ProjectKind::RawTerraform => {
                     output::checkline("Terraform project ready", color);

@@ -1,0 +1,31 @@
+[template]
+name = "uniswap-v4"
+version = "0.1.0"
+description = "Uniswap V4 analytics — swaps, liquidity changes, hook usage, pool initialization"
+category = "dex"
+min_evm_cloud_version = "0.0.2"
+
+[template.chains]
+[template.chains.ethereum]
+[template.chains.ethereum.contracts]
+[template.chains.ethereum.contracts.PoolManager]
+address = "0x000000000004444c5dc75cB358380D2e3dE08A90"
+start_block = 21688329
+
+[template.chains.arbitrum]
+[template.chains.arbitrum.contracts]
+[template.chains.arbitrum.contracts.PoolManager]
+address = "0x000000000004444c5dc75cB358380D2e3dE08A90"
+start_block = 291629680
+
+[template.chains.base]
+[template.chains.base.contracts]
+[template.chains.base.contracts.PoolManager]
+address = "0x000000000004444c5dc75cB358380D2e3dE08A90"
+start_block = 25350988
+
+[template.variables]
+[template.variables.reorg_safe_distance]
+type = "int"
+default = 64
+description = "Blocks behind head to consider final"

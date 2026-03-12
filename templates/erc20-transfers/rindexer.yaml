@@ -1,0 +1,22 @@
+name: ERC20Transfers
+description: ERC-20 Transfer event indexing for {{evm:token_symbol}}
+repository: https://github.com/evm-cloud/evm-cloud
+project_type: no-code
+timestamps: true
+
+networks:
+  {{evm:networks}}
+
+storage:
+  clickhouse:
+    enabled: true
+
+contracts:
+  - name: {{evm:token_symbol}}
+    details:
+      - network: {{evm:chain_name}}
+        address: "{{evm:token_address}}"
+        start_block: "{{evm:start_block}}"
+    abi: ./abis/ERC20.json
+    include_events:
+      - Transfer

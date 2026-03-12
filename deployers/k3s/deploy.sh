@@ -434,6 +434,19 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
   PROMTAIL_VERSION=$(jq -r '.services.monitoring.promtail_chart_version // "6.16.6"' "$HANDOFF_FILE")
   LOKI_PERSISTENCE=$(jq -r '.services.monitoring.loki_persistence_enabled // false' "$HANDOFF_FILE")
   CH_METRICS_URL=$(jq -r '.services.monitoring.clickhouse_metrics_url // empty' "$HANDOFF_FILE")
+  CH_GRAFANA_URL=$(jq -r '.data.clickhouse.url // empty' "$HANDOFF_FILE")
+  # Parse host:port from URL formats: "clickhouse://host:port/db", "host:port", "host"
+  CH_STRIPPED=$(echo "$CH_GRAFANA_URL" | sed -E 's|^[a-z]+://||')   # strip scheme
+  CH_STRIPPED=$(echo "$CH_STRIPPED" | sed -E 's|/.*$||')             # strip path
+  CH_GRAFANA_HOST=$(echo "$CH_STRIPPED" | sed -E 's|:[0-9]+$||')    # strip port
+  CH_GRAFANA_PORT=$(echo "$CH_STRIPPED" | sed -nE 's|.*:([0-9]+)$|\1|p')
+  CH_GRAFANA_PORT=${CH_GRAFANA_PORT:-9000}
+  CH_GRAFANA_USER=$(jq -r '.data.clickhouse.user // "default"' "$HANDOFF_FILE")
+  CH_GRAFANA_DB=$(jq -r '.data.clickhouse.db // "default"' "$HANDOFF_FILE")
+  CH_GRAFANA_PASSWORD=$(jq -r '.data.clickhouse.password // empty' "$HANDOFF_FILE")
+  if [[ -n "$CH_GRAFANA_HOST" ]]; then
+    echo "[evm-cloud] ClickHouse datasource: host=$CH_GRAFANA_HOST port=$CH_GRAFANA_PORT db=$CH_GRAFANA_DB user=$CH_GRAFANA_USER"
+  fi
   GRAFANA_INGRESS=$(jq -r '.services.monitoring.grafana_ingress_enabled // true' "$HANDOFF_FILE")
   GRAFANA_HOSTNAME=$(jq -r '.services.monitoring.grafana_hostname // empty' "$HANDOFF_FILE")
   GRAFANA_INGRESS_CLASS=$(jq -r '.services.monitoring.ingress_class_name // "nginx"' "$HANDOFF_FILE")
@@ -455,10 +468,16 @@ fi
 if [[ "$MONITORING_ENABLED" == "true" ]]; then
   kubectl create namespace monitoring 2>/dev/null || true
 
+  # Multi-project guard: skip if monitoring was installed by a different project.
+  # Same project redeploys always upgrade (picks up new datasources, dashboards, etc.).
+  MONITORING_OWNER=""
   if helm status monitoring -n monitoring >/dev/null 2>&1; then
-    echo "[evm-cloud] kube-prometheus-stack already present."
+    MONITORING_OWNER=$(helm get values monitoring -n monitoring -o json 2>/dev/null | jq -r '.evmCloudOwner // empty')
+  fi
+  if [[ -n "$MONITORING_OWNER" && "$MONITORING_OWNER" != "$PROJECT" ]]; then
+    echo "[evm-cloud] kube-prometheus-stack owned by project '$MONITORING_OWNER', skipping."
   else
-  echo "[evm-cloud] Installing kube-prometheus-stack (v${KUBE_PROM_VERSION})..."
+  echo "[evm-cloud] Installing/upgrading kube-prometheus-stack (v${KUBE_PROM_VERSION})..."
 
   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
   helm repo update prometheus-community
@@ -466,6 +485,7 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
   PROM_ARGS=(
     --namespace monitoring
     --version "$KUBE_PROM_VERSION"
+    --set "evmCloudOwner=$PROJECT"
     --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
     --set prometheus.prometheusSpec.retention=7d
     --set prometheus.prometheusSpec.resources.requests.cpu=100m
@@ -506,14 +526,58 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
     fi
   fi
 
-  # Loki datasource in Grafana
+  # Additional datasources in Grafana (indexed sequentially)
+  DS_IDX=0
+
+  # Loki datasource
   if [[ "$LOKI_ENABLED" == "true" ]]; then
     PROM_ARGS+=(
-      --set "grafana.additionalDataSources[0].name=Loki"
-      --set "grafana.additionalDataSources[0].type=loki"
-      --set "grafana.additionalDataSources[0].url=http://loki.monitoring.svc:3100"
-      --set "grafana.additionalDataSources[0].access=proxy"
+      --set "grafana.additionalDataSources[$DS_IDX].name=Loki"
+      --set "grafana.additionalDataSources[$DS_IDX].type=loki"
+      --set "grafana.additionalDataSources[$DS_IDX].url=http://loki.monitoring.svc:3100"
+      --set "grafana.additionalDataSources[$DS_IDX].access=proxy"
     )
+    DS_IDX=$((DS_IDX + 1))
+  fi
+
+  # ClickHouse datasource (for template dashboards)
+  # Detect protocol from URL scheme + port:
+  #   clickhouse+ssl:// or port 8443/9440 → native + secure
+  #   https://           or port 8443     → http + secure
+  #   clickhouse://      or port 9000     → native
+  #   http://            or port 8123     → http
+  if [[ -n "$CH_GRAFANA_HOST" ]]; then
+    CH_PROTO="native"
+    CH_SECURE="false"
+    case "$CH_GRAFANA_URL" in
+      https://*) CH_PROTO="http"; CH_SECURE="true" ;;
+      http://*)  CH_PROTO="http" ;;
+    esac
+    # Port-based TLS detection (ClickHouse Cloud uses 8443 for HTTPS)
+    if [[ "$CH_GRAFANA_PORT" == "8443" ]]; then
+      CH_PROTO="http"; CH_SECURE="true"
+    elif [[ "$CH_GRAFANA_PORT" == "9440" ]]; then
+      CH_PROTO="native"; CH_SECURE="true"
+    elif [[ "$CH_GRAFANA_PORT" == "8123" ]]; then
+      CH_PROTO="http"
+    fi
+    echo "[evm-cloud] ClickHouse Grafana datasource: protocol=$CH_PROTO secure=$CH_SECURE"
+
+    PROM_ARGS+=(
+      --set "grafana.plugins[0]=grafana-clickhouse-datasource"
+      --set-string "grafana.additionalDataSources[$DS_IDX].name=ClickHouse"
+      --set-string "grafana.additionalDataSources[$DS_IDX].type=grafana-clickhouse-datasource"
+      --set-string "grafana.additionalDataSources[$DS_IDX].uid=clickhouse"
+      --set-string "grafana.additionalDataSources[$DS_IDX].access=proxy"
+      --set-string "grafana.additionalDataSources[$DS_IDX].jsonData.host=$CH_GRAFANA_HOST"
+      --set "grafana.additionalDataSources[$DS_IDX].jsonData.port=$CH_GRAFANA_PORT"
+      --set-string "grafana.additionalDataSources[$DS_IDX].jsonData.protocol=$CH_PROTO"
+      --set "grafana.additionalDataSources[$DS_IDX].jsonData.secure=$CH_SECURE"
+      --set-string "grafana.additionalDataSources[$DS_IDX].jsonData.username=$CH_GRAFANA_USER"
+      --set-string "grafana.additionalDataSources[$DS_IDX].jsonData.defaultDatabase=$CH_GRAFANA_DB"
+      --set-string "grafana.additionalDataSources[$DS_IDX].secureJsonData.password=$CH_GRAFANA_PASSWORD"
+    )
+    DS_IDX=$((DS_IDX + 1))
   fi
 
   # Alertmanager routing
@@ -536,8 +600,8 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
   helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
     "${PROM_ARGS[@]}" \
     --rollback-on-failure --timeout 600s
-  echo "[evm-cloud] kube-prometheus-stack installed."
-  fi # end helm status guard
+  echo "[evm-cloud] kube-prometheus-stack ready."
+  fi # end multi-project guard
 
   # Optional: Loki + Promtail
   if [[ "$LOKI_ENABLED" == "true" ]]; then
@@ -586,9 +650,34 @@ if [[ "$MONITORING_ENABLED" == "true" ]]; then
   helm upgrade --install "${PROJECT}-dashboards" "${CHARTS_DIR}/dashboards/" \
     --namespace monitoring \
     --set projectName="$PROJECT" \
+    --set workloadNamespace="$NS" \
     --set monitoringRelease=monitoring \
     --timeout 120s
   echo "[evm-cloud] Dashboards deployed."
+
+  # Deploy custom dashboards from grafana/ directory (e.g. from templates apply)
+  GRAFANA_DIR="$(dirname "$CONFIG_DIR")/grafana"
+  if [[ -d "$GRAFANA_DIR" ]]; then
+    echo "[evm-cloud] Deploying custom dashboards from ${GRAFANA_DIR}..."
+    for dashboard_file in "$GRAFANA_DIR"/*.json; do
+      [[ -f "$dashboard_file" ]] || continue
+      fname="$(basename "$dashboard_file")"
+      cm_name="${PROJECT}-$(echo "${fname%.json}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')"
+      kubectl apply -n monitoring -f - <<CMEOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${cm_name}
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  ${fname}: |
+$(sed 's/^/    /' "$dashboard_file")
+CMEOF
+    done
+    echo "[evm-cloud] Custom dashboards deployed."
+  fi
 fi
 
 # --- Deploy workloads ---

@@ -1,0 +1,31 @@
+[template]
+name = "aave-v4"
+version = "0.1.0"
+description = "Aave V4 Hub & Spoke analytics — share-based lending, Dutch auction liquidations, risk premiums"
+category = "lending"
+min_evm_cloud_version = "0.0.2"
+
+# Aave V4 is launching on Ethereum mainnet first.
+# Spoke contract addresses will be updated once mainnet deployment is finalized.
+# Current addresses are from the testnet/pre-launch deployment.
+[template.chains]
+[template.chains.ethereum]
+[template.chains.ethereum.contracts]
+[template.chains.ethereum.contracts.AaveV4Spoke]
+address = "0x0000000000000000000000000000000000000000"
+start_block = 0
+
+[template.variables]
+[template.variables.spoke_address]
+type = "string"
+description = "Aave V4 Spoke contract address (required — set once mainnet launches)"
+
+[template.variables.spoke_start_block]
+type = "int"
+default = 0
+description = "Block number to start indexing from"
+
+[template.variables.reorg_safe_distance]
+type = "int"
+default = 64
+description = "Blocks behind head to consider final"

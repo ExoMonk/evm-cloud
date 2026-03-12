@@ -17,6 +17,7 @@ mod output;
 mod post_deploy;
 mod preflight;
 mod ssh;
+mod templates;
 mod terraform;
 mod tfvars_parser;
 mod version_guard;
@@ -38,6 +39,7 @@ use crate::commands::init::InitArgs;
 use crate::commands::kubectl::KubectlArgs;
 use crate::commands::logs::LogsArgs;
 use crate::commands::status::StatusArgs;
+use crate::commands::templates::TemplatesArgs;
 use crate::error::CliError;
 use crate::local::LocalCommand;
 use crate::output::ColorMode;
@@ -73,6 +75,8 @@ enum Commands {
     /// Manage the local dev stack (kind + Anvil + eRPC + ClickHouse + rindexer)
     #[command(subcommand)]
     Local(LocalCommand),
+    /// Browse and manage protocol templates from the registry
+    Templates(TemplatesArgs),
 }
 
 fn main() {
@@ -94,6 +98,7 @@ fn main() {
         Commands::Destroy(args) => commands::destroy::run(args, cli.color),
         Commands::Env(cmd) => commands::env::run(cmd, cli.color),
         Commands::Local(cmd) => local::run(cmd, cli.color),
+        Commands::Templates(args) => commands::templates::run(args, cli.color),
     };
 
     if let Err(err) = result {

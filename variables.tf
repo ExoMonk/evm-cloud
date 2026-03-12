@@ -691,6 +691,12 @@ variable "grafana_hostname" {
   default     = ""
 }
 
+variable "grafana_extra_dashboards" {
+  description = "Map of dashboard filename to JSON content for Grafana sidecar loading, e.g. { \"uniswap.json\" = file(\"grafana/dashboard.json\") }."
+  type        = map(string)
+  default     = {}
+}
+
 variable "ingress_class_name" {
   description = "Ingress class name for Grafana Ingress resource."
   type        = string

@@ -1,0 +1,28 @@
+name: AaveV4Analytics
+description: Aave V4 Hub & Spoke lending analytics — share-based positions, Dutch auction liquidations, risk premiums
+repository: https://github.com/evm-cloud/evm-cloud
+project_type: no-code
+timestamps: true
+
+networks:
+  {{evm:networks}}
+
+storage:
+  clickhouse:
+    enabled: true
+
+contracts:
+  - name: AaveV4Spoke
+    details:
+      - network: {{evm:chain_name}}
+        address: "{{evm:spoke_address}}"
+        start_block: "{{evm:spoke_start_block}}"
+    abi: ./abis/AaveV4Spoke.json
+    include_events:
+      - Supply
+      - Withdraw
+      - Borrow
+      - Repay
+      - LiquidationCall
+      - ReportDeficit
+      - UpdateUserRiskPremium

@@ -1,0 +1,22 @@
+name: UniswapV4Analytics
+description: Uniswap V4 analytics — swaps, liquidity changes, pool initialization
+repository: https://github.com/evm-cloud/evm-cloud
+project_type: no-code
+timestamps: true
+
+networks:
+  {{evm:networks}}
+
+storage:
+  clickhouse:
+    enabled: true
+
+contracts:
+  - name: PoolManager
+    details:
+      {{evm:contract_details}}
+    abi: ./abis/PoolManager.json
+    include_events:
+      - Initialize
+      - Swap
+      - ModifyLiquidity

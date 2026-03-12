@@ -214,6 +214,35 @@ pub(crate) enum CliError {
         source: std::io::Error,
     },
 
+    #[error("template `{name}` not found. Available: {available:?}. Run `evm-cloud templates list` to see all templates")]
+    TemplateNotFound {
+        name: String,
+        available: Vec<String>,
+    },
+
+    #[error("template `{template}` does not support chain `{chain}`. Supported: {supported:?}")]
+    TemplateChainNotSupported {
+        template: String,
+        chain: String,
+        supported: Vec<String>,
+    },
+
+    #[error("template `{template}` requires variable `{variable}`. Pass it with --var {variable}=<value>")]
+    TemplateVariableRequired {
+        template: String,
+        variable: String,
+    },
+
+    #[error("unresolved template variable {variable} in {file}:{line}")]
+    TemplateRenderError {
+        variable: String,
+        file: PathBuf,
+        line: usize,
+    },
+
+    #[error("failed to fetch template registry: {details}")]
+    RegistryFetchError { details: String },
+
     #[error("io error at {path}: {source}")]
     Io {
         source: std::io::Error,

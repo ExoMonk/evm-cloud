@@ -1,0 +1,22 @@
+name: ERC721Transfers
+description: ERC-721 Transfer tracking for {{evm:collection_name}}
+repository: https://github.com/evm-cloud/evm-cloud
+project_type: no-code
+timestamps: true
+
+networks:
+  {{evm:networks}}
+
+storage:
+  clickhouse:
+    enabled: true
+
+contracts:
+  - name: {{evm:collection_name}}
+    details:
+      - network: {{evm:chain_name}}
+        address: "{{evm:nft_address}}"
+        start_block: "{{evm:start_block}}"
+    abi: ./abis/ERC721.json
+    include_events:
+      - Transfer

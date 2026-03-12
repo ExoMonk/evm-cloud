@@ -418,6 +418,7 @@ Observability stack powered by kube-prometheus-stack. Requires `compute_engine =
 | `grafana_admin_password_secret_name` | `string` | `""` | No | Existing K8s Secret name for Grafana admin password (keys: `admin-user`, `admin-password`). Empty = chart default (`prom-operator`). |
 | `grafana_ingress_enabled` | `bool` | `true` | No | Expose Grafana via Ingress. Requires `ingress_mode != "none"` and `grafana_hostname` set. |
 | `grafana_hostname` | `string` | `""` | No | Grafana hostname for Ingress (e.g., `grafana.yourdomain.com`). |
+| `grafana_extra_dashboards` | `map(string)` | `{}` | No | Map of dashboard filename to JSON content for Grafana sidecar loading. Each entry creates a ConfigMap auto-discovered by Grafana. |
 | `ingress_class_name` | `string` | `"nginx"` | No | Ingress class name for the Grafana Ingress resource. |
 | `alertmanager_route_target` | `string` | `"slack"` | No | Alertmanager receiver target: `slack`, `sns`, or `pagerduty`. |
 | `alertmanager_slack_webhook_secret_name` | `string` | `""` | No | Existing K8s Secret name holding Slack webhook URL (key: `webhook_url`). |

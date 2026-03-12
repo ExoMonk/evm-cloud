@@ -438,6 +438,7 @@ module "k8s_addons" {
   clickhouse_metrics_url                         = var.clickhouse_metrics_url
   grafana_ingress_enabled                        = var.grafana_ingress_enabled
   grafana_hostname                               = var.grafana_hostname
+  grafana_extra_dashboards                       = var.grafana_extra_dashboards
   ingress_class_name                             = var.ingress_class_name
   aws_region                                     = var.aws_region
 }

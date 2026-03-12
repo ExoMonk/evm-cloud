@@ -1,0 +1,43 @@
+[template]
+name = "aave-v3"
+version = "0.1.0"
+description = "Aave V3 lending analytics — supply, borrow, repay, liquidation, utilization metrics"
+category = "lending"
+min_evm_cloud_version = "0.0.2"
+
+[template.chains]
+[template.chains.ethereum]
+[template.chains.ethereum.contracts]
+[template.chains.ethereum.contracts.AaveV3Pool]
+address = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+start_block = 16291127
+
+[template.chains.polygon]
+[template.chains.polygon.contracts]
+[template.chains.polygon.contracts.AaveV3Pool]
+address = "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+start_block = 25826028
+
+[template.chains.arbitrum]
+[template.chains.arbitrum.contracts]
+[template.chains.arbitrum.contracts.AaveV3Pool]
+address = "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+start_block = 7742429
+
+[template.chains.optimism]
+[template.chains.optimism.contracts]
+[template.chains.optimism.contracts.AaveV3Pool]
+address = "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+start_block = 4365693
+
+[template.chains.base]
+[template.chains.base.contracts]
+[template.chains.base.contracts.AaveV3Pool]
+address = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5"
+start_block = 2357652
+
+[template.variables]
+[template.variables.reorg_safe_distance]
+type = "int"
+default = 64
+description = "Blocks behind head to consider final"

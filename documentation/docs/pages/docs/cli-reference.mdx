@@ -37,6 +37,51 @@ Key behavior:
 - Supports both answers TOML and runtime `evm-cloud.toml` in non-interactive mode
 - `--example` bootstraps from local `examples/` when in a repo checkout, otherwise downloads from GitHub (current CLI tag, fallback `main`)
 - `--list-examples` prints canonical example names and aliases
+- If a partial `evm-cloud.toml` exists (e.g. from `templates apply`), the wizard runs automatically to complete configuration
+
+### `templates`
+
+Manage protocol templates — pre-built indexer configurations for DeFi protocols.
+
+#### `templates list`
+
+```bash
+evm-cloud templates list [OPTIONS]
+
+  --refresh                     Force refresh the registry cache
+  --chain <name>                Filter templates by chain support
+  --registry-url <url>          Custom template registry URL
+```
+
+#### `templates apply`
+
+Apply a protocol template to set up `config/` with indexer config, ABIs, ClickHouse schema, and Grafana dashboards.
+
+```bash
+evm-cloud templates apply <name> --chains <chain1,chain2> [OPTIONS]
+
+  --chains <chains>             Comma-separated chains to deploy on (required)
+  --var <KEY=VALUE>             Template variable override (repeatable)
+  --registry-url <url>          Custom template registry URL
+  --force                       Overwrite existing files
+  -d, --dir <path>              Target directory (default: .)
+```
+
+Key behavior:
+- Creates `config/rindexer.yaml` with multi-chain network blocks and per-chain contract addresses
+- Creates `config/erpc.yaml` with chain-specific upstreams (uses `repository://evm-public-endpoints.erpc.cloud`)
+- Copies `config/abis/` from the template package
+- Places `clickhouse/`, `grafana/`, and `README.md` at project root
+- Writes `.evm-cloud/template-lock.toml` to track applied templates
+- Creates a minimal `evm-cloud.toml` if none exists (run `evm-cloud init` to complete setup)
+
+Example:
+
+```bash
+evm-cloud templates apply uniswap-v4 --chains ethereum,base
+evm-cloud init    # Complete infrastructure setup
+evm-cloud deploy  # Deploy everything
+```
 
 ### `deploy`
 

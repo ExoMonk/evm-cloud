@@ -1,0 +1,37 @@
+[template]
+name = "erc721-transfers"
+version = "0.1.0"
+description = "ERC-721 Transfer tracking — NFT ownership history, mint activity, holder distribution"
+category = "nft"
+min_evm_cloud_version = "0.0.2"
+
+[template.chains]
+[template.chains.ethereum]
+contracts = {}
+
+[template.chains.polygon]
+contracts = {}
+
+[template.chains.arbitrum]
+contracts = {}
+
+[template.chains.optimism]
+contracts = {}
+
+[template.chains.base]
+contracts = {}
+
+[template.variables]
+[template.variables.nft_address]
+type = "string"
+description = "Contract address of the ERC-721 NFT collection to index"
+
+[template.variables.collection_name]
+type = "string"
+default = "NFT"
+description = "Name used for the contract in rindexer config"
+
+[template.variables.start_block]
+type = "string"
+default = "0"
+description = "Block number to start indexing from"
