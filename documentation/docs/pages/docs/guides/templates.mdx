@@ -281,7 +281,11 @@ rindexer automatically creates the base event tables (using `ReplacingMergeTree`
 
 ### Grafana dashboard (`grafana/dashboard.json`)
 
-Protocol-specific dashboard panels. The k3s deployer automatically deploys any `.json` files in the `grafana/` directory as Grafana ConfigMaps. For power-mode (Terraform-managed) deployments, wire them via [`grafana_extra_dashboards`](/docs/guides/observability#custom-dashboards):
+Protocol-specific dashboard panels. Dashboards are auto-loaded based on your deployment mode:
+
+- **Easy mode** (evm-cloud.toml): Dashboard JSON files from `grafana/` are automatically inlined into Terraform variables when `monitoring_enabled = true`. No extra configuration needed.
+- **k3s/bare_metal deployer**: The deployer reads `grafana/*.json` and creates Kubernetes ConfigMaps with the `grafana_dashboard: "1"` label, which Grafana's sidecar auto-discovers.
+- **Power mode** (raw Terraform): Wire them via [`grafana_extra_dashboards`](/docs/guides/observability#custom-dashboards):
 
 ```hcl
 grafana_extra_dashboards = {

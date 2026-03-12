@@ -172,6 +172,9 @@ struct TerraformVars {
     loki_persistence_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     clickhouse_metrics_url: Option<String>,
+    // Custom Grafana dashboards: filename → JSON content (loaded from grafana/ directory)
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    grafana_extra_dashboards: BTreeMap<String, String>,
 }
 
 pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> Result<Value> {
@@ -780,6 +783,11 @@ pub(crate) fn generate_tfvars(config: &EvmCloudConfig, project_root: &Path) -> R
         } else {
             None
         },
+        grafana_extra_dashboards: if is_monitoring {
+            load_dashboard_files(project_root)?
+        } else {
+            BTreeMap::new()
+        },
     };
 
     let json_value = serde_json::to_value(&vars).map_err(CliError::OutputParseError)?;
@@ -827,6 +835,38 @@ fn load_abi_files(rindexer_config_path: &Path) -> Result<BTreeMap<String, String
     }
 
     Ok(abis)
+}
+
+/// Load Grafana dashboard JSON files from the `grafana/` directory at project root.
+fn load_dashboard_files(project_root: &Path) -> Result<BTreeMap<String, String>> {
+    let grafana_dir = project_root.join("grafana");
+    let mut dashboards = BTreeMap::new();
+    if !grafana_dir.is_dir() {
+        return Ok(dashboards);
+    }
+
+    let entries = fs::read_dir(&grafana_dir).map_err(|source| CliError::Io {
+        source,
+        path: grafana_dir.clone(),
+    })?;
+
+    for entry in entries {
+        let entry = entry.map_err(|source| CliError::Io {
+            source,
+            path: grafana_dir.clone(),
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let content = fs::read_to_string(&path).map_err(|source| CliError::Io {
+                source,
+                path: path.clone(),
+            })?;
+            dashboards.insert(name, content);
+        }
+    }
+
+    Ok(dashboards)
 }
 
 pub(crate) fn ensure_gitignore_entry(project_root: &Path, entry: &str) -> Result<()> {
@@ -1065,6 +1105,10 @@ mode = "provider"
             promtail_chart_version: Some(String::new()),
             loki_persistence_enabled: Some(false),
             clickhouse_metrics_url: Some(String::new()),
+            grafana_extra_dashboards: std::collections::BTreeMap::from([(
+                "dashboard.json".to_string(),
+                "{}".to_string(),
+            )]),
         };
         let json = serde_json::to_value(&dummy).unwrap();
         let tfvars_keys: std::collections::HashSet<&str> = json
