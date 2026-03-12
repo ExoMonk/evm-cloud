@@ -43,7 +43,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT hour AS time, sum(supply_count) AS supplies, sum(withdraw_count) AS withdrawals, sum(borrow_count) AS borrows, sum(repay_count) AS repays FROM aave_v4_utilization_hourly WHERE chain_id = ${chain_id} AND hour >= $__fromTime AND hour <= $__toTime GROUP BY hour ORDER BY hour",
+          "rawSql": "SELECT hour AS time, sum(supply_count) AS supplies, sum(withdraw_count) AS withdrawals, sum(borrow_count) AS borrows, sum(repay_count) AS repays FROM utilization_hourly WHERE network = '${network}' AND hour >= $__fromTime AND hour <= $__toTime GROUP BY hour ORDER BY hour",
           "refId": "A",
           "format": 0
         }
@@ -83,7 +83,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT toString(reserve_id) AS reserve, total_supplied_amount, total_withdrawn_amount, total_borrowed_amount, total_repaid_amount, supply_count, borrow_count FROM aave_v4_net_position_by_reserve WHERE chain_id = ${chain_id} ORDER BY supply_count DESC",
+          "rawSql": "SELECT toString(reserve_id) AS reserve, total_supplied_amount, total_withdrawn_amount, total_borrowed_amount, total_repaid_amount, supply_count, borrow_count FROM net_position_by_reserve WHERE network = '${network}' ORDER BY supply_count DESC",
           "refId": "A",
           "format": 1
         }
@@ -124,7 +124,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT day AS time, sum(liquidation_count) AS liquidations FROM aave_v4_liquidation_volume_daily WHERE chain_id = ${chain_id} AND day >= $__fromTime AND day <= $__toTime GROUP BY day ORDER BY day",
+          "rawSql": "SELECT day AS time, sum(liquidation_count) AS liquidations FROM liquidation_volume_daily WHERE network = '${network}' AND day >= $__fromTime AND day <= $__toTime GROUP BY day ORDER BY day",
           "refId": "A",
           "format": 0
         }
@@ -165,7 +165,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT day AS time, sum(deficit_count) AS deficits, sum(unique_users) AS affected_users FROM aave_v4_deficit_daily WHERE chain_id = ${chain_id} AND day >= $__fromTime AND day <= $__toTime GROUP BY day ORDER BY day",
+          "rawSql": "SELECT day AS time, sum(deficit_count) AS deficits, sum(unique_users) AS affected_users FROM deficit_daily WHERE network = '${network}' AND day >= $__fromTime AND day <= $__toTime GROUP BY day ORDER BY day",
           "refId": "A",
           "format": 0
         }
@@ -205,7 +205,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT user, risk_premium, block_number, block_timestamp FROM aave_v4_risk_premiums FINAL WHERE chain_id = ${chain_id} ORDER BY risk_premium DESC LIMIT 50",
+          "rawSql": "SELECT user, risk_premium, block_number, block_timestamp FROM update_user_risk_premium FINAL WHERE network = '${network}' ORDER BY risk_premium DESC LIMIT 50",
           "refId": "A",
           "format": 1
         }
@@ -245,7 +245,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT user AS borrower, count() AS borrow_count, toString(sum(drawn_amount)) AS total_borrowed FROM aave_v4_borrows WHERE chain_id = ${chain_id} AND block_timestamp >= $__fromTime AND block_timestamp <= $__toTime GROUP BY user ORDER BY borrow_count DESC LIMIT 20",
+          "rawSql": "SELECT user AS borrower, count() AS borrow_count, toString(sum(drawn_amount)) AS total_borrowed FROM borrow WHERE network = '${network}' AND block_timestamp >= $__fromTime AND block_timestamp <= $__toTime GROUP BY user ORDER BY borrow_count DESC LIMIT 20",
           "refId": "A",
           "format": 1
         }
@@ -263,10 +263,10 @@
           "uid": "clickhouse"
         },
         "hide": 0,
-        "label": "Chain ID",
-        "name": "chain_id",
+        "label": "Network",
+        "name": "network",
         "options": [],
-        "query": "SELECT DISTINCT chain_id FROM aave_v4_supplies",
+        "query": "SELECT DISTINCT network FROM supply",
         "refresh": 1,
         "type": "query"
       }

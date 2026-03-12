@@ -1,6 +1,8 @@
+-- rindexer schema: aave_v3_analytics_aave_v3_pool
+
 -- Net position by asset: cumulative supply - withdrawal + borrow - repay
-CREATE TABLE IF NOT EXISTS aave_v3_net_position_by_asset (
-    chain_id UInt64,
+CREATE TABLE IF NOT EXISTS aave_v3_analytics_aave_v3_pool.net_position_by_asset (
+    network String,
     reserve String,
     total_supplied String,
     total_withdrawn String,
@@ -11,12 +13,12 @@ CREATE TABLE IF NOT EXISTS aave_v3_net_position_by_asset (
     borrow_count UInt64,
     repay_count UInt64
 ) ENGINE = SummingMergeTree()
-ORDER BY (chain_id, reserve);
+ORDER BY (network, reserve);
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_net_position_supply_mv
-TO aave_v3_net_position_by_asset
+CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_analytics_aave_v3_pool.net_position_supply_mv
+TO aave_v3_analytics_aave_v3_pool.net_position_by_asset
 AS SELECT
-    chain_id,
+    network,
     reserve,
     toString(sum(amount)) AS total_supplied,
     '0' AS total_withdrawn,
@@ -26,13 +28,13 @@ AS SELECT
     toUInt64(0) AS withdraw_count,
     toUInt64(0) AS borrow_count,
     toUInt64(0) AS repay_count
-FROM aave_v3_supplies
-GROUP BY chain_id, reserve;
+FROM aave_v3_analytics_aave_v3_pool.supply
+GROUP BY network, reserve;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_net_position_withdraw_mv
-TO aave_v3_net_position_by_asset
+CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_analytics_aave_v3_pool.net_position_withdraw_mv
+TO aave_v3_analytics_aave_v3_pool.net_position_by_asset
 AS SELECT
-    chain_id,
+    network,
     reserve,
     '0' AS total_supplied,
     toString(sum(amount)) AS total_withdrawn,
@@ -42,13 +44,13 @@ AS SELECT
     count() AS withdraw_count,
     toUInt64(0) AS borrow_count,
     toUInt64(0) AS repay_count
-FROM aave_v3_withdrawals
-GROUP BY chain_id, reserve;
+FROM aave_v3_analytics_aave_v3_pool.withdraw
+GROUP BY network, reserve;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_net_position_borrow_mv
-TO aave_v3_net_position_by_asset
+CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_analytics_aave_v3_pool.net_position_borrow_mv
+TO aave_v3_analytics_aave_v3_pool.net_position_by_asset
 AS SELECT
-    chain_id,
+    network,
     reserve,
     '0' AS total_supplied,
     '0' AS total_withdrawn,
@@ -58,13 +60,13 @@ AS SELECT
     toUInt64(0) AS withdraw_count,
     count() AS borrow_count,
     toUInt64(0) AS repay_count
-FROM aave_v3_borrows
-GROUP BY chain_id, reserve;
+FROM aave_v3_analytics_aave_v3_pool.borrow
+GROUP BY network, reserve;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_net_position_repay_mv
-TO aave_v3_net_position_by_asset
+CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_analytics_aave_v3_pool.net_position_repay_mv
+TO aave_v3_analytics_aave_v3_pool.net_position_by_asset
 AS SELECT
-    chain_id,
+    network,
     reserve,
     '0' AS total_supplied,
     '0' AS total_withdrawn,
@@ -74,12 +76,12 @@ AS SELECT
     toUInt64(0) AS withdraw_count,
     toUInt64(0) AS borrow_count,
     count() AS repay_count
-FROM aave_v3_repays
-GROUP BY chain_id, reserve;
+FROM aave_v3_analytics_aave_v3_pool.repay
+GROUP BY network, reserve;
 
 -- Daily liquidation volume
-CREATE TABLE IF NOT EXISTS aave_v3_liquidation_volume_daily (
-    chain_id UInt64,
+CREATE TABLE IF NOT EXISTS aave_v3_analytics_aave_v3_pool.liquidation_volume_daily (
+    network String,
     day Date,
     collateral_asset String,
     debt_asset String,
@@ -89,13 +91,13 @@ CREATE TABLE IF NOT EXISTS aave_v3_liquidation_volume_daily (
     unique_liquidators UInt64,
     unique_users_liquidated UInt64
 ) ENGINE = SummingMergeTree()
-ORDER BY (chain_id, day, collateral_asset, debt_asset)
-PARTITION BY (chain_id, toYYYYMM(day));
+ORDER BY (network, day, collateral_asset, debt_asset)
+PARTITION BY (network, toYYYYMM(day));
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_liquidation_volume_daily_mv
-TO aave_v3_liquidation_volume_daily
+CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_analytics_aave_v3_pool.liquidation_volume_daily_mv
+TO aave_v3_analytics_aave_v3_pool.liquidation_volume_daily
 AS SELECT
-    chain_id,
+    network,
     toDate(block_timestamp) AS day,
     collateral_asset,
     debt_asset,
@@ -104,12 +106,12 @@ AS SELECT
     toString(sum(liquidated_collateral_amount)) AS total_collateral_liquidated,
     uniqExact(liquidator) AS unique_liquidators,
     uniqExact(user) AS unique_users_liquidated
-FROM aave_v3_liquidations
-GROUP BY chain_id, day, collateral_asset, debt_asset;
+FROM aave_v3_analytics_aave_v3_pool.liquidation_call
+GROUP BY network, day, collateral_asset, debt_asset;
 
 -- Hourly utilization: supply vs borrow activity
-CREATE TABLE IF NOT EXISTS aave_v3_utilization_hourly (
-    chain_id UInt64,
+CREATE TABLE IF NOT EXISTS aave_v3_analytics_aave_v3_pool.utilization_hourly (
+    network String,
     hour DateTime,
     reserve String,
     supply_volume String,
@@ -121,13 +123,13 @@ CREATE TABLE IF NOT EXISTS aave_v3_utilization_hourly (
     borrow_count UInt64,
     repay_count UInt64
 ) ENGINE = SummingMergeTree()
-ORDER BY (chain_id, hour, reserve)
-PARTITION BY (chain_id, toYYYYMM(hour));
+ORDER BY (network, hour, reserve)
+PARTITION BY (network, toYYYYMM(hour));
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_utilization_supply_mv
-TO aave_v3_utilization_hourly
+CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_analytics_aave_v3_pool.utilization_supply_mv
+TO aave_v3_analytics_aave_v3_pool.utilization_hourly
 AS SELECT
-    chain_id,
+    network,
     toStartOfHour(block_timestamp) AS hour,
     reserve,
     toString(sum(amount)) AS supply_volume,
@@ -138,13 +140,13 @@ AS SELECT
     toUInt64(0) AS withdraw_count,
     toUInt64(0) AS borrow_count,
     toUInt64(0) AS repay_count
-FROM aave_v3_supplies
-GROUP BY chain_id, hour, reserve;
+FROM aave_v3_analytics_aave_v3_pool.supply
+GROUP BY network, hour, reserve;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_utilization_withdraw_mv
-TO aave_v3_utilization_hourly
+CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_analytics_aave_v3_pool.utilization_withdraw_mv
+TO aave_v3_analytics_aave_v3_pool.utilization_hourly
 AS SELECT
-    chain_id,
+    network,
     toStartOfHour(block_timestamp) AS hour,
     reserve,
     '0' AS supply_volume,
@@ -155,13 +157,13 @@ AS SELECT
     count() AS withdraw_count,
     toUInt64(0) AS borrow_count,
     toUInt64(0) AS repay_count
-FROM aave_v3_withdrawals
-GROUP BY chain_id, hour, reserve;
+FROM aave_v3_analytics_aave_v3_pool.withdraw
+GROUP BY network, hour, reserve;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_utilization_borrow_mv
-TO aave_v3_utilization_hourly
+CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_analytics_aave_v3_pool.utilization_borrow_mv
+TO aave_v3_analytics_aave_v3_pool.utilization_hourly
 AS SELECT
-    chain_id,
+    network,
     toStartOfHour(block_timestamp) AS hour,
     reserve,
     '0' AS supply_volume,
@@ -172,13 +174,13 @@ AS SELECT
     toUInt64(0) AS withdraw_count,
     count() AS borrow_count,
     toUInt64(0) AS repay_count
-FROM aave_v3_borrows
-GROUP BY chain_id, hour, reserve;
+FROM aave_v3_analytics_aave_v3_pool.borrow
+GROUP BY network, hour, reserve;
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_utilization_repay_mv
-TO aave_v3_utilization_hourly
+CREATE MATERIALIZED VIEW IF NOT EXISTS aave_v3_analytics_aave_v3_pool.utilization_repay_mv
+TO aave_v3_analytics_aave_v3_pool.utilization_hourly
 AS SELECT
-    chain_id,
+    network,
     toStartOfHour(block_timestamp) AS hour,
     reserve,
     '0' AS supply_volume,
@@ -189,5 +191,5 @@ AS SELECT
     toUInt64(0) AS withdraw_count,
     toUInt64(0) AS borrow_count,
     count() AS repay_count
-FROM aave_v3_repays
-GROUP BY chain_id, hour, reserve;
+FROM aave_v3_analytics_aave_v3_pool.repay
+GROUP BY network, hour, reserve;

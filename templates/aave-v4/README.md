@@ -26,20 +26,20 @@ evm-cloud templates apply aave-v4 --chains ethereum \
 
 ## ClickHouse Tables
 
-- **`aave_v4_supplies`** — Supply events (reserveId, caller, user, shares, amount)
-- **`aave_v4_withdrawals`** — Withdraw events (reserveId, caller, user, shares, amount)
-- **`aave_v4_borrows`** — Borrow events (reserveId, caller, user, drawnShares, drawnAmount)
-- **`aave_v4_repays`** — Repay events (reserveId, caller, user, drawnShares, totalAmountRepaid)
-- **`aave_v4_liquidations`** — LiquidationCall events (Dutch auction: collateral/debt reserves, amounts, shares)
-- **`aave_v4_deficits`** — ReportDeficit events (bad debt tracking per reserve)
-- **`aave_v4_risk_premiums`** — Latest risk premium per user (ReplacingMergeTree)
+- **`supply`** — Supply events (reserveId, caller, user, shares, amount)
+- **`withdraw`** — Withdraw events (reserveId, caller, user, shares, amount)
+- **`borrow`** — Borrow events (reserveId, caller, user, drawnShares, drawnAmount)
+- **`repay`** — Repay events (reserveId, caller, user, drawnShares, totalAmountRepaid)
+- **`liquidation_call`** — LiquidationCall events (Dutch auction: collateral/debt reserves, amounts, shares)
+- **`report_deficit`** — ReportDeficit events (bad debt tracking per reserve)
+- **`update_user_risk_premium`** — Latest risk premium per user (ReplacingMergeTree)
 
 ### Materialized Views
 
-- **`aave_v4_net_position_by_reserve`** — Cumulative supply/withdraw/borrow/repay per reserveId
-- **`aave_v4_liquidation_volume_daily`** — Daily liquidation count and volume per reserve pair
-- **`aave_v4_utilization_hourly`** — Hourly supply/withdraw/borrow/repay volume per reserve
-- **`aave_v4_deficit_daily`** — Daily bad debt event count per reserve
+- **`net_position_by_reserve`** — Cumulative supply/withdraw/borrow/repay per reserveId
+- **`liquidation_volume_daily`** — Daily liquidation count and volume per reserve pair
+- **`utilization_hourly`** — Hourly supply/withdraw/borrow/repay volume per reserve
+- **`deficit_daily`** — Daily bad debt event count per reserve
 
 ## Sample Queries
 
@@ -52,7 +52,7 @@ SELECT
     total_borrowed_amount,
     total_repaid_amount,
     supply_count + borrow_count AS total_interactions
-FROM aave_v4_net_position_by_reserve
+FROM net_position_by_reserve
 ORDER BY supply_count DESC;
 ```
 
@@ -68,7 +68,7 @@ SELECT
     collateral_amount_removed,
     collateral_shares_to_liquidator,
     tx_hash
-FROM aave_v4_liquidations
+FROM liquidation_call
 ORDER BY block_timestamp DESC
 LIMIT 20;
 ```
@@ -79,7 +79,7 @@ SELECT
     user,
     risk_premium,
     block_timestamp AS last_updated
-FROM aave_v4_risk_premiums FINAL
+FROM update_user_risk_premium FINAL
 ORDER BY risk_premium DESC
 LIMIT 20;
 ```
@@ -92,7 +92,7 @@ SELECT
     user,
     drawn_shares,
     tx_hash
-FROM aave_v4_deficits
+FROM report_deficit
 ORDER BY block_timestamp DESC
 LIMIT 20;
 ```
@@ -106,7 +106,7 @@ SELECT
     withdraw_count,
     borrow_count,
     repay_count
-FROM aave_v4_utilization_hourly
+FROM utilization_hourly
 WHERE hour >= now() - INTERVAL 24 HOUR
 ORDER BY hour, reserve;
 ```

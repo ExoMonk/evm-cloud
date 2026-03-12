@@ -50,7 +50,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT hour AS time, transfer_count FROM erc20_transfer_volume_hourly WHERE chain_id = ${chain_id} AND hour >= $__fromTime AND hour <= $__toTime ORDER BY hour",
+          "rawSql": "SELECT hour AS time, transfer_count FROM transfer_volume_hourly WHERE network = '${network}' AND hour >= $__fromTime AND hour <= $__toTime ORDER BY hour",
           "refId": "A",
           "format": 0
         }
@@ -92,7 +92,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT from_address, count() AS transfer_count, toString(sum(value)) AS total_value FROM erc20_transfers WHERE chain_id = ${chain_id} AND block_timestamp >= $__fromTime AND block_timestamp <= $__toTime GROUP BY from_address ORDER BY transfer_count DESC LIMIT 20",
+          "rawSql": "SELECT from_address, count() AS transfer_count, toString(sum(value)) AS total_value FROM transfer WHERE network = '${network}' AND block_timestamp >= $__fromTime AND block_timestamp <= $__toTime GROUP BY from_address ORDER BY transfer_count DESC LIMIT 20",
           "refId": "A",
           "format": 1
         }
@@ -134,7 +134,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT to_address, count() AS transfer_count, toString(sum(value)) AS total_value FROM erc20_transfers WHERE chain_id = ${chain_id} AND block_timestamp >= $__fromTime AND block_timestamp <= $__toTime GROUP BY to_address ORDER BY transfer_count DESC LIMIT 20",
+          "rawSql": "SELECT to_address, count() AS transfer_count, toString(sum(value)) AS total_value FROM transfer WHERE network = '${network}' AND block_timestamp >= $__fromTime AND block_timestamp <= $__toTime GROUP BY to_address ORDER BY transfer_count DESC LIMIT 20",
           "refId": "A",
           "format": 1
         }
@@ -180,7 +180,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT hour AS time, unique_senders, unique_receivers FROM erc20_transfer_volume_hourly WHERE chain_id = ${chain_id} AND hour >= $__fromTime AND hour <= $__toTime ORDER BY hour",
+          "rawSql": "SELECT hour AS time, unique_senders, unique_receivers FROM transfer_volume_hourly WHERE network = '${network}' AND hour >= $__fromTime AND hour <= $__toTime ORDER BY hour",
           "refId": "A",
           "format": 0
         }
@@ -198,10 +198,10 @@
           "uid": "clickhouse"
         },
         "hide": 0,
-        "label": "Chain ID",
-        "name": "chain_id",
+        "label": "Network",
+        "name": "network",
         "options": [],
-        "query": "SELECT DISTINCT chain_id FROM erc20_transfers",
+        "query": "SELECT DISTINCT network FROM transfer",
         "refresh": 1,
         "type": "query"
       }

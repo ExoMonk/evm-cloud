@@ -23,29 +23,29 @@ evm-cloud templates apply uniswap-v4 --chains ethereum,base
 
 ## ClickHouse Tables
 
-- **`uniswap_v4_pools`** — Initialize events (currency0, currency1, fee, tickSpacing, hooks, initial price)
-- **`uniswap_v4_swaps`** — Swap events with amounts, price, liquidity, tick, fee
-- **`uniswap_v4_liquidity_changes`** — ModifyLiquidity events (add/remove, tick range, salt)
+- **`initialize`** — Initialize events (currency_0, currency_1, fee, tick_spacing, hooks, initial price)
+- **`swap`** — Swap events with amounts, price, liquidity, tick, fee
+- **`modify_liquidity`** — ModifyLiquidity events (add/remove, tick range, salt)
 
 ### Materialized Views
 
-- **`uniswap_v4_volume_hourly`** — Hourly swap count and volume per pool
-- **`uniswap_v4_hook_usage`** — Aggregate pool count, swap count, and liquidity changes per hook address
+- **`volume_hourly`** — Hourly swap count and volume per pool
+- **`hook_usage`** — Aggregate pool count, swap count, and liquidity changes per hook address
 
 ## Sample Queries
 
 ### Top pools by swap count (last 24h)
 ```sql
 SELECT
-    s.pool_id,
-    p.currency0,
-    p.currency1,
+    s.id,
+    p.currency_0,
+    p.currency_1,
     p.hooks,
     count() AS swap_count
-FROM uniswap_v4_swaps s
-JOIN uniswap_v4_pools p ON s.pool_id = p.pool_id AND s.chain_id = p.chain_id
+FROM swap s
+JOIN initialize p ON s.id = p.id AND s.network = p.network
 WHERE s.block_timestamp >= now() - INTERVAL 1 DAY
-GROUP BY s.pool_id, p.currency0, p.currency1, p.hooks
+GROUP BY s.id, p.currency_0, p.currency_1, p.hooks
 ORDER BY swap_count DESC
 LIMIT 10;
 ```
@@ -55,8 +55,8 @@ LIMIT 10;
 SELECT
     hooks,
     count() AS pool_count,
-    round(count() * 100.0 / (SELECT count() FROM uniswap_v4_pools), 2) AS pct
-FROM uniswap_v4_pools
+    round(count() * 100.0 / (SELECT count() FROM initialize), 2) AS pct
+FROM initialize
 GROUP BY hooks
 ORDER BY pool_count DESC;
 ```
@@ -67,7 +67,7 @@ SELECT
     toDate(block_timestamp) AS day,
     count() AS pools_created,
     countIf(hooks != '0x0000000000000000000000000000000000000000') AS pools_with_hooks
-FROM uniswap_v4_pools
+FROM initialize
 GROUP BY day
 ORDER BY day;
 ```
@@ -75,7 +75,7 @@ ORDER BY day;
 ### Hourly swap volume
 ```sql
 SELECT hour, sum(swap_count) AS total_swaps
-FROM uniswap_v4_volume_hourly
+FROM volume_hourly
 WHERE hour >= now() - INTERVAL 7 DAY
 GROUP BY hour
 ORDER BY hour;
@@ -84,7 +84,7 @@ ORDER BY hour;
 ### Most active liquidity providers
 ```sql
 SELECT sender, count() AS modifications
-FROM uniswap_v4_liquidity_changes
+FROM modify_liquidity
 WHERE block_timestamp >= now() - INTERVAL 7 DAY
 GROUP BY sender
 ORDER BY modifications DESC

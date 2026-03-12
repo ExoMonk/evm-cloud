@@ -25,17 +25,17 @@ evm-cloud templates apply aave-v3 --chains ethereum,polygon,arbitrum
 
 ## ClickHouse Tables
 
-- **`aave_v3_supplies`** — Supply events (reserve, user, amount, referral)
-- **`aave_v3_withdrawals`** — Withdraw events (reserve, user, to, amount)
-- **`aave_v3_borrows`** — Borrow events (reserve, user, amount, interest rate mode, borrow rate)
-- **`aave_v3_repays`** — Repay events (reserve, user, repayer, amount)
-- **`aave_v3_liquidations`** — LiquidationCall events (collateral, debt, liquidator, amounts)
+- **`supply`** — Supply events (reserve, user, amount, referral)
+- **`withdraw`** — Withdraw events (reserve, user, to, amount)
+- **`borrow`** — Borrow events (reserve, user, amount, interest rate mode, borrow rate)
+- **`repay`** — Repay events (reserve, user, repayer, amount)
+- **`liquidation_call`** — LiquidationCall events (collateral, debt, liquidator, amounts)
 
 ### Materialized Views
 
-- **`aave_v3_net_position_by_asset`** — Cumulative supply/withdraw/borrow/repay per reserve
-- **`aave_v3_liquidation_volume_daily`** — Daily liquidation count and volume per asset pair
-- **`aave_v3_utilization_hourly`** — Hourly supply/withdraw/borrow/repay volume and count per reserve
+- **`net_position_by_asset`** — Cumulative supply/withdraw/borrow/repay per reserve
+- **`liquidation_volume_daily`** — Daily liquidation count and volume per asset pair
+- **`utilization_hourly`** — Hourly supply/withdraw/borrow/repay volume and count per reserve
 
 ## Sample Queries
 
@@ -48,7 +48,7 @@ SELECT
     total_borrowed,
     total_repaid,
     supply_count + borrow_count AS total_interactions
-FROM aave_v3_net_position_by_asset
+FROM net_position_by_asset
 ORDER BY supply_count DESC;
 ```
 
@@ -63,7 +63,7 @@ SELECT
     debt_to_cover,
     liquidated_collateral_amount,
     tx_hash
-FROM aave_v3_liquidations
+FROM liquidation_call
 ORDER BY block_timestamp DESC
 LIMIT 20;
 ```
@@ -75,7 +75,7 @@ SELECT
     reserve,
     count() AS borrow_count,
     toString(sum(amount)) AS total_borrowed
-FROM aave_v3_borrows
+FROM borrow
 WHERE block_timestamp >= now() - INTERVAL 7 DAY
 GROUP BY on_behalf_of, reserve
 ORDER BY borrow_count DESC
@@ -91,7 +91,7 @@ SELECT
     withdraw_count,
     borrow_count,
     repay_count
-FROM aave_v3_utilization_hourly
+FROM utilization_hourly
 WHERE hour >= now() - INTERVAL 24 HOUR
 ORDER BY hour, reserve;
 ```
@@ -102,7 +102,7 @@ SELECT
     day,
     sum(liquidation_count) AS liquidations,
     sum(unique_users_liquidated) AS users_liquidated
-FROM aave_v3_liquidation_volume_daily
+FROM liquidation_volume_daily
 WHERE day >= today() - 30
 GROUP BY day
 ORDER BY day;

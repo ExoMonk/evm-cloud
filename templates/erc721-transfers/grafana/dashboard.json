@@ -43,7 +43,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT day AS time, mint_count, transfer_count - mint_count - burn_count AS secondary_transfers, burn_count FROM erc721_activity_daily WHERE chain_id = ${chain_id} AND day >= $__fromTime AND day <= $__toTime ORDER BY day",
+          "rawSql": "SELECT day AS time, mint_count, transfer_count - mint_count - burn_count AS secondary_transfers, burn_count FROM activity_daily WHERE network = '${network}' AND day >= $__fromTime AND day <= $__toTime ORDER BY day",
           "refId": "A",
           "format": 0
         }
@@ -80,7 +80,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT uniqExact(owner) AS holders FROM erc721_holders_current FINAL WHERE chain_id = ${chain_id} AND owner != '0x0000000000000000000000000000000000000000'",
+          "rawSql": "SELECT uniqExact(owner) AS holders FROM holders_current FINAL WHERE network = '${network}' AND owner != '0x0000000000000000000000000000000000000000'",
           "refId": "A",
           "format": 1
         }
@@ -117,7 +117,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT sum(mint_count) AS total_mints FROM erc721_activity_daily WHERE chain_id = ${chain_id}",
+          "rawSql": "SELECT sum(mint_count) AS total_mints FROM activity_daily WHERE network = '${network}'",
           "refId": "A",
           "format": 1
         }
@@ -154,7 +154,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT sum(transfer_count) AS total_transfers FROM erc721_activity_daily WHERE chain_id = ${chain_id}",
+          "rawSql": "SELECT sum(transfer_count) AS total_transfers FROM activity_daily WHERE network = '${network}'",
           "refId": "A",
           "format": 1
         }
@@ -194,7 +194,7 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
-          "rawSql": "SELECT owner, count() AS token_count FROM erc721_holders_current FINAL WHERE chain_id = ${chain_id} AND owner != '0x0000000000000000000000000000000000000000' GROUP BY owner ORDER BY token_count DESC LIMIT 20",
+          "rawSql": "SELECT owner, count() AS token_count FROM holders_current FINAL WHERE network = '${network}' AND owner != '0x0000000000000000000000000000000000000000' GROUP BY owner ORDER BY token_count DESC LIMIT 20",
           "refId": "A",
           "format": 1
         }
@@ -212,10 +212,10 @@
           "uid": "clickhouse"
         },
         "hide": 0,
-        "label": "Chain ID",
-        "name": "chain_id",
+        "label": "Network",
+        "name": "network",
         "options": [],
-        "query": "SELECT DISTINCT chain_id FROM erc721_transfers",
+        "query": "SELECT DISTINCT network FROM transfer",
         "refresh": 1,
         "type": "query"
       }

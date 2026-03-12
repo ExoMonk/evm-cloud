@@ -23,23 +23,23 @@ ethereum, polygon, arbitrum, optimism, base
 
 ## ClickHouse Tables
 
-- **`erc721_transfers`** — Raw transfer events (from, to, tokenId, tx_hash, block info)
-- **`erc721_holders_current`** — ReplacingMergeTree: latest owner per token_id (use `FINAL` for accurate reads)
-- **`erc721_activity_daily`** — Daily transfer, mint, and burn counts with unique token/address metrics
+- **`transfer`** — Raw transfer events (from, to, tokenId, tx_hash, block info)
+- **`holders_current`** — ReplacingMergeTree: latest owner per token_id (use `FINAL` for accurate reads)
+- **`activity_daily`** — Daily transfer, mint, and burn counts with unique token/address metrics
 
 ## Sample Queries
 
 ### Current holder count
 ```sql
 SELECT uniqExact(owner) AS holder_count
-FROM erc721_holders_current FINAL
+FROM holders_current FINAL
 WHERE owner != '0x0000000000000000000000000000000000000000';
 ```
 
 ### Top holders by token count
 ```sql
 SELECT owner, count() AS tokens_held
-FROM erc721_holders_current FINAL
+FROM holders_current FINAL
 WHERE owner != '0x0000000000000000000000000000000000000000'
 GROUP BY owner
 ORDER BY tokens_held DESC
@@ -49,7 +49,7 @@ LIMIT 20;
 ### Daily mint activity over the past 30 days
 ```sql
 SELECT day, mint_count, transfer_count, burn_count
-FROM erc721_activity_daily
+FROM activity_daily
 WHERE day >= today() - 30
 ORDER BY day;
 ```
@@ -57,7 +57,7 @@ ORDER BY day;
 ### Most transferred tokens
 ```sql
 SELECT token_id, count() AS transfer_count
-FROM erc721_transfers
+FROM transfer
 GROUP BY token_id
 ORDER BY transfer_count DESC
 LIMIT 10;
@@ -66,7 +66,7 @@ LIMIT 10;
 ### Ownership history of a specific token
 ```sql
 SELECT block_number, block_timestamp, from_address, to_address, tx_hash
-FROM erc721_transfers
+FROM transfer
 WHERE token_id = '1234'
 ORDER BY block_number;
 ```
