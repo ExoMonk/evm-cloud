@@ -215,6 +215,7 @@ render_custom_service_values() {
   local MEM_LIM=$(echo "$SVC_JSON" | jq -r '.memory_limit // "512Mi"')
   local NODE_ROLE=$(echo "$SVC_JSON" | jq -r '.node_role // empty')
   local ENABLE_EGRESS=$(echo "$SVC_JSON" | jq -r '.enable_egress // false')
+  local PULL_POLICY=$(echo "$SVC_JSON" | jq -r '.image_pull_policy // "Always"')
 
   cat > "$OUT_FILE" <<EOF
 fullnameOverride: ${PROJECT}-${NAME}
@@ -222,7 +223,7 @@ priorityClassName: evm-cloud-custom
 image:
   repository: ${IMAGE_REPO}
   tag: "${IMAGE_TAG}"
-  pullPolicy: IfNotPresent
+  pullPolicy: ${PULL_POLICY}
 replicas: ${REPLICAS}
 service:
   port: ${PORT}

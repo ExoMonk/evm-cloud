@@ -162,7 +162,8 @@ variable "custom_services" {
       value    = optional(string)
       effect   = optional(string, "NoSchedule")
     })), [])
-    enable_egress = optional(bool, false)
+    enable_egress    = optional(bool, false)
+    image_pull_policy = optional(string, "Always")
   }))
   default = []
 }
