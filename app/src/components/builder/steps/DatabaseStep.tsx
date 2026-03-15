@@ -66,6 +66,23 @@ export function DatabaseStep({ state, dispatch }: Props) {
           </button>
         ))}
       </div>
+
+      {/* Database name */}
+      <div>
+        <label className="block text-[11px] uppercase tracking-[0.15em] text-[var(--color-text-muted)] mb-2">
+          database name
+        </label>
+        <input
+          type="text"
+          value={state.databaseName}
+          onChange={(e) => dispatch({ type: "SET_DATABASE_NAME", name: e.target.value })}
+          placeholder="rindexer"
+          className="w-full px-3 py-2.5 bg-transparent border border-[var(--color-border)] text-[13px] text-[var(--color-text)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-colors"
+        />
+        <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+          used in {state.databaseProfile.includes("clickhouse") ? "ClickHouse" : "PostgreSQL"} and rindexer.yaml storage config.
+        </p>
+      </div>
     </div>
   );
 }

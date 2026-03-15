@@ -53,7 +53,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <footer className="border-t border-[var(--color-border)] py-5 px-5 md:px-16">
         <div className="max-w-6xl mx-auto flex items-center justify-between text-[11px] text-[var(--color-text-muted)] tracking-[0.1em]">
-          <span>evm-cloud builder v0.1.0</span>
+          <span>evm-cloud v0.0.1-alpha8 builder</span>
           <span>pure client-side — your config never leaves the browser</span>
         </div>
       </footer>

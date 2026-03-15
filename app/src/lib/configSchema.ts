@@ -8,7 +8,7 @@
 
 // --- Module version pinning (M2) ---
 export const BUILDER_VERSION = "0.1.0";
-export const BUILDER_MODULE_VERSION = "0.5.0";
+export const BUILDER_MODULE_VERSION = "0.0.1-alpha8";
 
 // --- Enums mirroring schema.rs ---
 
@@ -214,6 +214,7 @@ export interface BuilderState {
   // Database
   databaseProfile: DatabaseProfile;
   queryPattern: QueryPattern | null;
+  databaseName: string;
 
   // Project + Chains
   projectName: string;
@@ -255,6 +256,7 @@ export const initialState: BuilderState = {
 
   databaseProfile: "byodb_clickhouse",
   queryPattern: null,
+  databaseName: "rindexer",
 
   projectName: "evm-cloud-demo",
   chains: [],
@@ -283,6 +285,7 @@ export type BuilderAction =
   | { type: "SELECT_TEMPLATE"; template: string | null; chains?: string[]; variables?: Record<string, string> }
   | { type: "SET_INFRA_PROFILE"; profile: InfraProfile }
   | { type: "SET_DATABASE_PROFILE"; profile: DatabaseProfile }
+  | { type: "SET_DATABASE_NAME"; name: string }
   | { type: "SET_QUERY_PATTERN"; pattern: QueryPattern }
   | { type: "SET_PROJECT_NAME"; name: string }
   | { type: "SET_CHAINS"; chains: string[] }
@@ -362,6 +365,9 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
 
     case "SET_DATABASE_PROFILE":
       return { ...state, databaseProfile: action.profile };
+
+    case "SET_DATABASE_NAME":
+      return { ...state, databaseName: action.name };
 
     case "SET_QUERY_PATTERN":
       return { ...state, queryPattern: action.pattern };

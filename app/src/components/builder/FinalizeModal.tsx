@@ -63,12 +63,12 @@ export function FinalizeModal({ state, onClose }: Props) {
       { name: "versions.tf", path: "versions.tf", content: generateVersionsTf(state), icon: "tf" },
       { name: "variables.tf", path: "variables.tf", content: generateVariablesTf(state), icon: "tf" },
       { name: "outputs.tf", path: "outputs.tf", content: generateOutputsTf(), icon: "tf" },
-      { name: "terraform.auto.tfvars.json", path: "terraform.auto.tfvars.json", content: generateTfvarsJson(state), icon: "json" },
+      { name: "terraform.auto.tfvars", path: "terraform.auto.tfvars", content: generateTfvarsJson(state), icon: "tf" },
     ];
 
     const secretsExample = generateSecretsExample(state);
     if (secretsExample) {
-      result.push({ name: "secrets.auto.tfvars.json.example", path: "secrets.auto.tfvars.json.example", content: secretsExample, icon: "json" });
+      result.push({ name: "secrets.auto.tfvars.example", path: "secrets.auto.tfvars.example", content: secretsExample, icon: "tf" });
     }
 
     const tfBackend = generateTfBackend(state);
