@@ -571,6 +571,11 @@ function hclValue(value: unknown): string {
   if (typeof value === "object" && value !== null) {
     const entries = Object.entries(value as Record<string, unknown>);
     if (entries.length === 0) return "{}";
+    // Inline for small maps (≤3 entries), multiline for larger
+    if (entries.length <= 3) {
+      const inner = entries.map(([k, v]) => `${JSON.stringify(k)} = ${hclValue(v)}`).join(", ");
+      return `{ ${inner} }`;
+    }
     const inner = entries.map(([k, v]) => `  ${JSON.stringify(k)} = ${hclValue(v)}`).join("\n");
     return `{\n${inner}\n}`;
   }
