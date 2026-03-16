@@ -26,6 +26,7 @@ where
     }
 }
 
+// NOTE: changes to this struct require updating cli/tests/e2e.rs handoff fixtures
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct WorkloadHandoff {
     pub(crate) version: String,

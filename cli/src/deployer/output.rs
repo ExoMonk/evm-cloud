@@ -130,3 +130,215 @@ pub(super) fn format_deploy_line(
     // Suppress everything else (verbose helm output, waiting messages, etc.)
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::schema::ComputeEngine;
+    use crate::output::ColorMode;
+
+    fn fmt(msg: &str, engine: ComputeEngine, idx: &mut u32) -> Option<String> {
+        format_deploy_line(msg, engine, ColorMode::Never, idx)
+    }
+
+    fn k3s(msg: &str, idx: &mut u32) -> Option<String> {
+        fmt(msg, ComputeEngine::K3s, idx)
+    }
+
+    fn compose(msg: &str, idx: &mut u32) -> Option<String> {
+        fmt(msg, ComputeEngine::DockerCompose, idx)
+    }
+
+    // --- K3s lines ---
+
+    #[test]
+    fn cluster_reachable() {
+        let mut idx = 0;
+        assert_eq!(k3s("Cluster reachable.", &mut idx), Some("     ✔ k3s cluster reachable".into()));
+    }
+
+    #[test]
+    fn eso_is_ready() {
+        let mut idx = 0;
+        assert_eq!(k3s("ESO is ready.", &mut idx), Some("     ✔ ESO is ready".into()));
+    }
+
+    #[test]
+    fn cluster_secret_store_applied() {
+        let mut idx = 0;
+        let out = k3s("ClusterSecretStore my-store applied.", &mut idx).unwrap();
+        assert!(out.contains("ClusterSecretStore"), "expected ClusterSecretStore in: {out}");
+        assert!(out.contains("my-store"), "expected my-store in: {out}");
+    }
+
+    #[test]
+    fn cloudflare_origin_tls() {
+        let mut idx = 0;
+        let out = k3s("Cloudflare origin TLS secret created", &mut idx).unwrap();
+        assert!(out.contains("Cloudflare"), "expected Cloudflare in: {out}");
+    }
+
+    #[test]
+    fn ingress_nginx_installed() {
+        let mut idx = 0;
+        assert_eq!(k3s("ingress-nginx installed.", &mut idx), Some("     ✔ ingress-nginx".into()));
+    }
+
+    #[test]
+    fn ingress_nginx_already_present() {
+        let mut idx = 0;
+        assert_eq!(k3s("ingress-nginx already present.", &mut idx), Some("     ✔ ingress-nginx".into()));
+    }
+
+    #[test]
+    fn cert_manager_installed() {
+        let mut idx = 0;
+        assert_eq!(k3s("cert-manager installed.", &mut idx), Some("     ✔ cert-manager".into()));
+    }
+
+    #[test]
+    fn cert_manager_crds_already_present() {
+        let mut idx = 0;
+        assert_eq!(k3s("cert-manager CRDs already present.", &mut idx), Some("     ✔ cert-manager".into()));
+    }
+
+    #[test]
+    fn kube_prometheus_stack_installed() {
+        let mut idx = 0;
+        assert_eq!(
+            k3s("kube-prometheus-stack installed.", &mut idx),
+            Some("     ✔ kube-prometheus-stack".into())
+        );
+    }
+
+    #[test]
+    fn loki_installed() {
+        let mut idx = 0;
+        assert_eq!(k3s("Loki installed.", &mut idx), Some("     ✔ Loki".into()));
+    }
+
+    #[test]
+    fn promtail_installed() {
+        let mut idx = 0;
+        assert_eq!(k3s("Promtail installed.", &mut idx), Some("     ✔ Promtail".into()));
+    }
+
+    #[test]
+    fn dashboards_deployed() {
+        let mut idx = 0;
+        let out = k3s("Dashboards deployed.", &mut idx).unwrap();
+        assert!(out.contains("Dashboards"), "expected Dashboards in: {out}");
+    }
+
+    #[test]
+    fn deploying_erpc() {
+        let mut idx = 0;
+        let out = k3s("Deploying eRPC (test-erpc)...", &mut idx).unwrap();
+        assert!(out.contains("eRPC"), "expected eRPC in: {out}");
+        assert!(out.contains("test-erpc"), "expected test-erpc in: {out}");
+    }
+
+    #[test]
+    fn erpc_deployed_suppressed() {
+        let mut idx = 0;
+        assert_eq!(k3s("eRPC deployed.", &mut idx), None);
+    }
+
+    #[test]
+    fn deploying_rindexer_instance() {
+        let mut idx = 0;
+        let out = k3s("Deploying rindexer instance (my-indexer)...", &mut idx).unwrap();
+        assert!(out.contains("rindexer #1"), "expected rindexer #1 in: {out}");
+        assert!(out.contains("my-indexer"), "expected my-indexer in: {out}");
+        assert_eq!(idx, 1);
+    }
+
+    #[test]
+    fn two_rindexer_instances_sequential() {
+        let mut idx = 0;
+        let first = k3s("Deploying rindexer instance (idx-a)...", &mut idx).unwrap();
+        assert!(first.contains("rindexer #1"), "expected #1 in: {first}");
+        assert_eq!(idx, 1);
+
+        let second = k3s("Deploying rindexer instance (idx-b)...", &mut idx).unwrap();
+        assert!(second.contains("rindexer #2"), "expected #2 in: {second}");
+        assert_eq!(idx, 2);
+    }
+
+    #[test]
+    fn deploying_custom_service() {
+        let mut idx = 0;
+        let out = k3s("Deploying custom service (my-api)...", &mut idx).unwrap();
+        assert!(out.contains("custom"), "expected custom in: {out}");
+        assert!(out.contains("my-api"), "expected my-api in: {out}");
+    }
+
+    #[test]
+    fn generic_deployed_suppressed() {
+        let mut idx = 0;
+        assert_eq!(k3s("my-indexer deployed.", &mut idx), None);
+    }
+
+    #[test]
+    fn all_workloads_deployed_suppressed() {
+        let mut idx = 0;
+        assert_eq!(k3s("All workloads deployed successfully.", &mut idx), None);
+    }
+
+    // --- Compose lines ---
+
+    #[test]
+    fn ssh_connectivity_verified() {
+        let mut idx = 0;
+        assert_eq!(
+            compose("SSH connectivity verified.", &mut idx),
+            Some("     ✔ SSH connectivity verified".into())
+        );
+    }
+
+    #[test]
+    fn uploaded_configs() {
+        let mut idx = 0;
+        assert_eq!(compose("Uploaded configs.", &mut idx), Some("     ✔ Configs uploaded".into()));
+    }
+
+    #[test]
+    fn secrets_pulled() {
+        let mut idx = 0;
+        assert_eq!(compose("Secrets pulled to .env", &mut idx), Some("     ✔ Secrets pulled".into()));
+    }
+
+    #[test]
+    fn restarting_containers() {
+        let mut idx = 0;
+        let out = compose("Restarting containers...", &mut idx).unwrap();
+        assert!(out.contains("Restarting"), "expected Restarting in: {out}");
+    }
+
+    #[test]
+    fn verifying_containers() {
+        let mut idx = 0;
+        let out = compose("Verifying containers...", &mut idx).unwrap();
+        assert!(out.contains("Verifying"), "expected Verifying in: {out}");
+    }
+
+    #[test]
+    fn deploy_complete_suppressed() {
+        let mut idx = 0;
+        assert_eq!(compose("Deploy complete.", &mut idx), None);
+    }
+
+    // --- Suppression ---
+
+    #[test]
+    fn random_message_suppressed() {
+        let mut idx = 0;
+        assert_eq!(k3s("Waiting for pods...", &mut idx), None);
+    }
+
+    #[test]
+    fn empty_string_suppressed() {
+        let mut idx = 0;
+        assert_eq!(k3s("", &mut idx), None);
+    }
+}

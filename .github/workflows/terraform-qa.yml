@@ -61,6 +61,10 @@ jobs:
       - name: Checkov
         run: checkov -d . --framework terraform --compact --quiet --skip-path app/tests/golden
 
+      - name: Shellcheck deployer scripts
+        continue-on-error: true
+        run: find deployers -name "*.sh" -exec shellcheck -S warning {} +
+
   plan:
     name: Plan — LocalStack examples
     runs-on: ubuntu-latest

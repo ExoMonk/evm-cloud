@@ -1,0 +1,65 @@
+name: CLI Tests
+
+on:
+  pull_request:
+    paths:
+      - "cli/**"
+      - "Cargo.*"
+      - "deployers/**"
+  push:
+    branches: [main]
+    paths:
+      - "cli/**"
+      - "Cargo.*"
+      - "deployers/**"
+  workflow_dispatch:
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('cli/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run unit tests
+        working-directory: cli
+        run: cargo test --bins
+
+  e2e:
+    name: E2E integration tests
+    runs-on: ubuntu-latest
+    needs: unit
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('cli/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run E2E tests
+        working-directory: cli
+        run: cargo test --test e2e
