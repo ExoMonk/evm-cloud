@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm ci
+      - run: npm install
 
       - name: TypeScript check
         run: npx tsc -b
@@ -52,7 +52,7 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm ci
+      - run: npm install
 
       - name: Build docs site
         run: npm run build
