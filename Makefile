@@ -81,6 +81,13 @@ verify:
 test-k8s:
 	@bash tests/kind/run.sh
 
+# --- Kind-based deployer integration ---
+# Requires: kind, kubectl, helm, jq, base64, python3, docker
+# Creates ephemeral cluster, runs real deploy.sh, validates Helm releases + pods.
+
+test-deploy:
+	@bash tests/kind/deployer-test.sh
+
 # --- E2E k3s validation ---
 # Requires: E2E_KUBECONFIG pointing to a persistent k3s VPS kubeconfig.
 # See tests/e2e-k3s/README.md for setup instructions.

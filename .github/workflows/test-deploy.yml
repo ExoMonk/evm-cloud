@@ -1,0 +1,34 @@
+name: Deployer Integration Tests
+
+on:
+  pull_request:
+    paths:
+      - "deployers/**"
+      - "tests/kind/**"
+  push:
+    branches: [main]
+    paths:
+      - "deployers/**"
+      - "tests/kind/**"
+  workflow_dispatch:
+
+jobs:
+  deployer:
+    name: Kind deployer test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Setup kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.25.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Run deployer integration tests
+        run: make test-deploy

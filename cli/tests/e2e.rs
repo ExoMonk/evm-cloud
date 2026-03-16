@@ -71,6 +71,49 @@ echo "ssh $@" >> "$MOCK_TF_STATE_DIR/ssh.log"
 exit 0
 "#;
 
+/// Mock deployer: logs invocation and env, emits [evm-cloud] status lines.
+/// Uses TMPDIR for log output (TMPDIR is in the sanitized env whitelist).
+/// Exit code can be controlled via $TMPDIR/deployer_exit_code file.
+const MOCK_DEPLOYER: &str = r#"#!/bin/bash
+LOG_DIR="$TMPDIR"
+echo "deployer $@" >> "$LOG_DIR/deployer.log"
+env | sort >> "$LOG_DIR/deployer_env.log"
+
+HANDOFF="$1"
+if [[ ! -f "$HANDOFF" ]]; then
+  echo "[evm-cloud] ERROR: handoff file not found" >&2
+  exit 1
+fi
+# Validate handoff file is non-empty (production code already validates JSON)
+if [[ ! -s "$HANDOFF" ]]; then
+  echo "[evm-cloud] ERROR: handoff file is empty" >&2
+  exit 1
+fi
+# Copy handoff content to a persistent location for test assertions
+cp "$HANDOFF" "$LOG_DIR/deployer_handoff.json"
+
+# Emit [evm-cloud] status lines for output streaming tests
+echo "[evm-cloud] Cluster reachable."
+echo "[evm-cloud] ESO is ready."
+echo "[evm-cloud] Deploying eRPC (test-erpc)..."
+echo "[evm-cloud] eRPC deployed."
+echo "[evm-cloud] Deploying rindexer instance (test-indexer)..."
+echo "[evm-cloud] test-indexer deployed."
+echo "[evm-cloud] All workloads deployed successfully."
+
+# Check for lock file and log its presence
+if ls "$PROJECT_DIR/.evm-cloud-deploy"* 2>/dev/null; then
+  echo "LOCK_EXISTS=true" >> "$LOG_DIR/deployer.log"
+fi
+
+# Configurable exit code via signal file
+EXIT_FILE="$TMPDIR/deployer_exit_code"
+if [[ -f "$EXIT_FILE" ]]; then
+  exit "$(cat "$EXIT_FILE")"
+fi
+exit 0
+"#;
+
 // ===========================================================================
 // Config fixtures
 // ===========================================================================
@@ -241,6 +284,7 @@ struct TestEnv {
     bin_dir: PathBuf,
     project_dir: PathBuf,
     state_dir: PathBuf,
+    mock_deployer: bool,
 }
 
 impl TestEnv {
@@ -270,7 +314,37 @@ impl TestEnv {
             bin_dir,
             project_dir,
             state_dir,
+            mock_deployer: false,
         }
+    }
+
+    fn with_mock_deployer(mut self) -> Self {
+        let path = self.bin_dir.join("mock_deployer.sh");
+        fs::write(&path, MOCK_DEPLOYER).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        self.mock_deployer = true;
+        self
+    }
+
+    /// Create the config files the deploy command requires before invoking the
+    /// deployer: config/erpc.yaml, config/rindexer.yaml, config/abis/.
+    fn with_deploy_configs(self) -> Self {
+        let config_dir = self.project_dir.join("config");
+        fs::create_dir_all(config_dir.join("abis")).unwrap();
+        fs::write(
+            config_dir.join("erpc.yaml"),
+            "server:\n  port: 4000\n",
+        )
+        .unwrap();
+        // rindexer.yaml is already created by with_config, but ensure it exists
+        if !config_dir.join("rindexer.yaml").exists() {
+            fs::write(
+                config_dir.join("rindexer.yaml"),
+                "name: test\nnetworks: []\ncontracts: []\n",
+            )
+            .unwrap();
+        }
+        self
     }
 
     fn with_config(self, config: &str) -> Self {
@@ -310,6 +384,17 @@ impl TestEnv {
         cmd.env("PATH", mock_path);
         cmd.env("MOCK_TF_STATE_DIR", &self.state_dir);
         cmd.current_dir(&self.project_dir);
+
+        if self.mock_deployer {
+            cmd.env(
+                "EVM_CLOUD_DEPLOYER_OVERRIDE",
+                self.bin_dir.join("mock_deployer.sh"),
+            );
+            // TMPDIR is in the sanitized env whitelist — the mock deployer
+            // writes logs here so we can inspect them after the run.
+            cmd.env("TMPDIR", &self.state_dir);
+        }
+
         cmd
     }
 
@@ -351,6 +436,28 @@ impl TestEnv {
             .lines()
             .map(|l| l.to_string())
             .collect()
+    }
+
+    /// Read the mock deployer invocation log (written to TMPDIR/deployer.log).
+    fn deployer_log(&self) -> Vec<String> {
+        let path = self.state_dir.join("deployer.log");
+        if !path.exists() {
+            return vec![];
+        }
+        fs::read_to_string(&path)
+            .unwrap()
+            .lines()
+            .map(|l| l.to_string())
+            .collect()
+    }
+
+    /// Read the mock deployer env log (written to TMPDIR/deployer_env.log).
+    fn deployer_env_log(&self) -> String {
+        let path = self.state_dir.join("deployer_env.log");
+        if !path.exists() {
+            return String::new();
+        }
+        fs::read_to_string(&path).unwrap()
     }
 }
 
@@ -2261,5 +2368,653 @@ fn t12_eks_deploy_unsupported_engine() {
     assert!(
         stderr.contains("unsupported") || stderr.contains("eks"),
         "error should mention unsupported engine or eks, got: {stderr}"
+    );
+}
+
+// ===========================================================================
+// Tier 13: Mock deployer — full deploy pipeline
+// ===========================================================================
+
+#[test]
+fn t13_deploy_writes_valid_handoff_to_deployer() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy --auto-approve with mock deployer");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "deploy with mock deployer should succeed, stderr: {stderr}"
+    );
+
+    // Deployer was invoked
+    let log = env.deployer_log();
+    assert!(
+        !log.is_empty(),
+        "deployer.log should exist and have content"
+    );
+
+    // First line should be the deployer invocation with the handoff path
+    let first = &log[0];
+    assert!(
+        first.starts_with("deployer "),
+        "deployer log should start with 'deployer ', got: {first}"
+    );
+
+    // Read the handoff copy saved by the mock deployer to TMPDIR
+    let handoff_copy = env.state_dir.join("deployer_handoff.json");
+    assert!(
+        handoff_copy.exists(),
+        "deployer should have copied handoff to deployer_handoff.json"
+    );
+    let handoff_content = fs::read_to_string(&handoff_copy)
+        .expect("handoff copy should be readable");
+    let handoff: serde_json::Value = serde_json::from_str(&handoff_content)
+        .expect("handoff should be valid JSON");
+
+    assert_eq!(
+        handoff["project_name"], "test-project",
+        "handoff should contain project_name"
+    );
+    assert_eq!(
+        handoff["compute_engine"], "k3s",
+        "handoff should contain compute_engine"
+    );
+    assert!(
+        handoff["services"].is_object(),
+        "handoff should contain services object"
+    );
+}
+
+#[test]
+fn t13_deploy_sanitizes_env_for_deployer() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    let output = env
+        .cmd()
+        .env("DATABASE_PASSWORD", "secret_value")
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy --auto-approve with secret env");
+
+    assert!(
+        output.status.success(),
+        "deploy should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let env_log = env.deployer_env_log();
+    assert!(
+        !env_log.is_empty(),
+        "deployer_env.log should exist and have content"
+    );
+
+    // DATABASE_PASSWORD should NOT be in the sanitized env
+    assert!(
+        !env_log.contains("DATABASE_PASSWORD"),
+        "DATABASE_PASSWORD should be stripped by env sanitization, got env log:\n{env_log}"
+    );
+
+    // PATH should be present (it's in the whitelist)
+    assert!(
+        env_log.contains("PATH="),
+        "PATH should be present in sanitized env, got env log:\n{env_log}"
+    );
+}
+
+#[test]
+fn t13_deploy_streams_formatted_output() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy --auto-approve");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "deploy should succeed, stderr: {stderr}"
+    );
+
+    // format_deploy_line maps "Cluster reachable." -> "k3s cluster reachable"
+    assert!(
+        stderr.contains("k3s cluster reachable"),
+        "stderr should contain formatted 'k3s cluster reachable', got: {stderr}"
+    );
+
+    // "ESO is ready." -> "ESO is ready"
+    assert!(
+        stderr.contains("ESO is ready"),
+        "stderr should contain formatted 'ESO is ready', got: {stderr}"
+    );
+
+    // "Deploying eRPC (test-erpc)..." -> "eRPC:" with "test-erpc"
+    assert!(
+        stderr.contains("eRPC"),
+        "stderr should contain formatted eRPC line, got: {stderr}"
+    );
+
+    // "Deploying rindexer instance (test-indexer)..." -> "rindexer #1"
+    assert!(
+        stderr.contains("rindexer #1"),
+        "stderr should contain formatted 'rindexer #1', got: {stderr}"
+    );
+
+    // "All workloads deployed successfully." is suppressed by format_deploy_line
+    assert!(
+        !stderr.contains("All workloads deployed successfully"),
+        "raw 'All workloads deployed successfully' should be suppressed, got: {stderr}"
+    );
+}
+
+#[test]
+fn t13_deploy_success_exits_zero() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    env.cmd()
+        .args(["deploy", "--auto-approve"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn t13_deploy_failure_shows_recovery_hint() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    // Write signal file to make mock deployer exit with code 1
+    fs::write(env.state_dir.join("deployer_exit_code"), "1").unwrap();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy --auto-approve (failure)");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        !output.status.success(),
+        "deploy should fail when deployer exits 1"
+    );
+
+    // Recovery hint: "Retry deployer only: evm-cloud deploy --only app"
+    assert!(
+        stderr.contains("--only app"),
+        "stderr should contain recovery hint with '--only app', got: {stderr}"
+    );
+}
+
+#[test]
+fn t13_deploy_passthrough_args_reach_deployer() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve", "--", "--helm-timeout=600s"])
+        .output()
+        .expect("run deploy --auto-approve with passthrough args");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "deploy with passthrough args should succeed, stderr: {stderr}"
+    );
+
+    let log = env.deployer_log();
+    assert!(
+        !log.is_empty(),
+        "deployer.log should exist"
+    );
+
+    let first = &log[0];
+    assert!(
+        first.contains("--helm-timeout=600s"),
+        "passthrough arg should reach deployer, got: {first}"
+    );
+}
+
+// ===========================================================================
+// Tier 14: Mock deployer — advanced scenarios
+// ===========================================================================
+
+#[test]
+fn t14_deploy_lock_cleaned_up_after_success() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    let lock_path = env.project_dir.join(".evm-cloud-deploy.lock");
+
+    // Deployer exits 0 (default) -> deploy succeeds.
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy --auto-approve with mock deployer");
+
+    assert!(
+        output.status.success(),
+        "deploy with mock deployer (exit 0) should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // The deployer was invoked (proving the lock didn't block execution).
+    let dlog = env.deployer_log();
+    assert!(
+        !dlog.is_empty(),
+        "deployer should have been invoked, log is empty"
+    );
+
+    // After deploy completes, the lock file must be cleaned up (Drop guard).
+    assert!(
+        !lock_path.exists(),
+        "lock file should be cleaned up after successful deploy"
+    );
+}
+
+#[test]
+fn t14_deploy_only_app_invokes_deployer_without_apply() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    // --only app skips terraform plan/apply, but should still invoke the deployer.
+    // Note: --only app is incompatible with --auto-approve (flag conflict).
+    let _ = env
+        .cmd()
+        .args(["deploy", "--only", "app"])
+        .output()
+        .expect("run deploy --only app with mock deployer");
+
+    // Terraform should NOT have plan or apply (infra phase skipped).
+    let tf_log = env.terraform_log();
+    assert!(
+        !tf_log.iter().any(|l| l.contains("plan")),
+        "deploy --only app should NOT call terraform plan, log: {tf_log:?}"
+    );
+    assert!(
+        !tf_log.iter().any(|l| l.contains("apply")),
+        "deploy --only app should NOT call terraform apply, log: {tf_log:?}"
+    );
+
+    // The deployer WAS invoked.
+    let dlog = env.deployer_log();
+    assert!(
+        !dlog.is_empty(),
+        "deployer should have been invoked for --only app, log is empty"
+    );
+}
+
+#[test]
+fn t14_deploy_nonzero_exit_propagates_as_failure() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    // Configure mock deployer to exit with code 42.
+    fs::write(env.state_dir.join("deployer_exit_code"), "42").unwrap();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy --auto-approve with failing mock deployer");
+
+    assert!(
+        !output.status.success(),
+        "deploy should fail when deployer exits non-zero"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("deployer") || stderr.contains("failed") || stderr.contains("exit"),
+        "stderr should mention deployer failure, got: {stderr}"
+    );
+}
+
+#[test]
+fn t14_deploy_handoff_contains_expected_fields() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy --auto-approve with mock deployer");
+
+    assert!(
+        output.status.success(),
+        "deploy should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Read the handoff copy saved by the mock deployer to TMPDIR.
+    let handoff_copy = env.state_dir.join("deployer_handoff.json");
+    assert!(
+        handoff_copy.exists(),
+        "deployer should have copied handoff to deployer_handoff.json"
+    );
+    let handoff_content =
+        fs::read_to_string(&handoff_copy).expect("handoff copy should be readable");
+    let handoff: serde_json::Value =
+        serde_json::from_str(&handoff_content).expect("handoff should be valid JSON");
+
+    // Verify expected fields.
+    assert_eq!(
+        handoff["version"], "v1",
+        "handoff version should be v1, got: {}",
+        handoff["version"]
+    );
+    assert_eq!(
+        handoff["compute_engine"], "k3s",
+        "handoff compute_engine should be k3s, got: {}",
+        handoff["compute_engine"]
+    );
+    assert_eq!(
+        handoff["project_name"], "test-project",
+        "handoff project_name should be test-project, got: {}",
+        handoff["project_name"]
+    );
+    assert!(
+        handoff["services"]["rpc_proxy"].is_object(),
+        "handoff should contain services.rpc_proxy, got: {}",
+        handoff["services"]
+    );
+}
+
+#[test]
+fn t14_deploy_mock_deployer_receives_handoff_as_first_arg() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy --auto-approve with mock deployer");
+
+    assert!(
+        output.status.success(),
+        "deploy should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let dlog = env.deployer_log();
+    assert!(!dlog.is_empty(), "deployer log should not be empty");
+
+    // First line should start with "deployer /" — confirming the handoff
+    // path (an absolute path) was passed as the first argument.
+    assert!(
+        dlog[0].starts_with("deployer /"),
+        "deployer log first line should start with 'deployer /' (handoff as first arg), got: {}",
+        dlog[0]
+    );
+}
+
+#[test]
+fn t14_deploy_success_prints_no_recovery_hint() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    // Mock deployer exits 0 (default) — full deploy succeeds.
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy --auto-approve with mock deployer");
+
+    assert!(
+        output.status.success(),
+        "deploy should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // On success, the recovery hint ("Retry deployer only") should NOT appear.
+    assert!(
+        !stderr.contains("only app"),
+        "successful deploy should not show '--only app' recovery hint, stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("Retry deployer"),
+        "successful deploy should not show 'Retry deployer' hint, stderr: {stderr}"
+    );
+}
+
+// ===========================================================================
+// Tier 15: Deploy pipeline gap closure
+// ===========================================================================
+
+#[test]
+fn t15_deploy_timeout_kills_deployer() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    // Write a slow deployer that sleeps 30s (overrides the normal mock)
+    let slow_script = "#!/bin/bash\nsleep 30\nexit 0\n";
+    let slow_path = env.state_dir.join("slow_deployer.sh");
+    fs::write(&slow_path, slow_script).unwrap();
+    fs::set_permissions(&slow_path, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let output = env
+        .cmd()
+        .env("EVM_CLOUD_DEPLOYER_OVERRIDE", &slow_path)
+        .args(["deploy", "--auto-approve", "--deploy-timeout", "2"])
+        .output()
+        .expect("run deploy with timeout");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        !output.status.success(),
+        "deploy with slow deployer + 2s timeout should fail"
+    );
+    assert!(
+        stderr.contains("timed out"),
+        "should mention 'timed out', got stderr: {stderr}"
+    );
+}
+
+#[test]
+fn t15_deploy_config_bundle_created() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_K3S)
+        .with_handoff(handoff_k3s())
+        .with_mock_deployer();
+
+    // Don't call with_deploy_configs() — put config files at project root
+    // (not inside config/) to trigger the config-bundle path in
+    // ensure_config_dir(). Deliberately omit abis/ at the root so
+    // config_dir_ready(project_root) returns false and the bundle is created.
+    fs::write(
+        env.project_dir.join("erpc.yaml"),
+        "server:\n  httpPort: 4000\n",
+    )
+    .unwrap();
+    fs::write(
+        env.project_dir.join("rindexer.yaml"),
+        "name: test\ncontracts: []\n",
+    )
+    .unwrap();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "deploy should succeed with bundled config, stderr: {stderr}, stdout: {stdout}"
+    );
+
+    // The config-bundle directory should have been created
+    let bundle_dir = env.project_dir.join(".evm-cloud/config-bundle");
+    assert!(
+        bundle_dir.exists(),
+        "config-bundle dir should be created at {}",
+        bundle_dir.display()
+    );
+
+    // The deployer log should contain --config-dir pointing to the bundle
+    let dlog = env.deployer_log();
+    assert!(
+        dlog.iter().any(|l| l.contains("--config-dir")),
+        "deployer should receive --config-dir, log: {dlog:?}"
+    );
+}
+
+#[test]
+fn t15_compose_deploy_generates_env_file() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_DOCKER_COMPOSE)
+        .with_handoff(handoff_docker_compose())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    // Create secrets.auto.tfvars with clickhouse vars so generate_env_file
+    // has data to write.
+    fs::write(
+        env.project_dir.join("secrets.auto.tfvars"),
+        "indexer_clickhouse_url = \"http://ch:8123\"\nindexer_clickhouse_password = \"secret\"\n",
+    )
+    .unwrap();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "compose deploy should succeed, stderr: {stderr}"
+    );
+
+    // .env should be generated in the config dir
+    let env_file = env.project_dir.join("config/.env");
+    assert!(
+        env_file.exists(),
+        ".env should be generated at {}",
+        env_file.display()
+    );
+
+    let content = fs::read_to_string(&env_file).unwrap();
+    assert!(
+        content.contains("CLICKHOUSE_URL=http://ch:8123"),
+        ".env should contain CLICKHOUSE_URL, got: {content}"
+    );
+    assert!(
+        content.contains("CLICKHOUSE_PASSWORD=secret"),
+        ".env should contain CLICKHOUSE_PASSWORD, got: {content}"
+    );
+
+    // Deployer should have been invoked
+    let dlog = env.deployer_log();
+    assert!(!dlog.is_empty(), "deployer should have been invoked");
+}
+
+#[test]
+fn t15_compose_deploy_injects_ssh_credentials() {
+    let env = TestEnv::new()
+        .with_config(CONFIG_DOCKER_COMPOSE)
+        .with_handoff(handoff_docker_compose())
+        .with_deploy_configs()
+        .with_mock_deployer();
+
+    // Create secrets.auto.tfvars with SSH vars
+    fs::write(
+        env.project_dir.join("secrets.auto.tfvars"),
+        "ssh_private_key_path = \"/home/user/.ssh/id_rsa\"\nbare_metal_ssh_user = \"deploy\"\nbare_metal_ssh_port = \"2222\"\n",
+    )
+    .unwrap();
+
+    let output = env
+        .cmd()
+        .args(["deploy", "--auto-approve"])
+        .output()
+        .expect("run deploy");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "compose deploy should succeed, stderr: {stderr}"
+    );
+
+    // Deployer should have received --ssh-key, --user, --port via auto-injection
+    let dlog = env.deployer_log();
+    assert!(!dlog.is_empty(), "deployer should have been invoked");
+
+    let deployer_line = &dlog[0];
+    assert!(
+        deployer_line.contains("--ssh-key") && deployer_line.contains("/home/user/.ssh/id_rsa"),
+        "deployer should receive --ssh-key, got: {deployer_line}"
+    );
+    assert!(
+        deployer_line.contains("--user") && deployer_line.contains("deploy"),
+        "deployer should receive --user, got: {deployer_line}"
+    );
+    assert!(
+        deployer_line.contains("--port") && deployer_line.contains("2222"),
+        "deployer should receive --port, got: {deployer_line}"
     );
 }

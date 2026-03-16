@@ -35,25 +35,42 @@ pub(crate) fn invoke_deployer(
     options: InvokeOptions<'_>,
 ) -> Result<()> {
     let temp = scripts::TempWorkspace::new()?;
-    let extracted = scripts::extract_scripts(temp.path())?;
     let handoff_path = scripts::write_handoff_file(temp.path(), handoff)?;
 
     let mut default_args = vec![handoff_path.display().to_string()];
-    let script_path = match (handoff.compute_engine, action) {
-        (ComputeEngine::K3s, Action::Deploy) => extracted.k3s_deploy.clone(),
-        (ComputeEngine::K3s, Action::Teardown) => extracted.k3s_teardown.clone(),
-        (ComputeEngine::Ec2, Action::Deploy) | (ComputeEngine::DockerCompose, Action::Deploy) => {
-            extracted.compose_deploy.clone()
-        }
-        (ComputeEngine::Ec2, Action::Teardown)
-        | (ComputeEngine::DockerCompose, Action::Teardown) => {
-            default_args.push("--teardown".to_string());
-            extracted.compose_deploy.clone()
-        }
-        (ComputeEngine::Eks, _) => {
-            return Err(CliError::DeployerUnsupportedEngine {
-                compute_engine: handoff.compute_engine.to_string(),
-            })
+
+    // Test-only: bypass bundled script extraction when override is set.
+    // Only available in debug builds (cargo test runs debug profile).
+    // Release builds always use the bundled scripts.
+    let script_path = {
+        #[cfg(debug_assertions)]
+        let override_script = std::env::var("EVM_CLOUD_DEPLOYER_OVERRIDE").ok();
+        #[cfg(not(debug_assertions))]
+        let override_script: Option<String> = None;
+
+        if let Some(override_path) = override_script {
+            eprintln!("WARNING: using deployer override: {override_path}");
+            std::path::PathBuf::from(override_path)
+        } else {
+            let extracted = scripts::extract_scripts(temp.path())?;
+            match (handoff.compute_engine, action) {
+                (ComputeEngine::K3s, Action::Deploy) => extracted.k3s_deploy.clone(),
+                (ComputeEngine::K3s, Action::Teardown) => extracted.k3s_teardown.clone(),
+                (ComputeEngine::Ec2, Action::Deploy)
+                | (ComputeEngine::DockerCompose, Action::Deploy) => {
+                    extracted.compose_deploy.clone()
+                }
+                (ComputeEngine::Ec2, Action::Teardown)
+                | (ComputeEngine::DockerCompose, Action::Teardown) => {
+                    default_args.push("--teardown".to_string());
+                    extracted.compose_deploy.clone()
+                }
+                (ComputeEngine::Eks, _) => {
+                    return Err(CliError::DeployerUnsupportedEngine {
+                        compute_engine: handoff.compute_engine.to_string(),
+                    })
+                }
+            }
         }
     };
 
