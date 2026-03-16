@@ -1,0 +1,62 @@
+name: Builder CI
+
+on:
+  push:
+    paths:
+      - "app/**"
+      - "documentation/**"
+      - ".github/workflows/builder.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "documentation/**"
+      - ".github/workflows/builder.yml"
+
+jobs:
+  builder:
+    name: Builder — typecheck + test + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc -b
+
+      - name: Contract tests (golden files)
+        run: npm test
+
+      - name: Production build
+        run: npx vite build
+
+  docs:
+    name: Docs — build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: documentation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: documentation/package-lock.json
+
+      - run: npm ci
+
+      - name: Build docs site
+        run: npm run build
