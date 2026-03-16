@@ -1,0 +1,24 @@
+name: analytics
+project_type: no-code
+networks:
+  - name: ethereum
+    chain_id: 1
+    rpc: ${RPC_URL}/main/evm/1
+  - name: polygon
+    chain_id: 137
+    rpc: ${RPC_URL}/main/evm/137
+storage:
+  clickhouse:
+    enabled: true
+contracts:
+  - name: USDC
+    details:
+      - network: ethereum
+        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        start_block: "0"
+      - network: polygon
+        address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
+        start_block: "0"
+    abi: ./abis/ERC20.json
+    include_events:
+      - Transfer

@@ -1,0 +1,19 @@
+logLevel: warn
+server:
+  listenV4: true
+  httpHostV4: 0.0.0.0
+  httpPort: 4000
+
+projects:
+  - id: main
+    networks:
+      - architecture: evm
+        evm:
+          chainId: 1
+    upstreams:
+      - id: ethereum-primary
+        endpoint: https://eth-mainnet.g.alchemy.com/v2/DEMO
+        type: evm
+      - id: evm-public
+        endpoint: repository://evm-public-endpoints.erpc.cloud
+        type: evm
