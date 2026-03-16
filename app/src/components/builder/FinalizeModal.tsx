@@ -172,7 +172,14 @@ export function FinalizeModal({ state, onClose }: Props) {
             {errors.length === 0 ? (
               <span className="text-[11px] text-[var(--color-accent)]">● valid</span>
             ) : (
-              <span className="text-[11px] text-[var(--color-error)]">✕ {errors.length} error{errors.length !== 1 ? "s" : ""}</span>
+              <span className="text-[11px] text-[var(--color-error)] group/err relative cursor-help">
+                ✕ {errors.length} error{errors.length !== 1 ? "s" : ""}
+                <span className="absolute top-6 right-0 hidden group-hover/err:block w-72 p-3 border border-[var(--color-error)]/30 bg-[var(--color-bg)] z-20 space-y-1">
+                  {errors.map((e, i) => (
+                    <span key={i} className="block text-[10px] text-[var(--color-text-dim)]">✕ {e.message}</span>
+                  ))}
+                </span>
+              </span>
             )}
             <button
               onClick={onClose}

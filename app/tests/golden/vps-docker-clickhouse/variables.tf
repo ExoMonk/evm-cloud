@@ -8,67 +8,67 @@
 
 variable "project_name" {
   description = "Name of the deployment project"
-  type = string
+  type        = string
 }
 
 variable "infrastructure_provider" {
   description = "Cloud provider: aws or bare_metal"
-  type = string
+  type        = string
 }
 
 variable "database_mode" {
   description = "Database deployment: managed or self_hosted"
-  type = string
+  type        = string
 }
 
 variable "compute_engine" {
   description = "Compute engine: ec2, eks, k3s, or docker_compose"
-  type = string
+  type        = string
 }
 
 variable "workload_mode" {
   description = "Workload management: terraform or external"
-  type = string
+  type        = string
 }
 
 variable "secrets_mode" {
   description = "Secrets management: inline, provider, or external"
-  type = string
+  type        = string
 }
 
 variable "ingress_mode" {
   description = "Ingress type: none, cloudflare, caddy, or ingress_nginx"
-  type = string
+  type        = string
 }
 
 variable "erpc_hostname" {
   description = "Hostname for eRPC proxy endpoint"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "ingress_tls_email" {
   description = "Email for Let's Encrypt certificate provisioning"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "deployment_target" {
   description = "Deployment target"
-  type    = string
-  default = "managed"
+  type        = string
+  default     = "managed"
 }
 
 variable "runtime_arch" {
   description = "Runtime architecture: amd64, arm64, or multi"
-  type    = string
-  default = "multi"
+  type        = string
+  default     = "multi"
 }
 
 variable "streaming_mode" {
   description = "Event streaming: disabled, kafka, sns-sqs, or cdc"
-  type    = string
-  default = "disabled"
+  type        = string
+  default     = "disabled"
 }
 
 
@@ -78,9 +78,9 @@ variable "streaming_mode" {
 
 variable "ssh_private_key_path" {
   description = "Path to SSH private key for provisioner"
-  type      = string
-  default   = ""
-  sensitive = true
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 
@@ -90,38 +90,38 @@ variable "ssh_private_key_path" {
 
 variable "bare_metal_host" {
   description = "Bare metal host IP or hostname"
-  type      = string
-  sensitive = true
+  type        = string
+  sensitive   = true
 }
 
 variable "bare_metal_ssh_user" {
   description = "SSH user for bare metal host"
-  type    = string
-  default = "ubuntu"
+  type        = string
+  default     = "ubuntu"
 }
 
 variable "bare_metal_ssh_port" {
   description = "SSH port for bare metal host"
-  type    = number
-  default = 22
+  type        = number
+  default     = 22
 }
 
 variable "bare_metal_rpc_proxy_mem_limit" {
   description = "Memory limit for eRPC container"
-  type    = string
-  default = "1g"
+  type        = string
+  default     = "1g"
 }
 
 variable "bare_metal_indexer_mem_limit" {
   description = "Memory limit for indexer container"
-  type    = string
-  default = "2g"
+  type        = string
+  default     = "2g"
 }
 
 variable "bare_metal_secrets_encryption" {
   description = "Secrets encryption method"
-  type    = string
-  default = "none"
+  type        = string
+  default     = "none"
 }
 
 
@@ -131,66 +131,66 @@ variable "bare_metal_secrets_encryption" {
 
 variable "rpc_proxy_enabled" {
   description = "Enable eRPC proxy deployment"
-  type = bool
+  type        = bool
 }
 
 variable "indexer_enabled" {
   description = "Enable rindexer deployment"
-  type = bool
+  type        = bool
 }
 
 variable "indexer_rpc_url" {
   description = "RPC endpoint URL for indexer"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "indexer_storage_backend" {
   description = "Storage backend: clickhouse or postgres"
-  type = string
+  type        = string
 }
 
 variable "rpc_proxy_image" {
   description = "Docker image for eRPC"
-  type    = string
-  default = "ghcr.io/erpc/erpc:latest"
+  type        = string
+  default     = "ghcr.io/erpc/erpc:latest"
 }
 
 variable "indexer_image" {
   description = "Docker image for rindexer"
-  type    = string
-  default = "ghcr.io/joshstevens19/rindexer:latest"
+  type        = string
+  default     = "ghcr.io/joshstevens19/rindexer:latest"
 }
 
 variable "erpc_config_yaml" {
   description = "eRPC configuration YAML content"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "rindexer_config_yaml" {
   description = "rindexer configuration YAML content"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "rindexer_abis" {
   description = "ABI files: { filename = content }"
-  type    = map(string)
-  default = {}
+  type        = map(string)
+  default     = {}
 }
 
 variable "indexer_extra_env" {
   description = "Extra environment variables for indexer"
-  type    = map(string)
-  default = {}
+  type        = map(string)
+  default     = {}
 }
 
 variable "indexer_extra_secret_env" {
   description = "Extra sensitive environment variables for indexer"
-  type      = map(string)
-  default   = {}
-  sensitive = true
+  type        = map(string)
+  default     = {}
+  sensitive   = true
 }
 
 
@@ -200,54 +200,54 @@ variable "indexer_extra_secret_env" {
 
 variable "indexer_clickhouse_url" {
   description = "ClickHouse connection URL"
-  type      = string
-  sensitive = true
+  type        = string
+  sensitive   = true
 }
 
 variable "indexer_clickhouse_user" {
   description = "ClickHouse username"
-  type    = string
-  default = "default"
+  type        = string
+  default     = "default"
 }
 
 variable "indexer_clickhouse_password" {
   description = "ClickHouse password"
-  type      = string
-  sensitive = true
+  type        = string
+  sensitive   = true
 }
 
 variable "indexer_clickhouse_db" {
   description = "ClickHouse database name"
-  type    = string
-  default = "rindexer"
+  type        = string
+  default     = "rindexer"
 }
 
 variable "ingress_caddy_image" {
   description = "Docker image for Caddy"
-  type    = string
-  default = "caddy:2.9.1-alpine"
+  type        = string
+  default     = "caddy:2.9.1-alpine"
 }
 
 variable "ingress_caddy_mem_limit" {
   description = "Memory limit for Caddy container"
-  type    = string
-  default = "128m"
+  type        = string
+  default     = "128m"
 }
 
 variable "ingress_request_body_max_size" {
   description = "Maximum request body size"
-  type    = string
-  default = "1m"
+  type        = string
+  default     = "1m"
 }
 
 variable "ingress_tls_staging" {
   description = "Use Let's Encrypt staging (avoid rate limits during testing)"
-  type    = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "ingress_hsts_preload" {
   description = "Enable HSTS preload"
-  type    = bool
-  default = false
+  type        = bool
+  default     = false
 }

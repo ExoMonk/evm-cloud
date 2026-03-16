@@ -641,3 +641,337 @@ fn run_cloudwatch(log_group: &str, follow: bool, color: ColorMode) -> Result<()>
 
     crate::error::tool_exit_status(status, "aws logs tail")
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::error::CliError;
+    use crate::handoff::parse_handoff_value;
+
+    // -- helpers ------------------------------------------------------------
+
+    fn make_handoff(services_json: serde_json::Value) -> WorkloadHandoff {
+        let value = json!({
+            "version": "v1",
+            "mode": "external",
+            "compute_engine": "k3s",
+            "project_name": "demo",
+            "runtime": { "k3s": { "kubeconfig_base64": "abc" } },
+            "services": services_json,
+            "data": {},
+            "secrets": {},
+            "ingress": {}
+        });
+        parse_handoff_value(value).unwrap()
+    }
+
+    fn full_services() -> serde_json::Value {
+        json!({
+            "indexer": {
+                "instances": [
+                    {"name": "indexer"},
+                    {"name": "backfill"}
+                ]
+            },
+            "rpc_proxy": {"internal_url": "http://erpc:4000"},
+            "custom_services": [
+                {"name": "api", "image": "img"},
+                {"name": "cdc", "image": "img"}
+            ],
+            "monitoring": {"grafana_hostname": "grafana.example.com"}
+        })
+    }
+
+    fn names(services: &[DiscoveredService]) -> Vec<&str> {
+        services.iter().map(|s| s.short_name.as_str()).collect()
+    }
+
+    // -----------------------------------------------------------------------
+    // discover_services
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn discover_full_handoff_with_all_services() {
+        let handoff = make_handoff(full_services());
+        let svcs = discover_services(&handoff);
+
+        // indexer(2) + erpc(1) + custom(2) + monitoring(2) + static(3)
+        assert_eq!(svcs.len(), 10);
+
+        let n = names(&svcs);
+        assert!(n.contains(&"indexer"));
+        assert!(n.contains(&"backfill"));
+        assert!(n.contains(&"erpc"));
+        assert!(n.contains(&"api"));
+        assert!(n.contains(&"cdc"));
+        assert!(n.contains(&"grafana"));
+        assert!(n.contains(&"prometheus"));
+        assert!(n.contains(&"clickhouse"));
+        assert!(n.contains(&"postgres"));
+        assert!(n.contains(&"caddy"));
+
+        // Verify kinds
+        assert_eq!(
+            svcs.iter().find(|s| s.short_name == "backfill").unwrap().kind,
+            ServiceKind::Indexer
+        );
+        assert_eq!(
+            svcs.iter().find(|s| s.short_name == "erpc").unwrap().kind,
+            ServiceKind::RpcProxy
+        );
+        assert_eq!(
+            svcs.iter().find(|s| s.short_name == "api").unwrap().kind,
+            ServiceKind::CustomService
+        );
+        assert_eq!(
+            svcs.iter().find(|s| s.short_name == "grafana").unwrap().kind,
+            ServiceKind::Monitoring
+        );
+
+        // Verify full_name includes project prefix
+        assert_eq!(
+            svcs.iter().find(|s| s.short_name == "api").unwrap().full_name,
+            "demo-api"
+        );
+    }
+
+    #[test]
+    fn discover_single_indexer_no_instances() {
+        let handoff = make_handoff(json!({
+            "indexer": {"service_name": "demo-indexer"}
+        }));
+        let svcs = discover_services(&handoff);
+        let indexers: Vec<_> = svcs.iter().filter(|s| s.kind == ServiceKind::Indexer).collect();
+        assert_eq!(indexers.len(), 1);
+        assert_eq!(indexers[0].short_name, "indexer");
+        assert_eq!(indexers[0].full_name, "demo-indexer");
+    }
+
+    #[test]
+    fn discover_empty_instances_array() {
+        let handoff = make_handoff(json!({
+            "indexer": {"instances": []}
+        }));
+        let svcs = discover_services(&handoff);
+        let indexers: Vec<_> = svcs.iter().filter(|s| s.kind == ServiceKind::Indexer).collect();
+        assert_eq!(indexers.len(), 1);
+        assert_eq!(indexers[0].short_name, "indexer");
+    }
+
+    #[test]
+    fn discover_no_indexer_field() {
+        let handoff = make_handoff(json!({}));
+        let svcs = discover_services(&handoff);
+        let indexers: Vec<_> = svcs.iter().filter(|s| s.kind == ServiceKind::Indexer).collect();
+        assert_eq!(indexers.len(), 1);
+        assert_eq!(indexers[0].short_name, "indexer");
+        assert_eq!(indexers[0].full_name, "demo-indexer");
+    }
+
+    #[test]
+    fn discover_minimal_handoff() {
+        let handoff = make_handoff(json!({}));
+        let svcs = discover_services(&handoff);
+        let n = names(&svcs);
+
+        // Only indexer + static infra (clickhouse, postgres, caddy)
+        assert_eq!(svcs.len(), 4);
+        assert!(n.contains(&"indexer"));
+        assert!(n.contains(&"clickhouse"));
+        assert!(n.contains(&"postgres"));
+        assert!(n.contains(&"caddy"));
+
+        // No erpc, custom, or monitoring
+        assert!(!n.contains(&"erpc"));
+        assert!(!n.contains(&"grafana"));
+    }
+
+    #[test]
+    fn discover_custom_services_only() {
+        let handoff = make_handoff(json!({
+            "custom_services": [
+                {"name": "worker", "image": "img"}
+            ]
+        }));
+        let svcs = discover_services(&handoff);
+        let n = names(&svcs);
+
+        // Default indexer + custom + static infra
+        assert!(n.contains(&"indexer"));
+        assert!(n.contains(&"worker"));
+        assert_eq!(
+            svcs.iter().find(|s| s.short_name == "worker").unwrap().kind,
+            ServiceKind::CustomService
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // resolve_service
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn resolve_exact_match_short_name() {
+        let handoff = make_handoff(full_services());
+        let svcs = discover_services(&handoff);
+        let target = resolve_service("api", "demo", &svcs).unwrap();
+        assert_eq!(target.display_name, "demo-api");
+        assert_eq!(target.kind, ServiceKind::CustomService);
+    }
+
+    #[test]
+    fn resolve_exact_match_full_name() {
+        let handoff = make_handoff(full_services());
+        let svcs = discover_services(&handoff);
+        let target = resolve_service("demo-api", "demo", &svcs).unwrap();
+        assert_eq!(target.display_name, "demo-api");
+    }
+
+    #[test]
+    fn resolve_case_insensitive() {
+        let handoff = make_handoff(full_services());
+        let svcs = discover_services(&handoff);
+        let target = resolve_service("API", "demo", &svcs).unwrap();
+        assert_eq!(target.display_name, "demo-api");
+    }
+
+    #[test]
+    fn resolve_prefix_strip() {
+        let handoff = make_handoff(full_services());
+        let svcs = discover_services(&handoff);
+        // "demo-api" with project "demo" → strips prefix → "api" → matches short_name
+        let target = resolve_service("demo-api", "demo", &svcs).unwrap();
+        assert_eq!(target.display_name, "demo-api");
+    }
+
+    #[test]
+    fn resolve_prefix_add() {
+        let handoff = make_handoff(full_services());
+        let svcs = discover_services(&handoff);
+        // "api" with project "demo" → tries "demo-api" → matches full_name
+        let target = resolve_service("api", "demo", &svcs).unwrap();
+        assert_eq!(target.display_name, "demo-api");
+    }
+
+    #[test]
+    fn resolve_no_match_returns_error_with_list() {
+        let handoff = make_handoff(full_services());
+        let svcs = discover_services(&handoff);
+        let result = resolve_service("nonexistent", "demo", &svcs);
+        assert!(result.is_err(), "expected error for unknown service");
+        match result.err().unwrap() {
+            CliError::InvalidArg { arg, details } => {
+                assert_eq!(arg, "nonexistent");
+                assert!(details.contains("unknown service"));
+                // Should list available services
+                assert!(details.contains("api"));
+                assert!(details.contains("erpc"));
+                assert!(details.contains("indexer"));
+            }
+            other => panic!("expected InvalidArg, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_indexer_default() {
+        let handoff = make_handoff(json!({}));
+        let svcs = discover_services(&handoff);
+        let target = resolve_service("indexer", "demo", &svcs).unwrap();
+        assert_eq!(target.display_name, "demo-indexer");
+        assert_eq!(target.kind, ServiceKind::Indexer);
+    }
+
+    #[test]
+    fn resolve_multi_indexer_instance() {
+        let handoff = make_handoff(full_services());
+        let svcs = discover_services(&handoff);
+        let target = resolve_service("backfill", "demo", &svcs).unwrap();
+        assert_eq!(target.display_name, "demo-backfill");
+        assert_eq!(target.kind, ServiceKind::Indexer);
+    }
+
+    // -----------------------------------------------------------------------
+    // build_service_target
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn target_indexer() {
+        let svc = DiscoveredService {
+            short_name: "indexer".into(),
+            full_name: "demo-indexer".into(),
+            kind: ServiceKind::Indexer,
+        };
+        let target = build_service_target(&svc, "demo");
+        assert_eq!(target.label_selector, "app.kubernetes.io/instance=demo-indexer");
+        assert_eq!(target.namespace, "demo");
+        assert_eq!(target.compose_name.as_deref(), Some("rindexer"));
+    }
+
+    #[test]
+    fn target_rpc_proxy() {
+        let svc = DiscoveredService {
+            short_name: "erpc".into(),
+            full_name: "demo-erpc".into(),
+            kind: ServiceKind::RpcProxy,
+        };
+        let target = build_service_target(&svc, "demo");
+        assert_eq!(target.label_selector, "app.kubernetes.io/instance=demo-erpc");
+        assert_eq!(target.compose_name.as_deref(), Some("erpc"));
+    }
+
+    #[test]
+    fn target_custom_service() {
+        let svc = DiscoveredService {
+            short_name: "api".into(),
+            full_name: "demo-api".into(),
+            kind: ServiceKind::CustomService,
+        };
+        let target = build_service_target(&svc, "demo");
+        assert_eq!(target.label_selector, "app.kubernetes.io/instance=demo-api");
+        assert!(target.compose_name.is_none());
+    }
+
+    #[test]
+    fn target_monitoring() {
+        let svc = DiscoveredService {
+            short_name: "grafana".into(),
+            full_name: "demo-grafana".into(),
+            kind: ServiceKind::Monitoring,
+        };
+        let target = build_service_target(&svc, "demo");
+        assert_eq!(target.label_selector, "app.kubernetes.io/name=grafana");
+        assert_eq!(target.namespace, "monitoring");
+        assert!(target.compose_name.is_none());
+    }
+
+    #[test]
+    fn target_database() {
+        let svc = DiscoveredService {
+            short_name: "clickhouse".into(),
+            full_name: "demo-clickhouse".into(),
+            kind: ServiceKind::Database,
+        };
+        let target = build_service_target(&svc, "demo");
+        assert_eq!(target.label_selector, "app=clickhouse");
+        assert_eq!(target.namespace, "demo");
+        assert_eq!(target.compose_name.as_deref(), Some("clickhouse"));
+    }
+
+    #[test]
+    fn target_ingress() {
+        let svc = DiscoveredService {
+            short_name: "caddy".into(),
+            full_name: "demo-caddy".into(),
+            kind: ServiceKind::Ingress,
+        };
+        let target = build_service_target(&svc, "demo");
+        assert_eq!(target.label_selector, "app=caddy");
+        assert_eq!(target.namespace, "demo");
+        assert_eq!(target.compose_name.as_deref(), Some("caddy"));
+    }
+}

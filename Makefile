@@ -19,7 +19,7 @@ lint:
 	@echo "=== tflint ===" && tflint --recursive --no-color 2>&1 && echo "PASS"
 
 security:
-	@echo "=== checkov ===" && checkov -d . --framework terraform --compact --quiet 2>/dev/null && echo "PASS"
+	@echo "=== checkov ===" && checkov -d . --framework terraform --compact --quiet --skip-path app/tests/golden 2>/dev/null && echo "PASS"
 
 qa: fmt-check validate lint security
 	@echo "\n=== QA PASSED ==="

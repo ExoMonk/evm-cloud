@@ -5,21 +5,31 @@ import { TemplatePicker } from "./TemplatePicker.tsx";
 import { StepForm } from "./StepForm.tsx";
 import { PreviewPanel } from "./PreviewPanel.tsx";
 import { FinalizeModal } from "./FinalizeModal.tsx";
+import { ImportConfig } from "./ImportConfig.tsx";
 import { ArchitectureDiagram } from "./ArchitectureDiagram.tsx";
 
 export function BuilderPage() {
   const [state, dispatch] = useReducer(builderReducer, initialState);
   const [showFinalize, setShowFinalize] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const errors = validate(state).filter((i) => i.severity === "error");
 
   return (
     <div className="max-w-6xl mx-auto px-5 md:px-16 py-12">
-      {/* Hero: title + live pipeline diagram */}
+      {/* Hero: title + import button + live architecture diagram */}
       <div className="mb-8">
-        <h1 className="text-[14px] uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-4">
-          // infrastructure builder
-        </h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-[14px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+            // infrastructure builder
+          </h1>
+          <button
+            onClick={() => setShowImport(true)}
+            className="text-[11px] uppercase tracking-[0.15em] px-4 py-1.5 border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)] transition-colors"
+          >
+            import / examples
+          </button>
+        </div>
         <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 relative">
           {/* Corner decorations */}
           <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-[var(--color-accent)]" />
@@ -69,6 +79,15 @@ export function BuilderPage() {
         <FinalizeModal
           state={state}
           onClose={() => setShowFinalize(false)}
+        />
+      )}
+
+      {/* Import modal */}
+      {showImport && (
+        <ImportConfig
+          state={state}
+          dispatch={dispatch}
+          onClose={() => setShowImport(false)}
         />
       )}
     </div>

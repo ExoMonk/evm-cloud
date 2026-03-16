@@ -30,12 +30,6 @@ variable "bare_metal_ssh_port" {
 
 # --- Ingress / Cloudflare ---
 
-variable "ingress_mode" {
-  description = "Ingress mode: none (default) or cloudflare"
-  type        = string
-  default     = "none"
-}
-
 variable "erpc_hostname" {
   description = "Public hostname for eRPC (e.g. rpc.example.com). Optional — only needed if you want to expose eRPC publicly."
   type        = string

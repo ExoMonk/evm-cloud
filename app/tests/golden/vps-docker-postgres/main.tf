@@ -6,42 +6,42 @@ module "evm_cloud" {
   source = "github.com/exomonk/evm-cloud?ref=v0.0.1-alpha8"
 
   # --- Core ---
-  project_name                             = var.project_name
-  infrastructure_provider                  = var.infrastructure_provider
-  database_mode                            = var.database_mode
-  compute_engine                           = var.compute_engine
-  workload_mode                            = var.workload_mode
-  secrets_mode                             = var.secrets_mode
-  ingress_mode                             = var.ingress_mode
-  erpc_hostname                            = var.erpc_hostname
-  ingress_tls_email                        = var.ingress_tls_email
-  deployment_target                        = var.deployment_target
-  runtime_arch                             = var.runtime_arch
-  streaming_mode                           = var.streaming_mode
+  project_name            = var.project_name
+  infrastructure_provider = var.infrastructure_provider
+  database_mode           = var.database_mode
+  compute_engine          = var.compute_engine
+  workload_mode           = var.workload_mode
+  secrets_mode            = var.secrets_mode
+  ingress_mode            = var.ingress_mode
+  erpc_hostname           = var.erpc_hostname
+  ingress_tls_email       = var.ingress_tls_email
+  deployment_target       = var.deployment_target
+  runtime_arch            = var.runtime_arch
+  streaming_mode          = var.streaming_mode
 
   # --- SSH ---
-  ssh_private_key_path                     = var.ssh_private_key_path
+  ssh_private_key_path = var.ssh_private_key_path
 
   # --- Bare Metal ---
-  bare_metal_host                          = var.bare_metal_host
-  bare_metal_ssh_user                      = var.bare_metal_ssh_user
-  bare_metal_ssh_port                      = var.bare_metal_ssh_port
-  bare_metal_rpc_proxy_mem_limit           = var.bare_metal_rpc_proxy_mem_limit
-  bare_metal_indexer_mem_limit             = var.bare_metal_indexer_mem_limit
-  bare_metal_secrets_encryption            = var.bare_metal_secrets_encryption
+  bare_metal_host                = var.bare_metal_host
+  bare_metal_ssh_user            = var.bare_metal_ssh_user
+  bare_metal_ssh_port            = var.bare_metal_ssh_port
+  bare_metal_rpc_proxy_mem_limit = var.bare_metal_rpc_proxy_mem_limit
+  bare_metal_indexer_mem_limit   = var.bare_metal_indexer_mem_limit
+  bare_metal_secrets_encryption  = var.bare_metal_secrets_encryption
 
   # --- Indexer ---
-  rpc_proxy_enabled                        = var.rpc_proxy_enabled
-  indexer_enabled                          = var.indexer_enabled
-  indexer_rpc_url                          = var.indexer_rpc_url
-  indexer_storage_backend                  = var.indexer_storage_backend
-  rpc_proxy_image                          = var.rpc_proxy_image
-  indexer_image                            = var.indexer_image
-  erpc_config_yaml                         = var.erpc_config_yaml
-  rindexer_config_yaml                     = var.rindexer_config_yaml
-  rindexer_abis                            = var.rindexer_abis
-  indexer_extra_env                        = var.indexer_extra_env
-  indexer_extra_secret_env                 = var.indexer_extra_secret_env
-  postgres_enabled                         = var.postgres_enabled
-  indexer_postgres_url                     = var.indexer_postgres_url
+  rpc_proxy_enabled        = var.rpc_proxy_enabled
+  indexer_enabled          = var.indexer_enabled
+  indexer_rpc_url          = var.indexer_rpc_url
+  indexer_storage_backend  = var.indexer_storage_backend
+  rpc_proxy_image          = var.rpc_proxy_image
+  indexer_image            = var.indexer_image
+  erpc_config_yaml         = var.erpc_config_yaml
+  rindexer_config_yaml     = var.rindexer_config_yaml
+  rindexer_abis            = var.rindexer_abis
+  indexer_extra_env        = var.indexer_extra_env
+  indexer_extra_secret_env = var.indexer_extra_secret_env
+  postgres_enabled         = var.postgres_enabled
+  indexer_postgres_url     = var.indexer_postgres_url
 }

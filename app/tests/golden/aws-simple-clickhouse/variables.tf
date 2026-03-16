@@ -8,67 +8,67 @@
 
 variable "project_name" {
   description = "Name of the deployment project"
-  type = string
+  type        = string
 }
 
 variable "infrastructure_provider" {
   description = "Cloud provider: aws or bare_metal"
-  type = string
+  type        = string
 }
 
 variable "database_mode" {
   description = "Database deployment: managed or self_hosted"
-  type = string
+  type        = string
 }
 
 variable "compute_engine" {
   description = "Compute engine: ec2, eks, k3s, or docker_compose"
-  type = string
+  type        = string
 }
 
 variable "workload_mode" {
   description = "Workload management: terraform or external"
-  type = string
+  type        = string
 }
 
 variable "secrets_mode" {
   description = "Secrets management: inline, provider, or external"
-  type = string
+  type        = string
 }
 
 variable "ingress_mode" {
   description = "Ingress type: none, cloudflare, caddy, or ingress_nginx"
-  type = string
+  type        = string
 }
 
 variable "erpc_hostname" {
   description = "Hostname for eRPC proxy endpoint"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "ingress_tls_email" {
   description = "Email for Let's Encrypt certificate provisioning"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "deployment_target" {
   description = "Deployment target"
-  type    = string
-  default = "managed"
+  type        = string
+  default     = "managed"
 }
 
 variable "runtime_arch" {
   description = "Runtime architecture: amd64, arm64, or multi"
-  type    = string
-  default = "multi"
+  type        = string
+  default     = "multi"
 }
 
 variable "streaming_mode" {
   description = "Event streaming: disabled, kafka, sns-sqs, or cdc"
-  type    = string
-  default = "disabled"
+  type        = string
+  default     = "disabled"
 }
 
 
@@ -78,9 +78,9 @@ variable "streaming_mode" {
 
 variable "ssh_private_key_path" {
   description = "Path to SSH private key for provisioner"
-  type      = string
-  default   = ""
-  sensitive = true
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 
@@ -90,46 +90,46 @@ variable "ssh_private_key_path" {
 
 variable "networking_enabled" {
   description = "Enable VPC and networking resources"
-  type = bool
+  type        = bool
 }
 
 variable "aws_region" {
   description = "AWS region for all resources"
-  type = string
+  type        = string
 }
 
 variable "ssh_public_key" {
   description = "SSH public key for EC2 instances"
-  type      = string
-  sensitive = true
+  type        = string
+  sensitive   = true
 }
 
 variable "network_availability_zones" {
   description = "Availability zones for subnets"
-  type = list(string)
+  type        = list(string)
 }
 
 variable "network_enable_nat_gateway" {
   description = "Enable NAT gateway for private subnets"
-  type = bool
+  type        = bool
 }
 
 variable "network_environment" {
   description = "Environment tag (dev, staging, production)"
-  type    = string
-  default = "dev"
+  type        = string
+  default     = "dev"
 }
 
 variable "network_vpc_cidr" {
   description = "VPC CIDR block"
-  type    = string
-  default = "10.42.0.0/16"
+  type        = string
+  default     = "10.42.0.0/16"
 }
 
 variable "network_enable_vpc_endpoints" {
   description = "Enable VPC endpoints for AWS services"
-  type    = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 
@@ -139,25 +139,25 @@ variable "network_enable_vpc_endpoints" {
 
 variable "ec2_instance_type" {
   description = "EC2 instance type"
-  type = string
+  type        = string
 }
 
 variable "ec2_rpc_proxy_mem_limit" {
   description = "Memory limit for eRPC on EC2"
-  type    = string
-  default = "1g"
+  type        = string
+  default     = "1g"
 }
 
 variable "ec2_indexer_mem_limit" {
   description = "Memory limit for indexer on EC2"
-  type    = string
-  default = "2g"
+  type        = string
+  default     = "2g"
 }
 
 variable "ec2_secret_recovery_window_in_days" {
   description = "Secrets Manager recovery window (days)"
-  type    = number
-  default = 7
+  type        = number
+  default     = 7
 }
 
 
@@ -167,66 +167,66 @@ variable "ec2_secret_recovery_window_in_days" {
 
 variable "rpc_proxy_enabled" {
   description = "Enable eRPC proxy deployment"
-  type = bool
+  type        = bool
 }
 
 variable "indexer_enabled" {
   description = "Enable rindexer deployment"
-  type = bool
+  type        = bool
 }
 
 variable "indexer_rpc_url" {
   description = "RPC endpoint URL for indexer"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "indexer_storage_backend" {
   description = "Storage backend: clickhouse or postgres"
-  type = string
+  type        = string
 }
 
 variable "rpc_proxy_image" {
   description = "Docker image for eRPC"
-  type    = string
-  default = "ghcr.io/erpc/erpc:latest"
+  type        = string
+  default     = "ghcr.io/erpc/erpc:latest"
 }
 
 variable "indexer_image" {
   description = "Docker image for rindexer"
-  type    = string
-  default = "ghcr.io/joshstevens19/rindexer:latest"
+  type        = string
+  default     = "ghcr.io/joshstevens19/rindexer:latest"
 }
 
 variable "erpc_config_yaml" {
   description = "eRPC configuration YAML content"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "rindexer_config_yaml" {
   description = "rindexer configuration YAML content"
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 variable "rindexer_abis" {
   description = "ABI files: { filename = content }"
-  type    = map(string)
-  default = {}
+  type        = map(string)
+  default     = {}
 }
 
 variable "indexer_extra_env" {
   description = "Extra environment variables for indexer"
-  type    = map(string)
-  default = {}
+  type        = map(string)
+  default     = {}
 }
 
 variable "indexer_extra_secret_env" {
   description = "Extra sensitive environment variables for indexer"
-  type      = map(string)
-  default   = {}
-  sensitive = true
+  type        = map(string)
+  default     = {}
+  sensitive   = true
 }
 
 
@@ -236,24 +236,24 @@ variable "indexer_extra_secret_env" {
 
 variable "indexer_clickhouse_url" {
   description = "ClickHouse connection URL"
-  type      = string
-  sensitive = true
+  type        = string
+  sensitive   = true
 }
 
 variable "indexer_clickhouse_user" {
   description = "ClickHouse username"
-  type    = string
-  default = "default"
+  type        = string
+  default     = "default"
 }
 
 variable "indexer_clickhouse_password" {
   description = "ClickHouse password"
-  type      = string
-  sensitive = true
+  type        = string
+  sensitive   = true
 }
 
 variable "indexer_clickhouse_db" {
   description = "ClickHouse database name"
-  type    = string
-  default = "rindexer"
+  type        = string
+  default     = "rindexer"
 }
