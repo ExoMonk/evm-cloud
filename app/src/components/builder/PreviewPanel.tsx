@@ -8,8 +8,9 @@ import { generateErpcYaml } from "../../lib/erpcGenerator.ts";
 import { CornerCard } from "../ui/CornerCard.tsx";
 import { SectionHeader } from "../ui/SectionHeader.tsx";
 import { SchemaPreview } from "./SchemaPreview.tsx";
+import { DeployGuide } from "./DeployGuide.tsx";
 
-type Tab = "toml" | "rindexer" | "erpc" | "schema";
+type Tab = "toml" | "rindexer" | "erpc" | "schema" | "deploy";
 
 interface Props {
   state: BuilderState;
@@ -32,6 +33,7 @@ export function PreviewPanel({ state }: Props) {
     { id: "rindexer", label: "rindexer.yaml" },
     { id: "erpc", label: "erpc.yaml" },
     { id: "schema", label: "schema" },
+    { id: "deploy", label: "deploy" },
   ];
 
   const getContent = (tab: Tab): string | null => {
@@ -40,6 +42,7 @@ export function PreviewPanel({ state }: Props) {
       case "rindexer": return rindexerYaml;
       case "erpc": return erpcYaml;
       case "schema": return null; // rendered as component, not text
+      case "deploy": return null; // rendered as component, not text
     }
   };
 
@@ -69,6 +72,10 @@ export function PreviewPanel({ state }: Props) {
         {activeTab === "schema" ? (
           <div className="p-4">
             <SchemaPreview state={state} />
+          </div>
+        ) : activeTab === "deploy" ? (
+          <div className="p-4">
+            <DeployGuide state={state} />
           </div>
         ) : (
           <pre className="p-4 text-[12px] leading-relaxed text-[var(--color-text-dim)] overflow-auto max-h-72 scrollbar-none">
