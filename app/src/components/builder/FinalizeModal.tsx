@@ -15,7 +15,9 @@ import {
   generateMakefile,
   generateReadme,
 } from "../../lib/tfGenerator.ts";
-import { exportZip, generatePlaceholderRindexerYaml, generatePlaceholderErpcYaml } from "../../lib/zipExporter.ts";
+import { exportZip } from "../../lib/zipExporter.ts";
+import { generateRindexerYaml } from "../../lib/rindexerGenerator.ts";
+import { generateErpcYaml } from "../../lib/erpcGenerator.ts";
 interface Props {
   state: BuilderState;
   onClose: () => void;
@@ -83,8 +85,8 @@ export function FinalizeModal({ state, onClose }: Props) {
 
     // Config files
     result.push(
-      { name: "config/rindexer.yaml", path: "config/rindexer.yaml", content: generatePlaceholderRindexerYaml(state), icon: "yaml" },
-      { name: "config/erpc.yaml", path: "config/erpc.yaml", content: generatePlaceholderErpcYaml(state), icon: "yaml" },
+      { name: "config/rindexer.yaml", path: "config/rindexer.yaml", content: generateRindexerYaml(state), icon: "yaml" },
+      { name: "config/erpc.yaml", path: "config/erpc.yaml", content: generateErpcYaml(state), icon: "yaml" },
     );
 
     // Project files

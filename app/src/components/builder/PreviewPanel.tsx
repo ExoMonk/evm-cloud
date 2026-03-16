@@ -3,7 +3,8 @@ import type { BuilderState } from "../../lib/configSchema.ts";
 import { generateToml } from "../../lib/tomlGenerator.ts";
 import { validate } from "../../lib/configValidator.ts";
 import { estimateCost } from "../../lib/costData.ts";
-import { generatePlaceholderRindexerYaml, generatePlaceholderErpcYaml } from "../../lib/zipExporter.ts";
+import { generateRindexerYaml } from "../../lib/rindexerGenerator.ts";
+import { generateErpcYaml } from "../../lib/erpcGenerator.ts";
 import { CornerCard } from "../ui/CornerCard.tsx";
 import { SectionHeader } from "../ui/SectionHeader.tsx";
 
@@ -17,8 +18,8 @@ export function PreviewPanel({ state }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("toml");
 
   const toml = useMemo(() => generateToml(state), [state]);
-  const rindexerYaml = useMemo(() => generatePlaceholderRindexerYaml(state), [state]);
-  const erpcYaml = useMemo(() => generatePlaceholderErpcYaml(state), [state]);
+  const rindexerYaml = useMemo(() => generateRindexerYaml(state), [state]);
+  const erpcYaml = useMemo(() => generateErpcYaml(state), [state]);
   const issues = useMemo(() => validate(state), [state]);
   const cost = useMemo(() => estimateCost(state), [state]);
 

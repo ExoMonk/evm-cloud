@@ -20,6 +20,10 @@ export default defineConfig({
       link: "/docs/examples",
       match: "/docs/examples",
     },
+    {
+      text: "Builder",
+      link: "https://app.evm-cloud.xyz",
+    },
   ],
   socials: [
     {
