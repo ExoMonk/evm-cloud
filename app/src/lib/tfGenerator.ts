@@ -111,6 +111,10 @@ const MANIFEST: VarEntry[] = [
   { name: "indexer_extra_env", type: "map(string)", condition: "always", default: "{}", sensitive: false, description: "Extra environment variables for indexer" },
   { name: "indexer_extra_secret_env", type: "map(string)", condition: "always", default: "{}", sensitive: true, description: "Extra sensitive environment variables for indexer" },
 
+  // ── Custom Services ────────────────────────────────────────────────────
+  // custom_services is handled specially in generateVariablesTf — not in manifest
+  // because its HCL type is too complex for the simple VarEntry model.
+
   // ── Database: ClickHouse ──────────────────────────────────────────────
   { name: "indexer_clickhouse_url", type: "string", condition: "clickhouse", sensitive: true, description: "ClickHouse connection URL", group: "Database" },
   { name: "indexer_clickhouse_user", type: "string", condition: "clickhouse", default: '"default"', sensitive: false, description: "ClickHouse username" },
@@ -296,6 +300,13 @@ export function generateMainTf(state: BuilderState): string {
     lines.push(`  ${padded} = var.${v.name}`);
   }
 
+  // custom_services (complex type, handled separately)
+  if (state.customServices.length > 0) {
+    lines.push("");
+    lines.push("  # --- Custom Services ---");
+    lines.push("  custom_services".padEnd(42) + "= var.custom_services");
+  }
+
   lines.push("}");
   lines.push("");
 
@@ -340,6 +351,35 @@ export function generateVariablesTf(state: BuilderState): string {
       lines.push(`  type = ${v.type}`);
     }
 
+    lines.push("}");
+    lines.push("");
+  }
+
+  // custom_services (complex type, appended after manifest vars)
+  if (state.customServices.length > 0) {
+    lines.push("# " + "=".repeat(70));
+    lines.push("# Custom Services");
+    lines.push("# " + "=".repeat(70));
+    lines.push("");
+    lines.push('variable "custom_services" {');
+    lines.push('  description = "User-defined containerized services deployed alongside the indexer stack."');
+    lines.push("  type = list(object({");
+    lines.push("    name             = string");
+    lines.push("    image            = string");
+    lines.push("    port             = number");
+    lines.push('    health_path      = optional(string, "/health")');
+    lines.push("    replicas         = optional(number, 1)");
+    lines.push('    cpu_request      = optional(string, "250m")');
+    lines.push('    memory_request   = optional(string, "256Mi")');
+    lines.push('    cpu_limit        = optional(string, "500m")');
+    lines.push('    memory_limit     = optional(string, "512Mi")');
+    lines.push("    env              = optional(map(string), {})");
+    lines.push("    secret_env       = optional(map(string), {})");
+    lines.push("    ingress_hostname = optional(string)");
+    lines.push('    ingress_path     = optional(string, "/")');
+    lines.push("    node_role        = optional(string)");
+    lines.push("  }))");
+    lines.push("  default = []");
     lines.push("}");
     lines.push("");
   }
@@ -478,6 +518,31 @@ export function generateTfvarsJson(state: BuilderState): string {
     if (state.monitoring.lokiEnabled) {
       tfvar(lines, "loki_enabled", true);
     }
+  }
+
+  // Custom services
+  if (state.customServices.length > 0) {
+    section(lines, "Custom Services");
+    lines.push("custom_services = [");
+    for (const svc of state.customServices) {
+      lines.push("  {");
+      lines.push(`    name           = "${svc.name}"`);
+      lines.push(`    image          = "${svc.image}"`);
+      lines.push(`    port           = ${svc.port}`);
+      if (svc.healthPath !== "/health") lines.push(`    health_path    = "${svc.healthPath}"`);
+      if (svc.replicas !== 1) lines.push(`    replicas       = ${svc.replicas}`);
+      if (svc.cpuRequest !== "250m") lines.push(`    cpu_request    = "${svc.cpuRequest}"`);
+      if (svc.memoryRequest !== "256Mi") lines.push(`    memory_request = "${svc.memoryRequest}"`);
+      if (svc.cpuLimit !== "500m") lines.push(`    cpu_limit      = "${svc.cpuLimit}"`);
+      if (svc.memoryLimit !== "512Mi") lines.push(`    memory_limit   = "${svc.memoryLimit}"`);
+      if (Object.keys(svc.env).length > 0) {
+        lines.push(`    env = ${hclValue(svc.env)}`);
+      }
+      if (svc.ingressHostname) lines.push(`    ingress_hostname = "${svc.ingressHostname}"`);
+      if (svc.nodeRole) lines.push(`    node_role      = "${svc.nodeRole}"`);
+      lines.push("  },");
+    }
+    lines.push("]");
   }
 
   return lines.join("\n");

@@ -6,63 +6,63 @@ module "evm_cloud" {
   source = "github.com/exomonk/evm-cloud?ref=v0.0.1-alpha8"
 
   # --- Core ---
-  project_name            = var.project_name
-  infrastructure_provider = var.infrastructure_provider
-  database_mode           = var.database_mode
-  compute_engine          = var.compute_engine
-  workload_mode           = var.workload_mode
-  secrets_mode            = var.secrets_mode
-  ingress_mode            = var.ingress_mode
-  erpc_hostname           = var.erpc_hostname
-  ingress_tls_email       = var.ingress_tls_email
-  deployment_target       = var.deployment_target
-  runtime_arch            = var.runtime_arch
-  streaming_mode          = var.streaming_mode
+  project_name                             = var.project_name
+  infrastructure_provider                  = var.infrastructure_provider
+  database_mode                            = var.database_mode
+  compute_engine                           = var.compute_engine
+  workload_mode                            = var.workload_mode
+  secrets_mode                             = var.secrets_mode
+  ingress_mode                             = var.ingress_mode
+  erpc_hostname                            = var.erpc_hostname
+  ingress_tls_email                        = var.ingress_tls_email
+  deployment_target                        = var.deployment_target
+  runtime_arch                             = var.runtime_arch
+  streaming_mode                           = var.streaming_mode
 
   # --- SSH ---
-  ssh_private_key_path = var.ssh_private_key_path
+  ssh_private_key_path                     = var.ssh_private_key_path
 
   # --- AWS ---
-  networking_enabled           = var.networking_enabled
-  aws_region                   = var.aws_region
-  ssh_public_key               = var.ssh_public_key
-  network_availability_zones   = var.network_availability_zones
-  network_enable_nat_gateway   = var.network_enable_nat_gateway
-  network_environment          = var.network_environment
-  network_vpc_cidr             = var.network_vpc_cidr
-  network_enable_vpc_endpoints = var.network_enable_vpc_endpoints
-  k3s_version                  = var.k3s_version
+  networking_enabled                       = var.networking_enabled
+  aws_region                               = var.aws_region
+  ssh_public_key                           = var.ssh_public_key
+  network_availability_zones               = var.network_availability_zones
+  network_enable_nat_gateway               = var.network_enable_nat_gateway
+  network_environment                      = var.network_environment
+  network_vpc_cidr                         = var.network_vpc_cidr
+  network_enable_vpc_endpoints             = var.network_enable_vpc_endpoints
+  k3s_version                              = var.k3s_version
 
   # --- Indexer ---
-  rpc_proxy_enabled        = var.rpc_proxy_enabled
-  indexer_enabled          = var.indexer_enabled
-  indexer_rpc_url          = var.indexer_rpc_url
-  indexer_storage_backend  = var.indexer_storage_backend
-  rpc_proxy_image          = var.rpc_proxy_image
-  indexer_image            = var.indexer_image
-  erpc_config_yaml         = var.erpc_config_yaml
-  rindexer_config_yaml     = var.rindexer_config_yaml
-  rindexer_abis            = var.rindexer_abis
-  indexer_extra_env        = var.indexer_extra_env
-  indexer_extra_secret_env = var.indexer_extra_secret_env
+  rpc_proxy_enabled                        = var.rpc_proxy_enabled
+  indexer_enabled                          = var.indexer_enabled
+  indexer_rpc_url                          = var.indexer_rpc_url
+  indexer_storage_backend                  = var.indexer_storage_backend
+  rpc_proxy_image                          = var.rpc_proxy_image
+  indexer_image                            = var.indexer_image
+  erpc_config_yaml                         = var.erpc_config_yaml
+  rindexer_config_yaml                     = var.rindexer_config_yaml
+  rindexer_abis                            = var.rindexer_abis
+  indexer_extra_env                        = var.indexer_extra_env
+  indexer_extra_secret_env                 = var.indexer_extra_secret_env
 
   # --- Database ---
-  indexer_clickhouse_url      = var.indexer_clickhouse_url
-  indexer_clickhouse_user     = var.indexer_clickhouse_user
-  indexer_clickhouse_password = var.indexer_clickhouse_password
-  indexer_clickhouse_db       = var.indexer_clickhouse_db
+  indexer_clickhouse_url                   = var.indexer_clickhouse_url
+  indexer_clickhouse_user                  = var.indexer_clickhouse_user
+  indexer_clickhouse_password              = var.indexer_clickhouse_password
+  indexer_clickhouse_db                    = var.indexer_clickhouse_db
 
   # --- Ingress ---
-  ingress_cloudflare_origin_cert = var.ingress_cloudflare_origin_cert
-  ingress_cloudflare_origin_key  = var.ingress_cloudflare_origin_key
-  ingress_cloudflare_ssl_mode    = var.ingress_cloudflare_ssl_mode
-  ingress_class_name             = var.ingress_class_name
+  ingress_cloudflare_origin_cert           = var.ingress_cloudflare_origin_cert
+  ingress_cloudflare_origin_key            = var.ingress_cloudflare_origin_key
+  ingress_cloudflare_ssl_mode              = var.ingress_cloudflare_ssl_mode
+  ingress_class_name                       = var.ingress_class_name
 
   # --- Secrets ---
-  secrets_manager_secret_arn = var.secrets_manager_secret_arn
-  secrets_manager_kms_key_id = var.secrets_manager_kms_key_id
-  eso_chart_version          = var.eso_chart_version
+  secrets_manager_secret_arn               = var.secrets_manager_secret_arn
+  secrets_manager_kms_key_id               = var.secrets_manager_kms_key_id
+  eso_chart_version                        = var.eso_chart_version
 
   # --- Monitoring ---
-  monitoring_enabled = var.monitoring_enabled
+  monitoring_enabled                       = var.monitoring_enabled
 }

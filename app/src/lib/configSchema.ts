@@ -192,6 +192,21 @@ export interface ContainerConfig {
   indexerImage?: string;
 }
 
+export interface CustomService {
+  name: string;
+  image: string;
+  port: number;
+  healthPath: string;
+  replicas: number;
+  cpuRequest: string;
+  cpuLimit: string;
+  memoryRequest: string;
+  memoryLimit: string;
+  env: Record<string, string>;
+  ingressHostname: string;
+  nodeRole: string;
+}
+
 // --- Builder State ---
 
 export interface BuilderState {
@@ -236,6 +251,7 @@ export interface BuilderState {
   indexerType: IndexerType;
   customIndexerImage: string;
   extraEnv: Record<string, string>;
+  customServices: CustomService[];
 }
 
 // --- Initial State ---
@@ -275,6 +291,7 @@ export const initialState: BuilderState = {
   indexerType: "rindexer",
   customIndexerImage: "",
   extraEnv: {},
+  customServices: [],
 };
 
 // --- Actions ---
@@ -304,6 +321,7 @@ export type BuilderAction =
   | { type: "SET_INDEXER_TYPE"; indexerType: IndexerType }
   | { type: "SET_CUSTOM_INDEXER_IMAGE"; image: string }
   | { type: "SET_EXTRA_ENV"; env: Record<string, string> }
+  | { type: "SET_CUSTOM_SERVICES"; services: CustomService[] }
   | { type: "SET_TEMPLATE_VARIABLE"; key: string; value: string };
 
 // --- Helpers ---
@@ -433,6 +451,9 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
 
     case "SET_EXTRA_ENV":
       return { ...state, extraEnv: action.env };
+
+    case "SET_CUSTOM_SERVICES":
+      return { ...state, customServices: action.services };
 
     case "SET_TEMPLATE_VARIABLE":
       return {

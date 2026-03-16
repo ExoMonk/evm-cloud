@@ -7,61 +7,61 @@
 # Core
 # ──────────────────────────────────────────────────────────────────────
 
-project_name            = "golden-test"
-infrastructure_provider = "aws"
-compute_engine          = "eks"
-workload_mode           = "external"
-database_mode           = "self_hosted"
-secrets_mode            = "provider"
-deployment_target       = "managed"
-runtime_arch            = "multi"
+project_name                        = "golden-test"
+infrastructure_provider             = "aws"
+compute_engine                      = "eks"
+workload_mode                       = "external"
+database_mode                       = "self_hosted"
+secrets_mode                        = "provider"
+deployment_target                   = "managed"
+runtime_arch                        = "multi"
 
 # ──────────────────────────────────────────────────────────────────────
 # AWS Networking
 # ──────────────────────────────────────────────────────────────────────
 
-networking_enabled           = true
-aws_region                   = "us-west-2"
-network_availability_zones   = ["us-west-2a", "us-west-2b"]
-network_enable_nat_gateway   = false
-network_environment          = "dev"
-network_vpc_cidr             = "10.42.0.0/16"
-network_enable_vpc_endpoints = false
+networking_enabled                  = true
+aws_region                          = "us-west-2"
+network_availability_zones          = ["us-west-2a", "us-west-2b"]
+network_enable_nat_gateway          = false
+network_environment                 = "dev"
+network_vpc_cidr                    = "10.42.0.0/16"
+network_enable_vpc_endpoints        = false
 
 # ──────────────────────────────────────────────────────────────────────
 # Database
 # ──────────────────────────────────────────────────────────────────────
 
-indexer_storage_backend = "clickhouse"
-indexer_clickhouse_user = "default"
-indexer_clickhouse_db   = "analytics"
+indexer_storage_backend             = "clickhouse"
+indexer_clickhouse_user             = "default"
+indexer_clickhouse_db               = "analytics"
 
 # ──────────────────────────────────────────────────────────────────────
 # Indexer / RPC Proxy
 # ──────────────────────────────────────────────────────────────────────
 
-rpc_proxy_enabled = true
-indexer_enabled   = true
-indexer_rpc_url   = ""
-rpc_proxy_image   = "ghcr.io/erpc/erpc:latest"
-indexer_image     = "ghcr.io/joshstevens19/rindexer:latest"
+rpc_proxy_enabled                   = true
+indexer_enabled                     = true
+indexer_rpc_url                     = ""
+rpc_proxy_image                     = "ghcr.io/erpc/erpc:latest"
+indexer_image                       = "ghcr.io/joshstevens19/rindexer:latest"
 
 # Config content — populated by `evm-cloud init` from config/ files
-erpc_config_yaml     = ""
-rindexer_config_yaml = ""
-rindexer_abis        = {}
-indexer_extra_env    = {}
+erpc_config_yaml                    = ""
+rindexer_config_yaml                = ""
+rindexer_abis                       = {}
+indexer_extra_env                   = {}
 
 # ──────────────────────────────────────────────────────────────────────
 # Ingress
 # ──────────────────────────────────────────────────────────────────────
 
-ingress_mode      = "cloudflare"
-erpc_hostname     = "rpc.example.com"
-ingress_tls_email = ""
+ingress_mode                        = "cloudflare"
+erpc_hostname                       = "rpc.example.com"
+ingress_tls_email                   = ""
 
 # ──────────────────────────────────────────────────────────────────────
 # Streaming
 # ──────────────────────────────────────────────────────────────────────
 
-streaming_mode = "disabled"
+streaming_mode                      = "disabled"

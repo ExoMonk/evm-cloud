@@ -7,55 +7,55 @@
 # Core
 # ──────────────────────────────────────────────────────────────────────
 
-project_name            = "golden-test"
-infrastructure_provider = "bare_metal"
-compute_engine          = "docker_compose"
-workload_mode           = "terraform"
-database_mode           = "self_hosted"
-secrets_mode            = "inline"
-deployment_target       = "managed"
-runtime_arch            = "multi"
+project_name                        = "golden-test"
+infrastructure_provider             = "bare_metal"
+compute_engine                      = "docker_compose"
+workload_mode                       = "terraform"
+database_mode                       = "self_hosted"
+secrets_mode                        = "inline"
+deployment_target                   = "managed"
+runtime_arch                        = "multi"
 
 # ──────────────────────────────────────────────────────────────────────
 # Bare Metal
 # ──────────────────────────────────────────────────────────────────────
 
-bare_metal_ssh_user = "ubuntu"
-bare_metal_ssh_port = 22
+bare_metal_ssh_user                 = "ubuntu"
+bare_metal_ssh_port                 = 22
 
 # ──────────────────────────────────────────────────────────────────────
 # Database
 # ──────────────────────────────────────────────────────────────────────
 
-indexer_storage_backend = "postgres"
-postgres_enabled        = true
+indexer_storage_backend             = "postgres"
+postgres_enabled                    = true
 
 # ──────────────────────────────────────────────────────────────────────
 # Indexer / RPC Proxy
 # ──────────────────────────────────────────────────────────────────────
 
-rpc_proxy_enabled = true
-indexer_enabled   = true
-indexer_rpc_url   = ""
-rpc_proxy_image   = "ghcr.io/erpc/erpc:latest"
-indexer_image     = "ghcr.io/joshstevens19/rindexer:latest"
+rpc_proxy_enabled                   = true
+indexer_enabled                     = true
+indexer_rpc_url                     = ""
+rpc_proxy_image                     = "ghcr.io/erpc/erpc:latest"
+indexer_image                       = "ghcr.io/joshstevens19/rindexer:latest"
 
 # Config content — populated by `evm-cloud init` from config/ files
-erpc_config_yaml     = ""
-rindexer_config_yaml = ""
-rindexer_abis        = {}
-indexer_extra_env    = {}
+erpc_config_yaml                    = ""
+rindexer_config_yaml                = ""
+rindexer_abis                       = {}
+indexer_extra_env                   = {}
 
 # ──────────────────────────────────────────────────────────────────────
 # Ingress
 # ──────────────────────────────────────────────────────────────────────
 
-ingress_mode      = "none"
-erpc_hostname     = ""
-ingress_tls_email = ""
+ingress_mode                        = "none"
+erpc_hostname                       = ""
+ingress_tls_email                   = ""
 
 # ──────────────────────────────────────────────────────────────────────
 # Streaming
 # ──────────────────────────────────────────────────────────────────────
 
-streaming_mode = "disabled"
+streaming_mode                      = "disabled"

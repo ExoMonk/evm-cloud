@@ -7,67 +7,67 @@
 # Core
 # ──────────────────────────────────────────────────────────────────────
 
-project_name            = "golden-test"
-infrastructure_provider = "aws"
-compute_engine          = "k3s"
-workload_mode           = "external"
-database_mode           = "self_hosted"
-secrets_mode            = "inline"
-deployment_target       = "managed"
-runtime_arch            = "multi"
+project_name                        = "golden-test"
+infrastructure_provider             = "aws"
+compute_engine                      = "k3s"
+workload_mode                       = "external"
+database_mode                       = "self_hosted"
+secrets_mode                        = "inline"
+deployment_target                   = "managed"
+runtime_arch                        = "multi"
 
 # ──────────────────────────────────────────────────────────────────────
 # AWS Networking
 # ──────────────────────────────────────────────────────────────────────
 
-networking_enabled           = true
-aws_region                   = "eu-west-1"
-network_availability_zones   = ["eu-west-1a", "eu-west-1b"]
-network_enable_nat_gateway   = false
-network_environment          = "dev"
-network_vpc_cidr             = "10.42.0.0/16"
-network_enable_vpc_endpoints = false
+networking_enabled                  = true
+aws_region                          = "eu-west-1"
+network_availability_zones          = ["eu-west-1a", "eu-west-1b"]
+network_enable_nat_gateway          = false
+network_environment                 = "dev"
+network_vpc_cidr                    = "10.42.0.0/16"
+network_enable_vpc_endpoints        = false
 
 # ──────────────────────────────────────────────────────────────────────
 # Compute
 # ──────────────────────────────────────────────────────────────────────
 
-k3s_instance_type = "t3.medium"
+k3s_instance_type                   = "t3.medium"
 
 # ──────────────────────────────────────────────────────────────────────
 # Database
 # ──────────────────────────────────────────────────────────────────────
 
-indexer_storage_backend = "postgres"
-postgres_enabled        = true
-postgres_db_name        = "indexer_db"
+indexer_storage_backend             = "postgres"
+postgres_enabled                    = true
+postgres_db_name                    = "indexer_db"
 
 # ──────────────────────────────────────────────────────────────────────
 # Indexer / RPC Proxy
 # ──────────────────────────────────────────────────────────────────────
 
-rpc_proxy_enabled = true
-indexer_enabled   = true
-indexer_rpc_url   = ""
-rpc_proxy_image   = "ghcr.io/erpc/erpc:latest"
-indexer_image     = "ghcr.io/joshstevens19/rindexer:latest"
+rpc_proxy_enabled                   = true
+indexer_enabled                     = true
+indexer_rpc_url                     = ""
+rpc_proxy_image                     = "ghcr.io/erpc/erpc:latest"
+indexer_image                       = "ghcr.io/joshstevens19/rindexer:latest"
 
 # Config content — populated by `evm-cloud init` from config/ files
-erpc_config_yaml     = ""
-rindexer_config_yaml = ""
-rindexer_abis        = {}
-indexer_extra_env    = {}
+erpc_config_yaml                    = ""
+rindexer_config_yaml                = ""
+rindexer_abis                       = {}
+indexer_extra_env                   = {}
 
 # ──────────────────────────────────────────────────────────────────────
 # Ingress
 # ──────────────────────────────────────────────────────────────────────
 
-ingress_mode      = "ingress_nginx"
-erpc_hostname     = "rpc.example.com"
-ingress_tls_email = "admin@example.com"
+ingress_mode                        = "ingress_nginx"
+erpc_hostname                       = "rpc.example.com"
+ingress_tls_email                   = "admin@example.com"
 
 # ──────────────────────────────────────────────────────────────────────
 # Streaming
 # ──────────────────────────────────────────────────────────────────────
 
-streaming_mode = "disabled"
+streaming_mode                      = "disabled"

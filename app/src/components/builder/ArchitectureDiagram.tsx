@@ -159,6 +159,15 @@ function ComputeInner({ label, s, state, isK8s, hasMonitoring, hasEso, ingressLa
             {hasEso && <Nd label="ESO" sub="secrets" s={s} />}
           </div>
         )}
+
+        {/* Custom services row */}
+        {state.customServices.length > 0 && (
+          <div className={`flex items-center ${s.gap} flex-wrap ${s.mt}`}>
+            {state.customServices.map((svc) => (
+              <CustomNd key={svc.name} label={svc.name} sub={`:${svc.port}`} s={s} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -183,6 +192,15 @@ function Nd({ label, sub, s }: { label: string; sub: string; s: Record<string, s
     <div className={`${s.nd} border border-[var(--color-border)] bg-[var(--color-surface)]`}>
       <span className={`${s.txt} text-[var(--color-text)] block`}>{label}</span>
       <span className={`${s.txs} text-[var(--color-text-muted)] block`}>{sub}</span>
+    </div>
+  );
+}
+
+function CustomNd({ label, sub, s }: { label: string; sub: string; s: Record<string, string> }) {
+  return (
+    <div className={`${s.nd} border border-cyan-500/30 bg-cyan-500/10`}>
+      <span className={`${s.txt} text-cyan-400 block`}>{label}</span>
+      <span className={`${s.txs} text-cyan-400/50 block`}>{sub}</span>
     </div>
   );
 }

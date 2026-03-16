@@ -3,6 +3,7 @@ import type {
   BuilderState,
   BuilderAction,
   SecretsMode,
+  CustomService,
   StreamingMode,
   S3State,
   GcsState,
@@ -92,6 +93,11 @@ export function ReviewStep({ state, dispatch }: Props) {
           {/* Extra Env */}
           <Accordion label="extra env" open={openSection === "env"} onToggle={() => toggle("env")}>
             <ExtraEnvSection state={state} dispatch={dispatch} />
+          </Accordion>
+
+          {/* Custom Services */}
+          <Accordion label={`custom services${state.customServices.length > 0 ? ` (${state.customServices.length})` : ""}`} open={openSection === "services"} onToggle={() => toggle("services")}>
+            <CustomServicesSection state={state} dispatch={dispatch} />
           </Accordion>
 
         </div>
@@ -522,6 +528,105 @@ function ExtraEnvSection({ state, dispatch }: { state: BuilderState; dispatch: D
         className="w-full px-3 py-2 border border-dashed border-[var(--color-border)] text-[11px] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)] transition-colors"
       >
         + add variable
+      </button>
+    </>
+  );
+}
+
+function CustomServicesSection({ state, dispatch }: { state: BuilderState; dispatch: Dispatch<BuilderAction> }) {
+  const services = state.customServices;
+
+  const newService = (): CustomService => ({
+    name: `service-${services.length + 1}`,
+    image: "",
+    port: 3000,
+    healthPath: "/health",
+    replicas: 1,
+    cpuRequest: "250m",
+    cpuLimit: "500m",
+    memoryRequest: "256Mi",
+    memoryLimit: "512Mi",
+    env: {},
+    ingressHostname: "",
+    nodeRole: "",
+  });
+
+  const add = () => dispatch({ type: "SET_CUSTOM_SERVICES", services: [...services, newService()] });
+
+  const update = (idx: number, patch: Partial<CustomService>) => {
+    const updated = services.map((s, i) => i === idx ? { ...s, ...patch } : s);
+    dispatch({ type: "SET_CUSTOM_SERVICES", services: updated });
+  };
+
+  const remove = (idx: number) => {
+    dispatch({ type: "SET_CUSTOM_SERVICES", services: services.filter((_, i) => i !== idx) });
+  };
+
+  const [expanded, setExpanded] = useState<number | null>(null);
+
+  return (
+    <>
+      {services.length === 0 && (
+        <p className="text-[10px] text-[var(--color-text-muted)]">
+          no custom services. add a containerized service to deploy alongside the indexer stack.
+        </p>
+      )}
+
+      {services.map((svc, idx) => (
+        <div key={idx} className="border border-[var(--color-border)] transition-colors">
+          <button
+            onClick={() => setExpanded(expanded === idx ? null : idx)}
+            className="w-full px-3 py-2 flex items-center justify-between text-left"
+          >
+            <span className="text-[11px] text-[var(--color-text)]">
+              {svc.name || `service-${idx + 1}`}
+              {svc.image && <span className="text-[var(--color-text-muted)] ml-2">({svc.image.split("/").pop()})</span>}
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-[var(--color-text-muted)]">:{svc.port}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); remove(idx); }}
+                className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+          </button>
+
+          {expanded === idx && (
+            <div className="px-3 pb-3 border-t border-[var(--color-border)] space-y-2 pt-2">
+              <div className="grid grid-cols-2 gap-2">
+                <FieldInput label="name" value={svc.name} onChange={(v) => update(idx, { name: v })} placeholder="my-api" />
+                <FieldInput label="port" value={String(svc.port)} onChange={(v) => update(idx, { port: parseInt(v) || 3000 })} placeholder="3000" type="number" />
+              </div>
+              <FieldInput label="image" value={svc.image} onChange={(v) => update(idx, { image: v })} placeholder="ghcr.io/myorg/my-api:latest" />
+              <FieldInput label="health path" value={svc.healthPath} onChange={(v) => update(idx, { healthPath: v })} placeholder="/health" />
+
+              <div className="grid grid-cols-2 gap-2">
+                <FieldInput label="cpu request" value={svc.cpuRequest} onChange={(v) => update(idx, { cpuRequest: v })} placeholder="250m" />
+                <FieldInput label="cpu limit" value={svc.cpuLimit} onChange={(v) => update(idx, { cpuLimit: v })} placeholder="500m" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <FieldInput label="memory request" value={svc.memoryRequest} onChange={(v) => update(idx, { memoryRequest: v })} placeholder="256Mi" />
+                <FieldInput label="memory limit" value={svc.memoryLimit} onChange={(v) => update(idx, { memoryLimit: v })} placeholder="512Mi" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <FieldInput label="replicas" value={String(svc.replicas)} onChange={(v) => update(idx, { replicas: parseInt(v) || 1 })} placeholder="1" type="number" />
+                <FieldInput label="node role" value={svc.nodeRole} onChange={(v) => update(idx, { nodeRole: v })} placeholder="optional" />
+              </div>
+              {state.ingressMode !== "none" && (
+                <FieldInput label="ingress hostname" value={svc.ingressHostname} onChange={(v) => update(idx, { ingressHostname: v })} placeholder="api.example.com" />
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <button
+        onClick={add}
+        className="w-full px-3 py-2 border border-dashed border-[var(--color-border)] text-[11px] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)] transition-colors"
+      >
+        + add service
       </button>
     </>
   );

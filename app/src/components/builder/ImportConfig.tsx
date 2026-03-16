@@ -42,6 +42,9 @@ export function ImportConfig({ state: _state, dispatch, onClose }: Props) {
     if (merged.networking) dispatch({ type: "SET_NETWORKING", config: merged.networking });
     if (merged.stateBackend) dispatch({ type: "SET_STATE_BACKEND", backend: merged.stateBackend });
     dispatch({ type: "SET_EXTRA_ENV", env: merged.extraEnv });
+    if (merged.customServices.length > 0) {
+      dispatch({ type: "SET_CUSTOM_SERVICES", services: merged.customServices });
+    }
 
     onClose();
   };
