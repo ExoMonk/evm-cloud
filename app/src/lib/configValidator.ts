@@ -80,14 +80,7 @@ export function validate(state: BuilderState): ValidationIssue[] {
     }
   }
 
-  // 7. Ingress != none requires domain
-  if (state.ingressMode !== "none" && !state.domain.trim()) {
-    issues.push({
-      field: "ingress.domain",
-      severity: "error",
-      message: "Domain is required when ingress is enabled.",
-    });
-  }
+  // 7. eRPC hostname is optional — no error if empty
 
   // 8. Caddy/ingress_nginx requires TLS email
   if (

@@ -7,15 +7,16 @@ import { generateRindexerYaml } from "../../lib/rindexerGenerator.ts";
 import { generateErpcYaml } from "../../lib/erpcGenerator.ts";
 import { CornerCard } from "../ui/CornerCard.tsx";
 import { SectionHeader } from "../ui/SectionHeader.tsx";
+import { SchemaPreview } from "./SchemaPreview.tsx";
 
-type Tab = "toml" | "rindexer" | "erpc";
+type Tab = "toml" | "rindexer" | "erpc" | "schema";
 
 interface Props {
   state: BuilderState;
 }
 
 export function PreviewPanel({ state }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("toml");
+  const [activeTab, setActiveTab] = useState<Tab>("schema");
 
   const toml = useMemo(() => generateToml(state), [state]);
   const rindexerYaml = useMemo(() => generateRindexerYaml(state), [state]);
@@ -30,13 +31,15 @@ export function PreviewPanel({ state }: Props) {
     { id: "toml", label: "evm-cloud.toml" },
     { id: "rindexer", label: "rindexer.yaml" },
     { id: "erpc", label: "erpc.yaml" },
+    { id: "schema", label: "schema" },
   ];
 
-  const getContent = (tab: Tab): string => {
+  const getContent = (tab: Tab): string | null => {
     switch (tab) {
       case "toml": return toml;
       case "rindexer": return rindexerYaml;
       case "erpc": return erpcYaml;
+      case "schema": return null; // rendered as component, not text
     }
   };
 
@@ -63,9 +66,15 @@ export function PreviewPanel({ state }: Props) {
             </button>
           ))}
         </div>
-        <pre className="p-4 text-[12px] leading-relaxed text-[var(--color-text-dim)] overflow-auto max-h-72 scrollbar-none">
-          {getContent(activeTab)}
-        </pre>
+        {activeTab === "schema" ? (
+          <div className="p-4">
+            <SchemaPreview state={state} />
+          </div>
+        ) : (
+          <pre className="p-4 text-[12px] leading-relaxed text-[var(--color-text-dim)] overflow-auto max-h-72 scrollbar-none">
+            {getContent(activeTab)}
+          </pre>
+        )}
       </CornerCard>
 
       {/* Cost estimate */}

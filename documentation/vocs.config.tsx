@@ -2,7 +2,7 @@ import { defineConfig } from "vocs";
 
 export default defineConfig({
   title: "🏰 EVM Cloud",
-  iconUrl: "/evm-cloud-favicon.png",
+  iconUrl: "/favicon.svg",
   description:
     "Deploy, manage, and scale EVM blockchain data infrastructure — Nodes, RPC proxies, indexers, databases, and networking — on any cloud or bare metal",
   theme: {

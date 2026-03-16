@@ -16,9 +16,12 @@ const INGRESS_DESCRIPTIONS: Record<IngressMode, string> = {
 
 export function IngressStep({ state, dispatch }: Props) {
   const validModes = INGRESS_MODES_BY_ENGINE[state.computeEngine];
+  const hasIngress = state.ingressMode !== "none";
+  const needsTls = state.ingressMode === "caddy" || state.ingressMode === "ingress_nginx";
 
   return (
     <div className="space-y-5">
+      {/* Ingress mode selection */}
       <div className="space-y-2">
         {validModes.map((mode) => {
           const isSelected = state.ingressMode === mode;
@@ -45,10 +48,11 @@ export function IngressStep({ state, dispatch }: Props) {
         })}
       </div>
 
-      {state.ingressMode !== "none" && (
+      {/* eRPC hostname — only when ingress is enabled */}
+      {hasIngress && (
         <div>
           <label className="block text-[11px] uppercase tracking-[0.15em] text-[var(--color-text-muted)] mb-2">
-            domain
+            erpc hostname
           </label>
           <input
             type="text"
@@ -57,10 +61,14 @@ export function IngressStep({ state, dispatch }: Props) {
             placeholder="rpc.example.com"
             className="w-full px-3 py-2.5 bg-transparent border border-[var(--color-border)] text-[13px] text-[var(--color-text)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-colors"
           />
+          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+            public hostname for your eRPC proxy endpoint.
+          </p>
         </div>
       )}
 
-      {(state.ingressMode === "caddy" || state.ingressMode === "ingress_nginx") && (
+      {/* TLS email — only for Let's Encrypt modes */}
+      {needsTls && (
         <div>
           <label className="block text-[11px] uppercase tracking-[0.15em] text-[var(--color-text-muted)] mb-2">
             tls email (let's encrypt)
