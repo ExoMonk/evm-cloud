@@ -84,6 +84,8 @@ pub(crate) struct HandoffServices {
     #[serde(default)]
     pub(crate) monitoring: Option<MonitoringService>,
     #[serde(default)]
+    pub(crate) indexer: Option<IndexerService>,
+    #[serde(default)]
     pub(crate) custom_services: Option<Vec<CustomServiceEntry>>,
     #[serde(flatten)]
     pub(crate) extra: HashMap<String, Value>,
@@ -103,6 +105,25 @@ pub(crate) struct MonitoringService {
     pub(crate) grafana_hostname: Option<String>,
     #[serde(default)]
     pub(crate) grafana_admin_password_secret_name: Option<String>,
+    #[serde(flatten)]
+    pub(crate) extra: HashMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub(crate) struct IndexerService {
+    #[serde(default)]
+    pub(crate) service_name: Option<String>,
+    #[serde(default)]
+    pub(crate) instances: Option<Vec<IndexerInstance>>,
+    #[serde(flatten)]
+    pub(crate) extra: HashMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub(crate) struct IndexerInstance {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) config_key: Option<String>,
     #[serde(flatten)]
     pub(crate) extra: HashMap<String, Value>,
 }
@@ -504,6 +525,47 @@ mod tests {
         let value = sample_handoff();
         let handoff = parse_handoff_value(value).expect("must parse");
         assert!(handoff.services.custom_services.is_none());
+    }
+
+    #[test]
+    fn parses_indexer_instances() {
+        let mut value = sample_handoff();
+        value["services"]["indexer"] = json!({
+            "service_name": "demo-indexer",
+            "instances": [
+                {"name": "indexer", "config_key": "default"},
+                {"name": "backfill", "config_key": "backfill"}
+            ]
+        });
+
+        let handoff = parse_handoff_value(value).expect("must parse");
+        let indexer = handoff.services.indexer.expect("indexer must be Some");
+        assert_eq!(indexer.service_name.as_deref(), Some("demo-indexer"));
+        let instances = indexer.instances.expect("instances must be Some");
+        assert_eq!(instances.len(), 2);
+        assert_eq!(instances[0].name, "indexer");
+        assert_eq!(instances[0].config_key.as_deref(), Some("default"));
+        assert_eq!(instances[1].name, "backfill");
+    }
+
+    #[test]
+    fn parses_indexer_without_instances() {
+        let mut value = sample_handoff();
+        value["services"]["indexer"] = json!({
+            "service_name": "demo-indexer"
+        });
+
+        let handoff = parse_handoff_value(value).expect("must parse");
+        let indexer = handoff.services.indexer.expect("indexer must be Some");
+        assert_eq!(indexer.service_name.as_deref(), Some("demo-indexer"));
+        assert!(indexer.instances.is_none());
+    }
+
+    #[test]
+    fn parses_absent_indexer() {
+        let value = sample_handoff();
+        let handoff = parse_handoff_value(value).expect("must parse");
+        assert!(handoff.services.indexer.is_none());
     }
 
     #[test]
