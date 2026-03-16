@@ -21,6 +21,7 @@ import {
 } from "./tfGenerator.ts";
 import { generateRindexerYaml } from "./rindexerGenerator.ts";
 import { generateErpcYaml } from "./erpcGenerator.ts";
+import { getAbiContent } from "./abiRegistry.ts";
 
 export async function exportZip(state: BuilderState): Promise<void> {
   const zip = new JSZip();
@@ -55,8 +56,11 @@ export async function exportZip(state: BuilderState): Promise<void> {
   config.file("rindexer.yaml", generateRindexerYaml(state));
   config.file("erpc.yaml", generateErpcYaml(state));
 
-  // ABIs directory (empty placeholder — templates will populate this)
-  config.folder("abis");
+  // ABIs — all available ABIs bundled (users may reference multiple)
+  const abisDir = config.folder("abis")!;
+  for (const abi of ["ERC20.json", "ERC721.json", "PoolManager.json", "AaveV3Pool.json", "AaveV4Spoke.json"]) {
+    abisDir.file(abi, getAbiContent(abi));
+  }
 
   // ── Project files ─────────────────────────────────────────────────────
   root.file(".gitignore", generateGitignore());

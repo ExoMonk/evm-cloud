@@ -17,6 +17,7 @@ export interface TemplateDef {
   displayName: string;
   description: string;
   category: TemplateCategory;
+  abis: string[];
   chains: TemplateChainConfig[];
   events: string[];
   variables?: Record<string, { type: string; default?: string; description: string }>;
@@ -28,6 +29,7 @@ export const TEMPLATES: TemplateDef[] = [
     displayName: "ERC-20 Transfers",
     description: "Track Transfer events for any ERC-20 token across chains.",
     category: "token",
+    abis: ["ERC20.json"],
     chains: [
       { chain: "ethereum", contracts: {} },
       { chain: "polygon", contracts: {} },
@@ -48,6 +50,7 @@ export const TEMPLATES: TemplateDef[] = [
     displayName: "ERC-721 Transfers",
     description: "Track Transfer events for any ERC-721 NFT collection.",
     category: "nft",
+    abis: ["ERC721.json"],
     chains: [
       { chain: "ethereum", contracts: {} },
       { chain: "polygon", contracts: {} },
@@ -68,6 +71,7 @@ export const TEMPLATES: TemplateDef[] = [
     displayName: "Uniswap V4",
     description: "Swap, liquidity, and pool analytics for Uniswap V4 PoolManager.",
     category: "dex",
+    abis: ["PoolManager.json"],
     chains: [
       {
         chain: "ethereum",
@@ -99,6 +103,7 @@ export const TEMPLATES: TemplateDef[] = [
     displayName: "Aave V3",
     description: "Supply, borrow, repay, and liquidation analytics for Aave V3 Pool.",
     category: "lending",
+    abis: ["AaveV3Pool.json"],
     chains: [
       {
         chain: "ethereum",
@@ -143,6 +148,7 @@ export const TEMPLATES: TemplateDef[] = [
     displayName: "Aave V4",
     description: "Hub & Spoke architecture analytics for Aave V4.",
     category: "lending",
+    abis: ["AaveV4Spoke.json"],
     chains: [
       {
         chain: "ethereum",

@@ -18,6 +18,10 @@ import {
 import { exportZip } from "../../lib/zipExporter.ts";
 import { generateRindexerYaml } from "../../lib/rindexerGenerator.ts";
 import { generateErpcYaml } from "../../lib/erpcGenerator.ts";
+import { getAbiContent } from "../../lib/abiRegistry.ts";
+import { ArchitectureDiagram } from "./ArchitectureDiagram.tsx";
+import { PanZoom } from "../ui/PanZoom.tsx";
+
 interface Props {
   state: BuilderState;
   onClose: () => void;
@@ -37,6 +41,7 @@ interface FileEntry {
 export function FinalizeModal({ state, onClose }: Props) {
   const [activeFile, setActiveFile] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [diagramExpanded, setDiagramExpanded] = useState(false);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -88,6 +93,16 @@ export function FinalizeModal({ state, onClose }: Props) {
       { name: "config/rindexer.yaml", path: "config/rindexer.yaml", content: generateRindexerYaml(state), icon: "yaml" },
       { name: "config/erpc.yaml", path: "config/erpc.yaml", content: generateErpcYaml(state), icon: "yaml" },
     );
+
+    // ABI files — all bundled
+    for (const abi of ["ERC20.json", "ERC721.json", "PoolManager.json", "AaveV3Pool.json", "AaveV4Spoke.json"]) {
+      result.push({
+        name: `config/abis/${abi}`,
+        path: `config/abis/${abi}`,
+        content: getAbiContent(abi),
+        icon: "json",
+      });
+    }
 
     // Project files
     result.push(
@@ -168,10 +183,11 @@ export function FinalizeModal({ state, onClose }: Props) {
           </div>
         </div>
 
-        {/* Body: file sidebar + code viewer */}
+        {/* Body: file list | code viewer | architecture */}
         <div className="flex flex-1 min-h-0">
+
           {/* Left: file list */}
-          <div className="w-64 border-r border-[var(--color-border)] overflow-y-auto py-3">
+          <div className="w-56 border-r border-[var(--color-border)] overflow-y-auto py-3 scrollbar-none shrink-0">
             <p className="px-4 text-[10px] uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-2">
               {state.projectName}/
             </p>
@@ -190,21 +206,13 @@ export function FinalizeModal({ state, onClose }: Props) {
                 <span className={`text-[10px] ${iconColor(file.icon)}`}>
                   {file.icon === "tf" ? "TF" : file.icon === "json" ? "{}" : file.icon === "toml" ? "◆" : file.icon === "yaml" ? "Y" : file.icon === "make" ? "M" : file.icon === "md" ? "#" : "·"}
                 </span>
-                <span className="text-[12px] truncate">{file.name}</span>
+                <span className="text-[11px] truncate">{file.name}</span>
               </button>
             ))}
-
-            {/* ABIs placeholder */}
-            <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
-              <p className="px-4 text-[10px] text-[var(--color-text-muted)]">
-                + config/abis/
-              </p>
-            </div>
           </div>
 
-          {/* Right: code viewer */}
+          {/* Center: code viewer */}
           <div className="flex-1 flex flex-col min-w-0">
-            {/* File header */}
             <div className="flex items-center justify-between px-5 py-2.5 border-b border-[var(--color-border)]">
               <span className="text-[12px] text-[var(--color-accent)]">
                 {currentFile?.name}
@@ -216,13 +224,58 @@ export function FinalizeModal({ state, onClose }: Props) {
                 {copied ? "copied" : "copy"}
               </button>
             </div>
-
-            {/* Code content */}
             <pre className="flex-1 p-5 text-[12px] leading-relaxed text-[var(--color-text-dim)] overflow-auto">
-              {currentFile?.content}
+              {truncatePreview(currentFile?.content ?? "")}
             </pre>
           </div>
+
+          {/* Right: architecture diagram (pannable + zoomable) */}
+          <div className="w-[490px] border-l border-[var(--color-border)] bg-[var(--color-surface)] shrink-0 relative flex flex-col">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-border)]">
+              <span className="text-[9px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">// architecture</span>
+              <button
+                onClick={() => setDiagramExpanded(true)}
+                className="text-[13px] px-2 py-1 text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-dim)] transition-colors"
+                title="Expand architecture view"
+              >
+                ↗
+              </button>
+            </div>
+            <PanZoom className="flex-1 flex items-center justify-center">
+              <div className="p-4">
+                <ArchitectureDiagram state={state} compact />
+              </div>
+            </PanZoom>
+            <div className="px-3 py-1 border-t border-[var(--color-border)]">
+              <span className="text-[8px] text-[var(--color-text-muted)]">scroll to zoom · drag to pan · double-click to reset</span>
+            </div>
+          </div>
         </div>
+
+        {/* Expanded architecture overlay */}
+        {diagramExpanded && (
+          <div className="absolute inset-0 z-10 bg-[var(--color-bg)] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+                // architecture
+              </p>
+              <button
+                onClick={() => setDiagramExpanded(false)}
+                className="text-[11px] uppercase tracking-[0.15em] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+              >
+                ← back to files
+              </button>
+            </div>
+            <PanZoom className="flex-1 flex items-center justify-center">
+              <div className="p-8 w-full max-w-4xl">
+                <ArchitectureDiagram state={state} />
+              </div>
+            </PanZoom>
+            <div className="px-6 py-2 border-t border-[var(--color-border)]">
+              <span className="text-[9px] text-[var(--color-text-muted)]">scroll to zoom · drag to pan · double-click to reset</span>
+            </div>
+          </div>
+        )}
 
         {/* Footer: download */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--color-border)]">
@@ -254,4 +307,12 @@ export function FinalizeModal({ state, onClose }: Props) {
       </div>
     </div>
   );
+}
+
+const MAX_PREVIEW_LINES = 60;
+
+function truncatePreview(content: string): string {
+  const lines = content.split("\n");
+  if (lines.length <= MAX_PREVIEW_LINES) return content;
+  return lines.slice(0, MAX_PREVIEW_LINES).join("\n") + `\n\n// ... ${lines.length - MAX_PREVIEW_LINES} more lines (full content in downloaded zip)`;
 }

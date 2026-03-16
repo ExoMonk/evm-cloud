@@ -5,6 +5,7 @@ import { TemplatePicker } from "./TemplatePicker.tsx";
 import { StepForm } from "./StepForm.tsx";
 import { PreviewPanel } from "./PreviewPanel.tsx";
 import { FinalizeModal } from "./FinalizeModal.tsx";
+import { ArchitectureDiagram } from "./ArchitectureDiagram.tsx";
 
 export function BuilderPage() {
   const [state, dispatch] = useReducer(builderReducer, initialState);
@@ -14,15 +15,20 @@ export function BuilderPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-5 md:px-16 py-12">
-      {/* Hero */}
-      <div className="mb-10">
-        <h1 className="text-[clamp(28px,5vw,48px)] font-light text-[var(--color-text)] leading-tight">
-          infrastructure builder
+      {/* Hero: title + live pipeline diagram */}
+      <div className="mb-8">
+        <h1 className="text-[14px] uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-4">
+          // infrastructure builder
         </h1>
-        <p className="text-[14px] text-[var(--color-text-dim)] mt-3 max-w-xl">
-          Build your EVM data pipeline visually. Select components,
-          preview configs, and export a ready-to-deploy project.
-        </p>
+        <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-4 relative">
+          {/* Corner decorations */}
+          <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-[var(--color-accent)]" />
+          <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-[var(--color-accent)]" />
+          <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-[var(--color-accent)]" />
+          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-[var(--color-accent)]" />
+
+          <ArchitectureDiagram state={state} compact />
+        </div>
       </div>
 
       {/* Template Picker */}
@@ -30,12 +36,12 @@ export function BuilderPage() {
 
       {/* Main: Step Form + Preview */}
       <div className="mt-10 flex flex-col lg:flex-row gap-8">
-        {/* Left: Step Form (55%) */}
+        {/* Left: Step Form (53%) */}
         <div className="lg:w-[53%]">
           <StepForm state={state} dispatch={dispatch} onFinalize={() => setShowFinalize(true)} />
         </div>
 
-        {/* Right: Preview Panel (45%) */}
+        {/* Right: Preview Panel (47%) */}
         <div className="lg:w-[47%]">
           <div className="sticky top-20">
             <PreviewPanel state={state} />
