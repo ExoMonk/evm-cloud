@@ -273,6 +273,29 @@ export function generateVersionsTf(state: BuilderState): string {
 }
 
 // ---------------------------------------------------------------------------
+// Section grouping helper — groups vars by their `group` field
+// ---------------------------------------------------------------------------
+
+function groupVarsBySection(vars: VarEntry[]): { group: string; vars: VarEntry[] }[] {
+  const groups: { group: string; vars: VarEntry[] }[] = [];
+  let current: { group: string; vars: VarEntry[] } | null = null;
+
+  for (const v of vars) {
+    if (v.group && (!current || v.group !== current.group)) {
+      current = { group: v.group, vars: [] };
+      groups.push(current);
+    }
+    if (!current) {
+      current = { group: "", vars: [] };
+      groups.push(current);
+    }
+    current.vars.push(v);
+  }
+
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
 // main.tf
 // ---------------------------------------------------------------------------
 
@@ -286,25 +309,28 @@ export function generateMainTf(state: BuilderState): string {
   lines.push(`  source = "${moduleSource}"`);
   lines.push("");
 
-  // Render variable assignments, grouped by section
-  let currentGroup = "";
-  for (const v of vars) {
-    if (v.group && v.group !== currentGroup) {
-      if (currentGroup) lines.push("");
-      lines.push(`  # --- ${v.group} ---`);
-      currentGroup = v.group;
+  // Render variable assignments, grouped by section (per-section alignment)
+  const groups = groupVarsBySection(vars);
+  let first = true;
+  for (const { group, vars: gVars } of groups) {
+    if (group) {
+      if (!first) lines.push("");
+      lines.push(`  # --- ${group} ---`);
     }
-
-    // Pad name for alignment (longest name ~45 chars)
-    const padded = v.name.padEnd(40);
-    lines.push(`  ${padded} = var.${v.name}`);
+    first = false;
+    const maxLen = Math.max(...gVars.map((v) => v.name.length));
+    for (const v of gVars) {
+      const padded = v.name.padEnd(maxLen);
+      lines.push(`  ${padded} = var.${v.name}`);
+    }
   }
 
   // custom_services (complex type, handled separately)
   if (state.customServices.length > 0) {
     lines.push("");
     lines.push("  # --- Custom Services ---");
-    lines.push("  custom_services".padEnd(42) + "= var.custom_services");
+    const csMaxLen = Math.max(...groups.flatMap((g) => g.vars.map((v) => v.name.length)), "custom_services".length);
+    lines.push(`  ${"custom_services".padEnd(csMaxLen)} = var.custom_services`);
   }
 
   lines.push("}");
@@ -336,19 +362,20 @@ export function generateVariablesTf(state: BuilderState): string {
     lines.push(`variable "${v.name}" {`);
     lines.push(`  description = "${v.description}"`);
 
-    // Type + default + sensitive rendering with alignment
+    // terraform fmt aligns all keys in a block to the longest (description = 11)
+    const pad = 11; // length of "description"
     if (v.default != null && v.sensitive) {
-      lines.push(`  type      = ${v.type}`);
-      lines.push(`  default   = ${v.default}`);
-      lines.push(`  sensitive = true`);
+      lines.push(`  ${"type".padEnd(pad)} = ${v.type}`);
+      lines.push(`  ${"default".padEnd(pad)} = ${v.default}`);
+      lines.push(`  ${"sensitive".padEnd(pad)} = true`);
     } else if (v.default != null) {
-      lines.push(`  type    = ${v.type}`);
-      lines.push(`  default = ${v.default}`);
+      lines.push(`  ${"type".padEnd(pad)} = ${v.type}`);
+      lines.push(`  ${"default".padEnd(pad)} = ${v.default}`);
     } else if (v.sensitive) {
-      lines.push(`  type      = ${v.type}`);
-      lines.push(`  sensitive = true`);
+      lines.push(`  ${"type".padEnd(pad)} = ${v.type}`);
+      lines.push(`  ${"sensitive".padEnd(pad)} = true`);
     } else {
-      lines.push(`  type = ${v.type}`);
+      lines.push(`  ${"type".padEnd(pad)} = ${v.type}`);
     }
 
     lines.push("}");
@@ -425,99 +452,110 @@ export function generateTfvarsJson(state: BuilderState): string {
   const storageBackend = inferStorageBackend(state.databaseProfile);
 
   const lines: string[] = [header()];
+  const buf: TfvarBuffer = [];
 
   // ── Core ──────────────────────────────────────────────────────────────
   section(lines, "Core");
-  tfvar(lines, "project_name", state.projectName);
-  tfvar(lines, "infrastructure_provider", state.provider);
-  tfvar(lines, "compute_engine", state.computeEngine);
-  tfvar(lines, "workload_mode", state.workloadMode);
-  tfvar(lines, "database_mode", inferDatabaseMode(state.databaseProfile));
-  tfvar(lines, "secrets_mode", state.secretsMode);
-  tfvar(lines, "deployment_target", "managed");
-  tfvar(lines, "runtime_arch", "multi");
+  tfvar(buf, "project_name", state.projectName);
+  tfvar(buf, "infrastructure_provider", state.provider);
+  tfvar(buf, "compute_engine", state.computeEngine);
+  tfvar(buf, "workload_mode", state.workloadMode);
+  tfvar(buf, "database_mode", inferDatabaseMode(state.databaseProfile));
+  tfvar(buf, "secrets_mode", state.secretsMode);
+  tfvar(buf, "deployment_target", "managed");
+  tfvar(buf, "runtime_arch", "multi");
+  flushTfvars(lines, buf);
 
   // ── Networking / AWS ──────────────────────────────────────────────────
   if (!isBareMetal) {
     section(lines, "AWS Networking");
-    tfvar(lines, "networking_enabled", true);
-    tfvar(lines, "aws_region", state.region);
-    tfvar(lines, "network_availability_zones", [`${state.region}a`, `${state.region}b`]);
-    tfvar(lines, "network_enable_nat_gateway", false);
-    tfvar(lines, "network_environment", state.networking?.environment ?? "dev");
-    tfvar(lines, "network_vpc_cidr", state.networking?.vpcCidr ?? "10.42.0.0/16");
-    tfvar(lines, "network_enable_vpc_endpoints", state.networking?.enableVpcEndpoints ?? false);
+    tfvar(buf, "networking_enabled", true);
+    tfvar(buf, "aws_region", state.region);
+    tfvar(buf, "network_availability_zones", [`${state.region}a`, `${state.region}b`]);
+    tfvar(buf, "network_enable_nat_gateway", false);
+    tfvar(buf, "network_environment", state.networking?.environment ?? "dev");
+    tfvar(buf, "network_vpc_cidr", state.networking?.vpcCidr ?? "10.42.0.0/16");
+    tfvar(buf, "network_enable_vpc_endpoints", state.networking?.enableVpcEndpoints ?? false);
+    flushTfvars(lines, buf);
   }
 
   // ── Bare Metal ────────────────────────────────────────────────────────
   if (isBareMetal) {
     section(lines, "Bare Metal");
-    tfvar(lines, "bare_metal_ssh_user", "ubuntu");
-    tfvar(lines, "bare_metal_ssh_port", 22);
+    tfvar(buf, "bare_metal_ssh_user", "ubuntu");
+    tfvar(buf, "bare_metal_ssh_port", 22);
+    flushTfvars(lines, buf);
   }
 
   // ── Compute ───────────────────────────────────────────────────────────
   if (state.computeEngine === "ec2" || (state.computeEngine === "k3s" && !isBareMetal)) {
     section(lines, "Compute");
     if (state.computeEngine === "ec2") {
-      tfvar(lines, "ec2_instance_type", state.instanceType);
+      tfvar(buf, "ec2_instance_type", state.instanceType);
     }
     if (state.computeEngine === "k3s" && !isBareMetal) {
-      tfvar(lines, "k3s_instance_type", state.instanceType);
+      tfvar(buf, "k3s_instance_type", state.instanceType);
     }
+    flushTfvars(lines, buf);
   }
 
   // ── Database ──────────────────────────────────────────────────────────
   section(lines, "Database");
-  tfvar(lines, "indexer_storage_backend", storageBackend);
+  tfvar(buf, "indexer_storage_backend", storageBackend);
   if (isPostgres) {
-    tfvar(lines, "postgres_enabled", true);
+    tfvar(buf, "postgres_enabled", true);
     if (state.databaseName && state.databaseName !== "rindexer") {
-      tfvar(lines, "postgres_db_name", state.databaseName);
+      tfvar(buf, "postgres_db_name", state.databaseName);
     }
   } else {
-    tfvar(lines, "indexer_clickhouse_user", "default");
-    tfvar(lines, "indexer_clickhouse_db", state.databaseName || "rindexer");
+    tfvar(buf, "indexer_clickhouse_user", "default");
+    tfvar(buf, "indexer_clickhouse_db", state.databaseName || "rindexer");
   }
+  flushTfvars(lines, buf);
 
   // ── Indexer / RPC Proxy ───────────────────────────────────────────────
   section(lines, "Indexer / RPC Proxy");
-  tfvar(lines, "rpc_proxy_enabled", true);
-  tfvar(lines, "indexer_enabled", true);
-  tfvar(lines, "indexer_rpc_url", "");
-  tfvar(lines, "rpc_proxy_image", "ghcr.io/erpc/erpc:latest");
-  tfvar(lines, "indexer_image", "ghcr.io/joshstevens19/rindexer:latest");
+  tfvar(buf, "rpc_proxy_enabled", true);
+  tfvar(buf, "indexer_enabled", true);
+  tfvar(buf, "indexer_rpc_url", "");
+  tfvar(buf, "rpc_proxy_image", "ghcr.io/erpc/erpc:latest");
+  tfvar(buf, "indexer_image", "ghcr.io/joshstevens19/rindexer:latest");
+  flushTfvars(lines, buf);
   lines.push("");
   lines.push("# Config content — populated by `evm-cloud init` from config/ files");
-  tfvar(lines, "erpc_config_yaml", "");
-  tfvar(lines, "rindexer_config_yaml", "");
-  tfvar(lines, "rindexer_abis", {});
+  tfvar(buf, "erpc_config_yaml", "");
+  tfvar(buf, "rindexer_config_yaml", "");
+  tfvar(buf, "rindexer_abis", {});
   if (Object.keys(state.extraEnv).length > 0) {
-    tfvar(lines, "indexer_extra_env", state.extraEnv);
+    tfvar(buf, "indexer_extra_env", state.extraEnv);
   } else {
-    tfvar(lines, "indexer_extra_env", {});
+    tfvar(buf, "indexer_extra_env", {});
   }
+  flushTfvars(lines, buf);
 
   // ── Ingress ───────────────────────────────────────────────────────────
   section(lines, "Ingress");
-  tfvar(lines, "ingress_mode", state.ingressMode);
-  tfvar(lines, "erpc_hostname", state.domain || "");
-  tfvar(lines, "ingress_tls_email", state.tlsEmail || "");
+  tfvar(buf, "ingress_mode", state.ingressMode);
+  tfvar(buf, "erpc_hostname", state.domain || "");
+  tfvar(buf, "ingress_tls_email", state.tlsEmail || "");
+  flushTfvars(lines, buf);
 
   // ── Streaming ─────────────────────────────────────────────────────────
   section(lines, "Streaming");
-  tfvar(lines, "streaming_mode", state.streaming?.mode ?? "disabled");
+  tfvar(buf, "streaming_mode", state.streaming?.mode ?? "disabled");
+  flushTfvars(lines, buf);
 
   // ── Monitoring ────────────────────────────────────────────────────────
   if (isK8s && state.monitoring?.enabled) {
     section(lines, "Monitoring");
-    tfvar(lines, "monitoring_enabled", true);
+    tfvar(buf, "monitoring_enabled", true);
     if (state.monitoring.grafanaHostname) {
-      tfvar(lines, "grafana_hostname", state.monitoring.grafanaHostname);
+      tfvar(buf, "grafana_hostname", state.monitoring.grafanaHostname);
     }
     if (state.monitoring.lokiEnabled) {
-      tfvar(lines, "loki_enabled", true);
+      tfvar(buf, "loki_enabled", true);
     }
+    flushTfvars(lines, buf);
   }
 
   // Custom services
@@ -556,8 +594,20 @@ function section(lines: string[], name: string) {
   lines.push("");
 }
 
-function tfvar(lines: string[], key: string, value: unknown) {
-  lines.push(`${key.padEnd(35)} = ${hclValue(value)}`);
+// Collect tfvars into a section buffer, then flush with per-section alignment
+type TfvarBuffer = { key: string; value: string }[];
+
+function tfvar(buf: TfvarBuffer, key: string, value: unknown) {
+  buf.push({ key, value: hclValue(value) });
+}
+
+function flushTfvars(lines: string[], buf: TfvarBuffer) {
+  if (buf.length === 0) return;
+  const maxLen = Math.max(...buf.map((e) => e.key.length));
+  for (const { key, value } of buf) {
+    lines.push(`${key.padEnd(maxLen)} = ${value}`);
+  }
+  buf.length = 0;
 }
 
 function hclValue(value: unknown): string {
