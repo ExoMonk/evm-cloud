@@ -8,6 +8,7 @@
  */
 
 import { mkdirSync, writeFileSync } from "fs";
+import { execSync } from "child_process";
 import { join } from "path";
 import { FIXTURES } from "./fixtures.ts";
 import { generateToml } from "../src/lib/tomlGenerator.ts";
@@ -60,5 +61,13 @@ for (const fixture of FIXTURES) {
   console.log(`  ${fixture.name}/ (${files.length} files)`);
 }
 
-console.log(`\nGenerated ${totalFiles} golden files across ${FIXTURES.length} fixtures.`);
+// Format all generated .tf files so golden files stay consistent with `terraform fmt`
+try {
+  execSync(`terraform fmt -recursive ${GOLDEN_DIR}`, { stdio: "pipe" });
+  console.log("\nFormatted .tf files with terraform fmt.");
+} catch {
+  console.warn("\nWarning: terraform fmt not available — .tf files may need manual formatting.");
+}
+
+console.log(`Generated ${totalFiles} golden files across ${FIXTURES.length} fixtures.`);
 console.log("Commit these files to lock the current generator output.");
